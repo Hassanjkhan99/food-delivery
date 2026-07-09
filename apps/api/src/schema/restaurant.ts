@@ -402,6 +402,48 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Offer a job to a rider for swipe-to-accept (additive alternative to assignRider,
+  // which hard-assigns). Creates/updates the DeliveryTask in `offered` state with the
+  // rider attached so it surfaces in that rider's myJobs; the order itself stays
+  // ready_for_pickup until the rider accepts (acceptTask promotes it to rider_assigned).
+  offerTask: t.prismaField({
+    type: "DeliveryTask",
+    authScopes: { restaurantMember: true },
+    args: {
+      orderId: t.arg.string({ required: true }),
+      riderId: t.arg.string({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.orderId);
+      const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
+      if (!rider || rider.restaurantId !== order.branch.restaurantId) {
+        throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      const task = await prisma.deliveryTask.upsert({
+        where: { orderId: args.orderId },
+        update: {
+          riderId: args.riderId,
+          status: "offered",
+          offeredAt: new Date(),
+          acceptedAt: null,
+          assignedAt: null,
+          declineReason: null,
+        },
+        create: {
+          orderId: args.orderId,
+          riderId: args.riderId,
+          status: "offered",
+          offeredAt: new Date(),
+          codAmountMinor: order.paymentMode === "cod" ? order.grandTotalMinor : 0,
+        },
+      });
+      await prisma.deliveryEvent.create({
+        data: { taskId: task.id, type: "offered", actorUserId: ctx.userId },
+      });
+      return prisma.deliveryTask.findUniqueOrThrow({ ...query, where: { id: task.id } });
+    },
+  }),
+
   setAcceptingOrders: t.prismaField({
     type: "Branch",
     authScopes: { restaurantMember: true },

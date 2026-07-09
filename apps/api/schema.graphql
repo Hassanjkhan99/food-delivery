@@ -115,10 +115,14 @@ type DashboardStats {
 scalar DateTime
 
 type DeliveryTask {
+  acceptedAt: DateTime
   assignedAt: DateTime
   codAmountMinor: Int!
+  declineReason: String
   id: ID!
+  offeredAt: DateTime
   order: Order!
+  podMedia: MediaAsset
   status: String!
 }
 
@@ -209,11 +213,13 @@ type ModifierOption {
 
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
+  acceptTask(taskId: String!): DeliveryTask!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
+  declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
@@ -224,6 +230,7 @@ type Mutation {
   joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
   logout: Boolean!
   markReady(id: String!): Order!
+  offerTask(orderId: String!, riderId: String!): DeliveryTask!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
   presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
@@ -237,7 +244,7 @@ type Mutation {
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
-  riderDelivered(codCollectedMinor: Int!, taskId: String!): DeliveryTask!
+  riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
@@ -373,10 +380,12 @@ type Query {
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
   myEarnings: RiderEarnings!
+  myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
+  myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
@@ -486,6 +495,35 @@ type Rider {
 type RiderEarnings {
   codCollectedMinor: Int!
   deliveredCount: Int!
+}
+
+type RiderEarningsBreakdown {
+  codCollectedMinor: Int!
+  deliveryFeeMinor: Int!
+  jobCount: Int!
+  netMinor: Int!
+  rows: [RiderEarningsRow!]!
+  tipMinor: Int!
+}
+
+type RiderEarningsRow {
+  codCollectedMinor: Int!
+  deliveredAt: DateTime
+  deliveryFeeMinor: Int!
+  netMinor: Int!
+  orderCode: String!
+  orderId: String!
+  taskId: String!
+  tipMinor: Int!
+}
+
+type RiderPayoutRow {
+  amountMinor: Int!
+  isComputed: Boolean!
+  jobCount: Int!
+  periodEnd: DateTime!
+  periodKey: String!
+  periodStart: DateTime!
 }
 
 type RiderProfile {
