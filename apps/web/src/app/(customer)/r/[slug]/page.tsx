@@ -6,8 +6,9 @@
 // the restaurant's physical menu structure. On top of that we layer the Foodpanda
 // conversion patterns (UX-03): a "Popular" auto-section, in-menu search, a scroll-
 // synced category rail, a collapsing hero, one-tap quick-add, and a floating cart bar.
-import { use, useMemo, useState } from "react";
+import { Suspense, use, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "urql";
 import { motion, useReducedMotion } from "framer-motion";
 import { Star, Timer } from "lucide-react";
@@ -26,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ParallaxHero } from "@/components/theme/ParallaxHero";
 import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
 import { useCart } from "@/lib/cart";
-import { ItemModal, type MenuItemForModal } from "./item-modal";
+import { ItemModal, type EditContext, type MenuItemForModal } from "./item-modal";
 import { ItemCard, type ItemForCard } from "./item-card";
 import { MenuNav, type NavSection } from "./menu-nav";
 import { CartBarSpacer, FloatingCartBar } from "./floating-cart-bar";
@@ -119,8 +120,11 @@ const BranchQuery = graphql(`
 type LayoutJson = { categoryOrder?: string[]; displayModes?: Record<string, string> };
 type Section = { domId: string; name: string; description?: string | null; items: ItemForCard[] };
 
-export default function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
+function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editLineId = searchParams.get("edit");
   const [{ data, fetching }] = useQuery({ query: BranchQuery, variables: { slug } });
   const reduced = useReducedMotion();
   const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
@@ -177,6 +181,37 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   }, [sections, q]);
 
   const activeId = useScrollSpy(visibleSections.map((s) => s.domId));
+
+  // Edit-from-cart round-trip (#39): /r/[slug]?edit=<lineId>. We hold the item's
+  // modifier groups here, so we derive the line's item from the loaded menu and
+  // open the sheet pre-filled. Derived (not effect state) so it can't cascade.
+  const cartLines = useCart((s) => s.lines);
+  const [dismissedEdit, setDismissedEdit] = useState<string | null>(null);
+  const editTarget = useMemo(() => {
+    if (!editLineId || editLineId === dismissedEdit) return null;
+    const line = cartLines.find((l) => l.lineId === editLineId);
+    if (!line) return null;
+    const item = sections.flatMap((s) => s.items).find((i) => i.id === line.menuItemId);
+    if (!item) return null;
+    return {
+      item,
+      edit: {
+        lineId: line.lineId,
+        qty: line.qty,
+        modifierOptionIds: line.modifierOptionIds,
+        notes: line.notes,
+        unavailabilityPreference: line.unavailabilityPreference,
+      } satisfies EditContext,
+    };
+  }, [editLineId, dismissedEdit, cartLines, sections]);
+
+  // Closing the edit sheet: strip the ?edit param and remember the id so this
+  // render pass doesn't immediately re-derive it back open. Event handler → the
+  // setState here is fine (not an effect).
+  function closeEdit() {
+    if (editLineId) setDismissedEdit(editLineId);
+    router.replace(`/r/${slug}`);
+  }
 
   if (fetching) {
     return (
@@ -357,12 +392,23 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       <CartBarSpacer branchId={branch.id} />
       <FloatingCartBar branchId={branch.id} />
 
-      {openItem && (
+      {/* Edit-from-cart (URL param) takes precedence over a plain card open. */}
+      {editTarget ? (
         <ItemModal
-          item={openItem}
+          key={editTarget.edit.lineId}
+          item={editTarget.item}
           branch={{ id: branch.id, slug: r.slug, name: r.name }}
-          onClose={() => setOpenItem(null)}
+          edit={editTarget.edit}
+          onClose={closeEdit}
         />
+      ) : (
+        openItem && (
+          <ItemModal
+            item={openItem}
+            branch={{ id: branch.id, slug: r.slug, name: r.name }}
+            onClose={() => setOpenItem(null)}
+          />
+        )
       )}
 
       {conflict && (
@@ -386,5 +432,14 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         </Dialog>
       )}
     </main>
+  );
+}
+
+// useSearchParams (for the ?edit=<lineId> round-trip) requires a Suspense boundary.
+export default function RestaurantPageRoute({ params }: { params: Promise<{ slug: string }> }) {
+  return (
+    <Suspense>
+      <RestaurantPage params={params} />
+    </Suspense>
   );
 }

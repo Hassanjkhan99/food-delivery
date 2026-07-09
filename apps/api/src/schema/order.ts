@@ -14,6 +14,9 @@ const CartLineInput = builder.inputType("CartLineInput", {
     qty: t.int({ required: true }),
     modifierOptionIds: t.stringList({ required: false }),
     notes: t.string({ required: false }),
+    // "If this item is unavailable" preference (#39). One of remove_item |
+    // cancel_order | contact_me; defaults to remove_item when omitted.
+    unavailabilityPreference: t.string({ required: false }),
   }),
 });
 
@@ -74,6 +77,7 @@ type RawLines = Array<{
   qty: number;
   modifierOptionIds?: string[] | null;
   notes?: string | null;
+  unavailabilityPreference?: string | null;
 }>;
 const normalizeLines = (lines: RawLines) =>
   lines.map((l) => ({
@@ -81,6 +85,8 @@ const normalizeLines = (lines: RawLines) =>
     qty: l.qty,
     modifierOptionIds: l.modifierOptionIds ?? [],
     notes: l.notes ?? undefined,
+    // Let the shared zod schema apply the default + enum validation.
+    unavailabilityPreference: l.unavailabilityPreference ?? undefined,
   }));
 
 // ── output types ────────────────────────────────────────────────────────────

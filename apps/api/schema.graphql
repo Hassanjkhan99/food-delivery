@@ -85,6 +85,7 @@ input CartLineInput {
   modifierOptionIds: [String!]
   notes: String
   qty: Int!
+  unavailabilityPreference: String
 }
 
 type CsvImportResult {

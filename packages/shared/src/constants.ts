@@ -25,3 +25,22 @@ export type ReviewTagValue = (typeof REVIEW_TAGS)[number]["value"];
 /** Map a stored tag value back to its display label (falls back to the raw value). */
 export const reviewTagLabel = (value: string): string =>
   REVIEW_TAGS.find((t) => t.value === value)?.label ?? value;
+
+/**
+ * Per-line "if this item is unavailable" preference (UX-04 / #39). Captured on the
+ * cart line, snapshotted onto the OrderItem, and honored by the vendor flow. Default
+ * is `remove_item`.
+ */
+export const UNAVAILABILITY_PREFERENCES = [
+  { value: "remove_item", label: "Remove it from my order", short: "Remove item" },
+  { value: "cancel_order", label: "Cancel the whole order", short: "Cancel order" },
+  { value: "contact_me", label: "Call me", short: "Call customer" },
+] as const;
+
+export type UnavailabilityPreference = (typeof UNAVAILABILITY_PREFERENCES)[number]["value"];
+
+export const DEFAULT_UNAVAILABILITY_PREFERENCE: UnavailabilityPreference = "remove_item";
+
+/** Map a stored preference value to its short operator-facing label. */
+export const unavailabilityPreferenceLabel = (value: string): string =>
+  UNAVAILABILITY_PREFERENCES.find((p) => p.value === value)?.short ?? value;

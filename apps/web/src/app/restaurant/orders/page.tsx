@@ -5,7 +5,11 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
-import { formatRs } from "@fd/shared";
+import {
+  DEFAULT_UNAVAILABILITY_PREFERENCE,
+  formatRs,
+  unavailabilityPreferenceLabel,
+} from "@fd/shared";
 import { useConsole } from "../useConsole";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -129,12 +133,23 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
           {order.paymentMode === "cod" ? "COD" : "PAID"} · {formatRs(order.grandTotalMinor)}
         </Badge>
       </div>
-      <ul className="mt-1 text-kd-fg-muted">
+      <ul className="mt-1 space-y-0.5 text-kd-fg-muted">
         {order.items.map((i) => {
-          const snap = i.menuSnapshotJson as { name?: string };
+          const snap = i.menuSnapshotJson as {
+            name?: string;
+            unavailabilityPreference?: string;
+          };
+          // Only surface a non-default preference — "remove item" is the norm and
+          // would just add noise to every line.
+          const pref = snap.unavailabilityPreference ?? DEFAULT_UNAVAILABILITY_PREFERENCE;
           return (
             <li key={i.id}>
               {i.qty} × {snap.name}
+              {pref !== DEFAULT_UNAVAILABILITY_PREFERENCE && (
+                <span className="ml-1 text-xs font-medium text-kd-warning">
+                  (if out: {unavailabilityPreferenceLabel(pref)})
+                </span>
+              )}
             </li>
           );
         })}
