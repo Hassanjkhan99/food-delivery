@@ -51,7 +51,16 @@ next session unless the founder redirects.
 Program framing: the machinery works but won't survive a side-by-side with Foodpanda. Shift-Ledger-
 style human-in-the-loop: one issue per surface (Foodpanda benchmark → our gap → target spec with
 every state → decisions → acceptance). **Workflow (#35 UX-00):** decision gate (`needs-decision`
-issues wait for a founder comment) → build gate (PR per issue, screenshots mandatory) → verify gate.
+issues wait for a founder comment) → build gate (PR per issue, screenshots mandatory) → verify gate
+→ **Codex review gate**.
+
+**Codex (ChatGPT) review gate — MANDATORY on every PR, repo-wide (not just UX work).**
+Codex is configured to auto-review PRs in this repo (triggers on PR open / ready / `@codex review`).
+After opening or pushing to any PR, **wait for the Codex review to post**, then triage every finding:
+fix it in the PR, or — if it's out of scope / needs backend — **open a GitHub issue** (cross-linked to
+the PR and the Codex comment) so it's tracked. A PR is not "ready to merge" until the Codex review has
+landed and each finding is either fixed or issue-filed. Re-request with a `@codex review` comment if it
+doesn't appear. This gate is essential; do not merge ahead of it.
 
 **Status of the gates (already cleared — don't re-ask):**
 
