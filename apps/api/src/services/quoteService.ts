@@ -1,7 +1,12 @@
 // Server-authoritative cart pricing. The client never sends prices — only item ids,
 // modifier option ids, and quantities. Everything money is recomputed here.
 import { prisma } from "@fd/db";
-import { applyBps, haversineMeters, type QuoteInput } from "@fd/shared";
+import {
+  applyBps,
+  haversineMeters,
+  resolveLoyaltyRedemption,
+  type QuoteInput,
+} from "@fd/shared";
 import { GraphQLError } from "graphql";
 
 export type ResolvedLine = {
@@ -28,6 +33,12 @@ export type QuoteResult = {
   commissionMinor: number;
   commissionBps: number;
   tipAmount: number;
+  // Loyalty redemption resolved server-side (FP-07). loyaltyDiscountMinor is subtracted
+  // from grandTotalMinor; loyaltyPointsRedeemed is what will actually be spent. Both 0
+  // when nothing is redeemed. pointsBalance is the caller's current balance (for UI).
+  loyaltyPointsRedeemed: number;
+  loyaltyDiscountMinor: number;
+  loyaltyPointsBalance: number;
   grandTotalMinor: number;
   minOrderMinor: number;
   meetsMinimum: boolean;
@@ -36,7 +47,9 @@ export type QuoteResult = {
   lines: ResolvedLine[];
 };
 
-export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
+// customerId is optional: anonymous quote requests (pre-login) still price the cart but
+// can't redeem points. When present we look up the loyalty balance and clamp redemption.
+export async function quoteCart(input: QuoteInput, customerId?: string | null): Promise<QuoteResult> {
   const branch = await prisma.branch.findUnique({
     where: { id: input.branchId },
     include: { restaurant: true, taxProfile: true },
@@ -128,6 +141,25 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   // Rider tip is added on top of the bill; it isn't taxed or commissioned.
   const tipAmount = input.tipAmount ?? 0;
 
+  // Loyalty redemption (FP-07). Points can only offset the subtotal — fees, tax, and
+  // tip stay fully owed — so the restaurant/rider are never shortchanged by a discount.
+  let loyaltyPointsBalance = 0;
+  let loyaltyPointsRedeemed = 0;
+  let loyaltyDiscountMinor = 0;
+  const requestedRedeem = input.redeemPoints ?? 0;
+  if (customerId) {
+    const acct = await prisma.loyaltyAccount.findUnique({ where: { userId: customerId } });
+    loyaltyPointsBalance = acct?.pointsBalance ?? 0;
+    if (requestedRedeem > 0) {
+      const r = resolveLoyaltyRedemption(requestedRedeem, loyaltyPointsBalance, subtotal);
+      loyaltyPointsRedeemed = r.points;
+      loyaltyDiscountMinor = r.discountMinor;
+    }
+  }
+
+  const grandTotalMinor =
+    subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount - loyaltyDiscountMinor;
+
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
@@ -137,7 +169,10 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
     commissionMinor: commission,
     commissionBps,
     tipAmount,
-    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount,
+    loyaltyPointsRedeemed,
+    loyaltyDiscountMinor,
+    loyaltyPointsBalance,
+    grandTotalMinor,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,

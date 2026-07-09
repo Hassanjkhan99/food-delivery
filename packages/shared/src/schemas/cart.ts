@@ -17,6 +17,10 @@ export const quoteInputSchema = z.object({
   // Optional rider tip in minor units; folded into the grand total. Capped to a sane
   // ceiling so a fat-fingered client can't book an absurd total.
   tipAmount: z.number().int().min(0).max(1_000_000).default(0),
+  // Loyalty points the customer wants to redeem (FP-07). Server clamps this to the
+  // balance + redemption rules and recomputes the discount; the client value is only a
+  // request. 0 = redeem nothing.
+  redeemPoints: z.number().int().min(0).max(10_000_000).default(0),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({

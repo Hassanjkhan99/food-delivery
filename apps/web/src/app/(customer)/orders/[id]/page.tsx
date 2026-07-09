@@ -21,6 +21,8 @@ const OrderQuery = graphql(`
       taxTotalMinor
       deliveryFeeMinor
       platformFeeMinor
+      loyaltyPointsRedeemed
+      loyaltyDiscountMinor
       grandTotalMinor
       acceptDeadlineAt
       prepEtaMinutes
@@ -383,6 +385,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>Platform fee</span>
           <span>{formatRs(order.platformFeeMinor)}</span>
         </div>
+        {order.loyaltyDiscountMinor > 0 && (
+          <div className="flex justify-between text-kd-success">
+            <span>Loyalty discount ({order.loyaltyPointsRedeemed.toLocaleString("en-PK")} pts)</span>
+            <span>-{formatRs(order.loyaltyDiscountMinor)}</span>
+          </div>
+        )}
         <div className="mt-1 flex justify-between font-semibold">
           <span>Total ({order.paymentMode === "cod" ? "cash on delivery" : "paid by card"})</span>
           <span>{formatRs(order.grandTotalMinor)}</span>

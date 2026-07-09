@@ -16,6 +16,7 @@ import { logger } from "../logger.js";
 import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import { onOrderDeliveredLoyalty, onOrderReversalLoyalty, postLoyaltyTx } from "./loyaltyService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
@@ -41,7 +42,7 @@ export async function placeOrder(
     return existing;
   }
 
-  const quote = await quoteCart(input);
+  const quote = await quoteCart(input, customerId);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
 
@@ -97,6 +98,8 @@ export async function placeOrder(
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,
           commissionBpsSnapshot: quote.commissionBps,
+          loyaltyPointsRedeemed: quote.loyaltyPointsRedeemed,
+          loyaltyDiscountMinor: quote.loyaltyDiscountMinor,
           tipAmount: quote.tipAmount,
           cutleryRequested: input.cutleryRequested,
           grandTotalMinor: quote.grandTotalMinor,
@@ -138,6 +141,17 @@ export async function placeOrder(
           actorRole: "customer",
         },
       });
+
+      // Spend redeemed loyalty points now (FP-07). quoteCart already clamped this to the
+      // live balance, but the deduction is inside the placement tx so the cart's unique
+      // idempotency create still arbitrates races. Points are returned if the order is
+      // later reversed (see onOrderReversalLoyalty).
+      if (quote.loyaltyPointsRedeemed > 0) {
+        await postLoyaltyTx(tx, customerId, -quote.loyaltyPointsRedeemed, "redeem", {
+          orderId: created.id,
+          memo: `Redeemed on ${created.code}`,
+        });
+      }
 
       return created;
     });
@@ -268,8 +282,10 @@ export async function transition(
     // Money side-effects live in the same transaction as the status change.
     if (to === "delivered") {
       await onOrderDelivered(tx, order);
+      await onOrderDeliveredLoyalty(tx, order);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
       await onOrderMoneyReversal(tx, order, to);
+      await onOrderReversalLoyalty(tx, order, to);
     }
 
     return tx.order.findUniqueOrThrow({ where: { id: orderId } });

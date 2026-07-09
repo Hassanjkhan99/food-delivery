@@ -192,6 +192,16 @@ enum CampaignStatus {
   rejected
 }
 
+// Reason for a loyalty ledger movement (FP-07). Append-only, mirrors the money
+// ledger's discipline: earn on delivered, redeem at checkout, expire (not built yet),
+// adjust for manual admin corrections.
+enum LoyaltyReason {
+  earn
+  redeem
+  expire
+  adjust
+}
+
 // ───────────────────────────── identity & auth ─────────────────────────────
 
 model User {
@@ -211,6 +221,8 @@ model User {
   ownedRestaurants Restaurant[]        @relation("RestaurantOwner")
   tickets          SupportTicket[]
   pushSubs         PushSubscription[]
+  loyaltyAccount   LoyaltyAccount?
+  loyaltyLedger    LoyaltyLedger[]
 
   @@map("users")
 }
@@ -569,6 +581,11 @@ model Order {
   taxTotalMinor         Int
   platformFeeMinor      Int
   commissionMinor       Int
+  // Loyalty redemption applied at checkout (FP-07). loyaltyPointsRedeemed points were
+  // spent for a loyaltyDiscountMinor discount off the grand total; both are 0 when no
+  // points were redeemed. Platform-funded, so the restaurant share is unaffected.
+  loyaltyPointsRedeemed Int         @default(0)
+  loyaltyDiscountMinor  Int         @default(0)
   // Optional rider tip (minor units), included in grandTotalMinor and — for COD — in
   // the cash the rider collects. There is no rider ledger split yet, so it is not
   // posted as a separate rider credit; see orderService TODO.
@@ -937,4 +954,41 @@ model Waitlist {
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   @@map("waitlist")
+}
+
+// ───────────────────────────── loyalty / rewards (FP-07) ─────────────────────────────
+
+// One loyalty wallet per customer. pointsBalance is the cached running total; it is
+// only ever mutated in the same transaction as an appended LoyaltyLedger row, so the
+// ledger is the source of truth and the balance is a fast read. Platform-funded — the
+// discount value is booked as a platform cost, restaurants are unaffected (see loyaltyService).
+model LoyaltyAccount {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  pointsBalance Int      @default(0)
+  createdAt     DateTime @default(now()) @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("loyalty_accounts")
+}
+
+// Append-only points ledger. delta is signed (earn > 0, redeem/expire < 0);
+// balanceAfter snapshots the running balance for auditable history. orderId links the
+// movement to the order that earned or spent the points. There is no update/delete path.
+model LoyaltyLedger {
+  id           String        @id @default(cuid())
+  userId       String
+  orderId      String?
+  delta        Int
+  balanceAfter Int
+  reason       LoyaltyReason
+  memo         String?
+  createdAt    DateTime      @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("loyalty_ledger")
 }

@@ -29,6 +29,9 @@ const QuoteMutation = graphql(`
       minOrderMinor
       meetsMinimum
       inRadius
+      loyaltyPointsBalance
+      loyaltyPointsRedeemed
+      loyaltyDiscountMinor
     }
   }
 `);
@@ -69,6 +72,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+  // Loyalty: when on, we ask the server to redeem the customer's full eligible balance.
+  // The server clamps to balance + rules and returns what was actually applied (FP-07).
+  const [useLoyalty, setUseLoyalty] = useState(false);
 
   // Saved-address book state. selectedAddressId is null while entering a new
   // address; saveNewAddress persists a fresh manual entry back to the book.
@@ -113,13 +119,24 @@ export default function CheckoutPage() {
   const [quoteState, runQuote] = useMutation(QuoteMutation);
   const [placeState, runPlace] = useMutation(PlaceOrderMutation);
 
+  // Requesting a huge number tells the server "redeem as much as I'm allowed"; it
+  // clamps to the live balance + subtotal ceiling. 0 disables redemption.
+  const redeemPoints = useLoyalty ? 100_000_000 : 0;
+
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
-      input: { branchId, lines: cartLines, deliveryLat: loc.lat, deliveryLng: loc.lng, tipAmount },
+      input: {
+        branchId,
+        lines: cartLines,
+        deliveryLat: loc.lat,
+        deliveryLng: loc.lng,
+        tipAmount,
+        redeemPoints,
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount]);
+  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount, redeemPoints]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -167,6 +184,7 @@ export default function CheckoutPage() {
         paymentMode,
         paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
         tipAmount,
+        redeemPoints,
         cutleryRequested,
       },
     });
@@ -250,6 +268,28 @@ export default function CheckoutPage() {
           />
         </div>
 
+        {quote && quote.loyaltyPointsBalance > 0 && (
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-kd-border bg-kd-surface p-4">
+            <span className="text-sm">
+              <span className="font-semibold text-kd-fg">Use loyalty points</span>
+              <span className="mt-0.5 block text-xs text-kd-fg-muted">
+                You have {quote.loyaltyPointsBalance.toLocaleString("en-PK")} points
+                {useLoyalty && quote.loyaltyDiscountMinor > 0
+                  ? ` · redeeming ${quote.loyaltyPointsRedeemed.toLocaleString("en-PK")} for ${formatRs(
+                      quote.loyaltyDiscountMinor,
+                    )} off`
+                  : ""}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={useLoyalty}
+              onChange={(e) => setUseLoyalty(e.target.checked)}
+              className="size-4"
+            />
+          </label>
+        )}
+
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
           <p className="mb-3 text-sm font-semibold">Payment</p>
           <RadioGroup
@@ -332,6 +372,12 @@ export default function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-kd-fg-muted">Rider tip</span>
                   <span>{formatRs(tipAmount)}</span>
+                </div>
+              )}
+              {quote.loyaltyDiscountMinor > 0 && (
+                <div className="flex justify-between text-kd-success">
+                  <span>Loyalty discount</span>
+                  <span>-{formatRs(quote.loyaltyDiscountMinor)}</span>
                 </div>
               )}
               <Separator className="my-2" />
