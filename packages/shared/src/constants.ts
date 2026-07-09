@@ -6,3 +6,22 @@ export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RATE_LIMIT_PER_HOUR = 5;
 export const SESSION_TTL_DAYS = 30;
 export const SESSION_COOKIE_NAME = "fd_session";
+
+/**
+ * Canonical post-delivery review tags (Foodpanda-style quick chips). Shown on the
+ * rating form and rendered as pills on the reviews page. `value` is what's stored
+ * on Rating.tags[]; `label` is the human string.
+ */
+export const REVIEW_TAGS = [
+  { value: "on-time", label: "On time" },
+  { value: "tasty", label: "Tasty" },
+  { value: "hot", label: "Hot & fresh" },
+  { value: "packaging", label: "Good packaging" },
+  { value: "value", label: "Great value" },
+] as const;
+
+export type ReviewTagValue = (typeof REVIEW_TAGS)[number]["value"];
+
+/** Map a stored tag value back to its display label (falls back to the raw value). */
+export const reviewTagLabel = (value: string): string =>
+  REVIEW_TAGS.find((t) => t.value === value)?.label ?? value;

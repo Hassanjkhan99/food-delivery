@@ -56,6 +56,39 @@ builder.prismaObject("Restaurant", {
       resolve: (r) =>
         prisma.rating.count({ where: { restaurantId: r.id, moderationStatus: "approved" } }),
     }),
+    // Count of approved ratings per star, index 0 => 1★ … index 4 => 5★.
+    // Powers the distribution bars on the reviews page.
+    ratingDistribution: t.field({
+      type: ["Int"],
+      resolve: async (r) => {
+        const rows = await prisma.rating.groupBy({
+          by: ["stars"],
+          where: { restaurantId: r.id, moderationStatus: "approved" },
+          _count: { stars: true },
+        });
+        const buckets = [0, 0, 0, 0, 0];
+        for (const row of rows) {
+          if (row.stars >= 1 && row.stars <= 5) buckets[row.stars - 1] = row._count.stars;
+        }
+        return buckets;
+      },
+    }),
+    // Paginated approved reviews, newest first (offset pagination — the house style).
+    ratings: t.prismaField({
+      type: ["Rating"],
+      args: {
+        limit: t.arg.int({ required: false }),
+        offset: t.arg.int({ required: false }),
+      },
+      resolve: (query, r, args) =>
+        prisma.rating.findMany({
+          ...query,
+          where: { restaurantId: r.id, moderationStatus: "approved" },
+          orderBy: { createdAt: "desc" },
+          take: Math.min(Math.max(args.limit ?? 10, 1), 50),
+          skip: Math.max(args.offset ?? 0, 0),
+        }),
+    }),
   }),
 });
 
@@ -135,6 +168,49 @@ builder.prismaObject("Branch", {
         branch.activeMenuId
           ? prisma.menu.findUnique({ ...query, where: { id: branch.activeMenuId } })
           : null,
+    }),
+    // "Popular" pseudo-category: top items by quantity across the last 30 days of
+    // delivered orders at this branch, resolved back to their *current* menu items
+    // (so renamed/removed/unavailable items drop out gracefully). New branches with
+    // no order history simply return [] and the client omits the section.
+    //
+    // MVP is fully computed. A future curated override (issue #38 "hybrid") would
+    // slot in here: fetch pinned items first, then top up from the computed tally.
+    popularItems: t.prismaField({
+      type: ["MenuItem"],
+      args: { limit: t.arg.int({ required: false }) },
+      resolve: async (query, branch, args) => {
+        if (!branch.activeMenuId) return [];
+        const limit = Math.min(Math.max(args.limit ?? 8, 1), 20);
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const rows = await prisma.orderItem.findMany({
+          where: {
+            order: { branchId: branch.id, status: "delivered", placedAt: { gte: since } },
+          },
+          select: { qty: true, menuSnapshotJson: true },
+        });
+        const tally = new Map<string, number>();
+        for (const row of rows) {
+          const snap = row.menuSnapshotJson as { menuItemId?: string } | null;
+          const id = snap?.menuItemId;
+          if (id) tally.set(id, (tally.get(id) ?? 0) + row.qty);
+        }
+        const topIds = [...tally.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit)
+          .map(([id]) => id);
+        if (topIds.length === 0) return [];
+        const items = await prisma.menuItem.findMany({
+          ...query,
+          where: {
+            id: { in: topIds },
+            isAvailable: true,
+            category: { menuId: branch.activeMenuId },
+          },
+        });
+        const rank = new Map(topIds.map((id, i) => [id, i]));
+        return items.sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99));
+      },
     }),
   }),
 });
