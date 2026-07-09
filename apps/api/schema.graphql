@@ -19,6 +19,14 @@ type BranchSearchResult {
   etaMinutes: Int!
 }
 
+input CardInput {
+  cvc: String!
+  expMonth: Int!
+  expYear: Int!
+  holderName: String
+  number: String!
+}
+
 input CartLineInput {
   menuItemId: String!
   modifierOptionIds: [String!]
@@ -72,10 +80,12 @@ type ModifierOption {
 }
 
 type Mutation {
+  addPaymentMethod(card: CardInput!): PaymentMethod!
   cancelOrder(id: String!, reason: String): Order!
   logout: Boolean!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
   quoteCart(input: QuoteCartInput!): Quote!
+  removePaymentMethod(id: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
   verifyOtp(code: String!, phone: String!): Viewer!
 }
@@ -124,6 +134,15 @@ type OtpRequestResult {
   devCode: String
 }
 
+type PaymentMethod {
+  brand: String!
+  expMonth: Int!
+  expYear: Int!
+  id: ID!
+  isDefault: Boolean!
+  last4: String!
+}
+
 input PlaceOrderInput {
   addressLabel: String
   addressText: String!
@@ -141,6 +160,7 @@ type Query {
   branchBySlug(slug: String!): Branch
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
   myOrders: [Order!]!
+  myPaymentMethods: [PaymentMethod!]!
   order(id: String!): Order
   viewer: Viewer
 }

@@ -3,5 +3,6 @@ import { builder } from "./builder.js";
 import "./auth.js";
 import "./marketplace.js";
 import "./order.js";
+import "./payment.js";
 
 export const schema = builder.toSchema();

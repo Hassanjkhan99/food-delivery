@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation } from "urql";
+import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { useCart } from "@/lib/cart";
@@ -39,6 +39,17 @@ const PlaceOrderMutation = graphql(`
   }
 `);
 
+const CheckoutMethodsQuery = graphql(`
+  query CheckoutPaymentMethods {
+    myPaymentMethods {
+      id
+      brand
+      last4
+      isDefault
+    }
+  }
+`);
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { branchId, branchName, lines, clear } = useCart();
@@ -48,6 +59,17 @@ export default function CheckoutPage() {
   const [contactPhone, setContactPhone] = useState("+92");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
+  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null);
+
+  const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
+  const methods = methodsData?.myPaymentMethods ?? [];
+
+  useEffect(() => {
+    if (paymentMode === "card" && !paymentMethodId && methods.length > 0) {
+      setPaymentMethodId(methods.find((m) => m.isDefault)?.id ?? methods[0]!.id);
+    }
+  }, [paymentMode, paymentMethodId, methods]);
 
   // Generated when checkout renders — NOT on click — so retries are idempotent.
   const idempotencyKey = useRef<string>(crypto.randomUUID());
@@ -101,7 +123,8 @@ export default function CheckoutPage() {
         addressText,
         contactPhone,
         customerNote: note.trim() || undefined,
-        paymentMode: "cod",
+        paymentMode,
+        paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
       },
     });
     const order = result.data?.placeOrder;
@@ -166,11 +189,47 @@ export default function CheckoutPage() {
         <div className="rounded-xl border border-neutral-200 bg-white p-4">
           <p className="mb-2 text-sm font-semibold">Payment</p>
           <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked readOnly /> Cash on delivery
+            <input
+              type="radio"
+              name="paymode"
+              checked={paymentMode === "cod"}
+              onChange={() => setPaymentMode("cod")}
+            />
+            Cash on delivery
           </label>
-          <label className="mt-1 flex items-center gap-2 text-sm text-neutral-400">
-            <input type="radio" disabled /> Card (coming soon)
+          <label className="mt-1 flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="paymode"
+              checked={paymentMode === "card"}
+              onChange={() => setPaymentMode("card")}
+            />
+            Pay now by card
           </label>
+          {paymentMode === "card" && (
+            <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
+              {methods.length === 0 && (
+                <p className="text-xs text-neutral-500">
+                  No saved cards.{" "}
+                  <Link href="/payment-methods" className="underline">
+                    Add one
+                  </Link>{" "}
+                  first.
+                </p>
+              )}
+              {methods.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 text-sm capitalize">
+                  <input
+                    type="radio"
+                    name="paymethod"
+                    checked={paymentMethodId === m.id}
+                    onChange={() => setPaymentMethodId(m.id)}
+                  />
+                  {m.brand} •••• {m.last4}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">

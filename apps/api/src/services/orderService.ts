@@ -14,7 +14,8 @@ import { GraphQLError } from "graphql";
 import { publishOrderChanged } from "../pubsub.js";
 import { logger } from "../logger.js";
 import { quoteCart } from "./quoteService.js";
-import { onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import { mockProvider } from "./payments/mockProvider.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
 export const SYSTEM_ACTOR: Actor = { userId: null, role: "system" };
@@ -43,9 +44,15 @@ export async function placeOrder(
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
 
+  // Card orders charge at placement (Foodpanda-style): validate the saved method first.
+  let cardToken: string | null = null;
   if (input.paymentMode === "card") {
-    // Card checkout lands in M5 (MockProvider charge inside this same flow).
-    throw new GraphQLError("Card payment is not enabled yet — use cash on delivery");
+    if (!input.paymentMethodId) throw new GraphQLError("Select a saved card");
+    const method = await prisma.paymentMethod.findUnique({
+      where: { id: input.paymentMethodId },
+    });
+    if (!method || method.userId !== customerId) throw new GraphQLError("Card not found");
+    cardToken = method.providerToken;
   }
 
   const code = `FD-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36).toString(36).toUpperCase()}`;
@@ -99,6 +106,7 @@ export async function placeOrder(
           mode: input.paymentMode,
           status: "pending",
           amountMinor: quote.grandTotalMinor,
+          paymentMethodId: input.paymentMethodId ?? null,
         },
       });
 
@@ -114,6 +122,52 @@ export async function placeOrder(
 
       return created;
     });
+
+    // Charge AFTER the order row exists: the idempotency-unique create is the race
+    // arbiter, so a duplicate submit can never double-charge.
+    if (input.paymentMode === "card" && cardToken) {
+      const result = await mockProvider.charge({
+        token: cardToken,
+        amountMinor: order.grandTotalMinor,
+        reference: order.code,
+      });
+      if (!result.ok) {
+        await prisma.$transaction(async (tx) => {
+          await tx.payment.updateMany({
+            where: { orderId: order.id },
+            data: { status: "failed" },
+          });
+          await tx.order.update({
+            where: { id: order.id },
+            data: { status: "cancelled", cancelledAt: new Date() },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: order.id,
+              fromStatus: "pending_acceptance",
+              toStatus: "cancelled",
+              actorRole: "system",
+              reason: `Payment failed: ${result.declineReason}`,
+            },
+          });
+        });
+        throw new GraphQLError(result.declineReason);
+      }
+      const chargedOrder = await prisma.$transaction(async (tx) => {
+        await tx.payment.updateMany({
+          where: { orderId: order.id },
+          data: { status: "captured", providerRef: result.providerRef, capturedAt: new Date() },
+        });
+        const withMoney = await tx.order.findUniqueOrThrow({
+          where: { id: order.id },
+          include: { payment: true, branch: true },
+        });
+        await onCardCharged(tx, withMoney);
+        return withMoney;
+      });
+      publishOrderChanged({ orderId: chargedOrder.id, branchId: chargedOrder.branchId, status: chargedOrder.status });
+      return chargedOrder;
+    }
 
     publishOrderChanged({ orderId: order.id, branchId: order.branchId, status: order.status });
     return order;

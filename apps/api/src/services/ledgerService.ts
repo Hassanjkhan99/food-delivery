@@ -95,12 +95,16 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
 
 /**
  * Money reversal when an order terminates before fulfilment
- * (rejected / auto_expired / cancelled). Card refunds via provider land in M5.
+ * (rejected / auto_expired / cancelled).
+ *
+ * Card path calls the provider inside the transition transaction — fine for the
+ * in-process mock; a real PSP moves this to an outbox/worker so a network call
+ * never sits inside a DB transaction.
  */
 export async function onOrderMoneyReversal(
   tx: Tx,
   order: OrderWithMoney,
-  _to: string,
+  to: string,
 ): Promise<void> {
   if (order.paymentMode === "cod") {
     // Nothing was collected; void the pending payment.
@@ -110,5 +114,53 @@ export async function onOrderMoneyReversal(
     });
     return;
   }
-  // Card path: M5 executes MockProvider.refund + reversing ledger legs here.
+
+  // Card: refund the captured charge in full.
+  if (!order.payment || order.payment.status !== "captured" || !order.payment.providerRef) return;
+
+  const { mockProvider } = await import("./payments/mockProvider.js");
+  await mockProvider.refund({
+    chargeRef: order.payment.providerRef,
+    amountMinor: order.payment.amountMinor,
+    reference: order.code,
+  });
+
+  await tx.payment.update({
+    where: { id: order.payment.id },
+    data: { status: "refunded", refundedMinor: order.payment.amountMinor },
+  });
+
+  const refund = await tx.refund.create({
+    data: {
+      orderId: order.id,
+      status: "refunded",
+      amountMinor: order.payment.amountMinor,
+      destination: "card",
+      reason: `Automatic refund — order ${to}`,
+      decidedAt: new Date(),
+    },
+  });
+
+  await postLedgerTx(
+    tx,
+    `Refund ${order.code} (${to})`,
+    [
+      { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, debit: order.payment.amountMinor },
+      { code: "platform:cash", ownerType: "platform", credit: order.payment.amountMinor },
+    ],
+    { orderId: order.id, refundId: refund.id },
+  );
+}
+
+/** Post the charge legs after a successful card capture. */
+export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void> {
+  await postLedgerTx(
+    tx,
+    `Card charge ${order.code}`,
+    [
+      { code: "platform:cash", ownerType: "platform", debit: order.grandTotalMinor },
+      { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, credit: order.grandTotalMinor },
+    ],
+    { orderId: order.id },
+  );
 }
