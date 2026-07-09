@@ -3,6 +3,7 @@ import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition } from "../services/orderService.js";
+import { recordCashVariance, recordRiderLocation } from "../services/fraudService.js";
 import { builder } from "./builder.js";
 
 async function assertMyTask(ctx: AppContext, taskId: string) {
@@ -26,6 +27,12 @@ const DeliveryTaskType = builder.prismaObject("DeliveryTask", {
     acceptedAt: t.field({ type: "DateTime", nullable: true, resolve: (d) => d.acceptedAt }),
     declineReason: t.exposeString("declineReason", { nullable: true }),
     assignedAt: t.field({ type: "DateTime", nullable: true, resolve: (d) => d.assignedAt }),
+    // Set once the rider enters the correct pickup PIN (#25). null = still to verify.
+    pickupVerifiedAt: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (d) => d.pickupVerifiedAt,
+    }),
     order: t.relation("order"),
     podMedia: t.relation("podMedia", { nullable: true }),
   }),
@@ -338,6 +345,14 @@ builder.mutationFields((t) => ({
       if (!["assigned", "arrived_pickup"].includes(task.status)) {
         throw new GraphQLError("Job is not awaiting pickup");
       }
+      // Pickup PIN gate (#25): if the order carries a PIN, the rider must have verified it
+      // (verifyPickupPin) before collecting — the wrong-rider collection guard. Legacy
+      // PIN-less orders (pickupPin == null) skip the gate so they still flow.
+      if (task.order.pickupPin && !task.pickupVerifiedAt) {
+        throw new GraphQLError("Enter the pickup PIN from the restaurant first", {
+          extensions: { code: "pickup_pin_required" },
+        });
+      }
       // picked_up then straight to out_for_delivery (rider is moving).
       await transition(task.orderId, "picked_up", { userId: ctx.userId, role: "rider" });
       await transition(task.orderId, "out_for_delivery", { userId: ctx.userId, role: "rider" });
@@ -386,6 +401,16 @@ builder.mutationFields((t) => ({
             body: `Expected ${task.codAmountMinor}, rider declared ${args.codCollectedMinor}.`,
           },
         });
+        // Rolling cash-variance abuse tracking (#25): records the signed variance and
+        // auto-disables COD for the rider once the window total crosses the threshold.
+        if (task.riderId) {
+          await recordCashVariance({
+            riderId: task.riderId,
+            orderId: task.orderId,
+            expectedMinor: task.codAmountMinor,
+            collectedMinor: args.codCollectedMinor,
+          });
+        }
       }
 
       await prisma.deliveryEvent.create({
@@ -425,6 +450,69 @@ builder.mutationFields((t) => ({
         },
       });
       return true;
+    },
+  }),
+
+  // Pickup PIN handoff (#25): the rider enters the order-scoped PIN the restaurant shows
+  // them. On a match we stamp pickupVerifiedAt, which unlocks riderPickedUp. Wrong PIN
+  // writes an incident DeliveryEvent (audit trail) and returns false without stamping.
+  // Idempotent: verifying an already-verified task just returns true.
+  verifyPickupPin: t.field({
+    type: "Boolean",
+    authScopes: { rider: true },
+    args: {
+      taskId: t.arg.string({ required: true }),
+      pin: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      const task = await assertMyTask(ctx, args.taskId);
+      if (!["assigned", "arrived_pickup"].includes(task.status)) {
+        throw new GraphQLError("Job is not awaiting pickup");
+      }
+      if (task.pickupVerifiedAt) return true;
+      // No PIN on the order (legacy) — nothing to verify; treat as passed.
+      if (!task.order.pickupPin) return true;
+      if (args.pin.trim() !== task.order.pickupPin) {
+        await prisma.deliveryEvent.create({
+          data: {
+            taskId: task.id,
+            type: "incident",
+            actorUserId: ctx.userId,
+            note: "Incorrect pickup PIN entered",
+          },
+        });
+        throw new GraphQLError("Incorrect pickup PIN", {
+          extensions: { code: "pickup_pin_incorrect" },
+        });
+      }
+      await prisma.deliveryTask.update({
+        where: { id: task.id },
+        data: { pickupVerifiedAt: new Date() },
+      });
+      return true;
+    },
+  }),
+
+  // Rider location heartbeat (#25). Called every 15–30s by the rider app while a job is
+  // active. Updates the availability fix and flags a GPS anomaly (teleport/mock-location)
+  // when the implied speed vs the previous fresh fix is impossible. Returns whether this
+  // ping was flagged so the client can surface a soft warning; it never blocks the rider.
+  patchRiderLocation: t.field({
+    type: "Boolean",
+    authScopes: { rider: true },
+    args: {
+      lat: t.arg.float({ required: true }),
+      lng: t.arg.float({ required: true }),
+      taskId: t.arg.string({ required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      const { anomaly } = await recordRiderLocation({
+        riderId: ctx.riderId!,
+        lat: args.lat,
+        lng: args.lng,
+        taskId: args.taskId ?? null,
+      });
+      return anomaly;
     },
   }),
 }));

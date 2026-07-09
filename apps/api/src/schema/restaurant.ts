@@ -376,6 +376,13 @@ builder.mutationFields((t) => ({
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
       }
+      // Cash-variance auto-disable (#25): a rider flagged for repeated short remittance
+      // can't be handed COD orders until an admin clears them.
+      if (order.paymentMode === "cod" && rider.codDisabled) {
+        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+          extensions: { code: "rider_cod_disabled" },
+        });
+      }
       await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
         update: { riderId: args.riderId, status: "assigned", assignedAt: new Date() },
@@ -418,6 +425,11 @@ builder.mutationFields((t) => ({
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      if (order.paymentMode === "cod" && rider.codDisabled) {
+        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+          extensions: { code: "rider_cod_disabled" },
+        });
       }
       const task = await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },

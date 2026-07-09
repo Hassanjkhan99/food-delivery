@@ -127,6 +127,28 @@ export const OrderType = builder.prismaObject("Order", {
     tipAmount: t.exposeInt("tipAmount"),
     cutleryRequested: t.exposeBoolean("cutleryRequested"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
+    // Pickup handoff PIN (#25). Visible ONLY to the customer or the branch's restaurant
+    // members (who show it to the rider) — never to the rider themselves, who reach this
+    // same OrderType via DeliveryTask.order (myJobs). The rider ENTERS the PIN via
+    // verifyPickupPin; they must never READ it, or the wrong-rider guard is defeated.
+    pickupPin: t.string({
+      nullable: true,
+      resolve: async (o, _args, ctx) => {
+        if (!o.pickupPin) return null;
+        if (o.customerId === ctx.userId || ctx.hasRole("admin")) return o.pickupPin;
+        // Restaurant member of the order's branch. Only pay for the branch lookup when the
+        // viewer actually belongs to some restaurant (owner/staff); everyone else — riders
+        // included — gets null so they can never read the PIN they're meant to enter.
+        if (ctx.restaurantIds.length > 0) {
+          const branch = await prisma.branch.findUnique({
+            where: { id: o.branchId },
+            select: { restaurantId: true },
+          });
+          if (branch && ctx.restaurantIds.includes(branch.restaurantId)) return o.pickupPin;
+        }
+        return null;
+      },
+    }),
     contactPhone: t.exposeString("contactPhone"),
     customerNote: t.exposeString("customerNote", { nullable: true }),
     addressSnapshotJson: t.field({ type: "JSON", resolve: (o) => o.addressSnapshotJson }),

@@ -528,12 +528,20 @@ model Rider {
   vehicleType        String?
   verificationStatus RiderVerification @default(pending)
   cashLimitMinor     Int               @default(1000000)
+  // Trust score (0–100, higher is better). Nudged down when abuse signals fire
+  // (cash variance, GPS anomaly). Advisory for now — surfaced to admins/dispatch. (#25)
+  trustScore         Int               @default(100)
+  // Auto-set true when rolling cash variance crosses the disable threshold; blocks the
+  // rider from being assigned/offered COD orders until an admin clears it. (#25)
+  codDisabled        Boolean           @default(false)
   createdAt          DateTime          @default(now()) @db.Timestamptz()
 
   user         User               @relation(fields: [userId], references: [id])
   restaurant   Restaurant?        @relation(fields: [restaurantId], references: [id])
   availability RiderAvailability?
   tasks        DeliveryTask[]
+  cashVariances RiderCashVariance[]
+  gpsAnomalies  GpsAnomaly[]
 
   @@index([restaurantId])
   @@map("riders")
@@ -545,6 +553,10 @@ model RiderAvailability {
   isOnline  Boolean  @default(false)
   lat       Decimal? @db.Decimal(9, 6)
   lng       Decimal? @db.Decimal(9, 6)
+  // Wall-clock time of the last location heartbeat (patchRiderLocation, #25). Distinct
+  // from updatedAt (which also bumps on online/offline toggles) so GPS-anomaly speed math
+  // uses the true delta between position pings, and staleness is measured off pings only.
+  lastLocationAt DateTime? @db.Timestamptz()
   updatedAt DateTime @updatedAt @db.Timestamptz()
 
   rider Rider @relation(fields: [riderId], references: [id])
@@ -561,6 +573,10 @@ model Order {
   branchId              String
   status                OrderStatus @default(pending_acceptance)
   idempotencyKey        String      @unique
+  // Order-scoped pickup handoff PIN (#25). Shown to the customer + restaurant; the rider
+  // must enter it to confirm they collected the right order (wrong-rider collection guard).
+  // Additive — null on legacy orders, which the pickup gate treats as "no PIN required".
+  pickupPin             String?
   addressSnapshotJson   Json
   contactPhone          String
   customerNote          String?
@@ -652,6 +668,9 @@ model DeliveryTask {
   // Optional proof-of-delivery photo captured at drop-off, uploaded via the shared
   // media flow and linked on riderDelivered. Additive.
   podMediaId     String?
+  // Set when the rider enters the correct pickup PIN (#25). Gates riderPickedUp when the
+  // order carries a PIN. Null = not yet verified (or legacy PIN-less order).
+  pickupVerifiedAt DateTime?        @db.Timestamptz()
   assignedAt     DateTime?          @db.Timestamptz()
   createdAt      DateTime           @default(now()) @db.Timestamptz()
 
@@ -678,6 +697,48 @@ model DeliveryEvent {
 
   @@index([taskId, createdAt])
   @@map("delivery_events")
+}
+
+// Append-only per-drop cash-variance record (#25). One row per COD delivery where the
+// rider's declared cash != the expected COD amount. varianceMinor is signed (negative =
+// short remittance, positive = over). A rolling sum of |varianceMinor| over
+// CASH_VARIANCE_WINDOW_DAYS drives the auto COD-disable. Written alongside the existing
+// cash_mismatch SupportTicket, not instead of it.
+model RiderCashVariance {
+  id            String   @id @default(cuid())
+  riderId       String
+  orderId       String
+  expectedMinor Int
+  collectedMinor Int
+  varianceMinor Int
+  createdAt     DateTime @default(now()) @db.Timestamptz()
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([riderId, createdAt])
+  @@map("rider_cash_variances")
+}
+
+// Append-only GPS anomaly flag (#25). Written when two consecutive rider location
+// heartbeats imply travel faster than GPS_ANOMALY_MAX_SPEED_KMH (teleport / mock-location).
+// Informational + trust-score input; does not block delivery.
+model GpsAnomaly {
+  id          String   @id @default(cuid())
+  riderId     String
+  taskId      String?
+  fromLat     Decimal  @db.Decimal(9, 6)
+  fromLng     Decimal  @db.Decimal(9, 6)
+  toLat       Decimal  @db.Decimal(9, 6)
+  toLng       Decimal  @db.Decimal(9, 6)
+  distanceM   Int
+  elapsedSec  Int
+  speedKmh    Int
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@index([riderId, createdAt])
+  @@map("gps_anomalies")
 }
 
 // ───────────────────────────── payments & money ─────────────────────────────
