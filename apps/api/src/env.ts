@@ -20,6 +20,11 @@ export const env = {
   get storageDir(): string {
     return process.env.STORAGE_DIR ?? "./.storage";
   },
+  // Optional. When absent, the Google Places photo tier is skipped and the image
+  // pipeline degrades to the typography fallback (dev/CI stay green without a key).
+  get googlePlacesApiKey(): string | null {
+    return process.env.GOOGLE_PLACES_API_KEY ?? null;
+  },
   get isProduction(): boolean {
     return process.env.NODE_ENV === "production";
   },

@@ -58,6 +58,22 @@ builder.prismaObject("Restaurant", {
   }),
 });
 
+// Resolved image for a branch card/hero. `source` lets the client render the
+// right treatment (e.g. mandatory attribution overlay for Google photos).
+// null means "no image" — the client shows its typography fallback (tier 3).
+const BranchPhoto = builder.objectRef<{
+  url: string;
+  source: "uploaded" | "google";
+  attributionHtml: string | null;
+}>("BranchPhoto");
+BranchPhoto.implement({
+  fields: (t) => ({
+    url: t.exposeString("url"),
+    source: t.exposeString("source"),
+    attributionHtml: t.exposeString("attributionHtml", { nullable: true }),
+  }),
+});
+
 builder.prismaObject("Branch", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -71,6 +87,37 @@ builder.prismaObject("Branch", {
     isAcceptingOrders: t.exposeBoolean("isAcceptingOrders"),
     hoursJson: t.field({ type: "JSON", nullable: true, resolve: (b) => b.hoursJson }),
     restaurant: t.relation("restaurant"),
+    // Image pipeline (#50): uploaded restaurant hero -> Google Places venue photo
+    // -> null (client fallback). All secret/ToS-bound work stays server-side.
+    photo: t.field({
+      type: BranchPhoto,
+      nullable: true,
+      resolve: async (branch) => {
+        const { assetUrl } = await import("../services/uploads.js");
+        // Tier 1: restaurant's uploaded hero (owned, stored by us).
+        const theme = await prisma.restaurantTheme.findUnique({
+          where: { restaurantId: branch.restaurantId },
+        });
+        if (theme?.heroAssetId) {
+          const a = await prisma.mediaAsset.findUnique({ where: { id: theme.heroAssetId } });
+          if (a)
+            return {
+              url: assetUrl(a.objectKey),
+              source: "uploaded" as const,
+              attributionHtml: null,
+            };
+        }
+        // Tier 2: live Google Places venue photo (no bytes stored).
+        if (branch.googlePlaceId) {
+          const { getPlacePhoto } = await import("../services/placesPhoto.js");
+          const p = await getPlacePhoto(branch.googlePlaceId);
+          if (p)
+            return { url: p.url, source: "google" as const, attributionHtml: p.attributionHtml };
+        }
+        // Tier 3: no image -> client renders the typography fallback.
+        return null;
+      },
+    }),
     activeMenu: t.prismaField({
       type: "Menu",
       nullable: true,
@@ -112,6 +159,16 @@ builder.prismaObject("MenuItem", {
     priceMinor: t.exposeInt("priceMinor"),
     isAvailable: t.exposeBoolean("isAvailable"),
     badges: t.exposeStringList("badges"),
+    // Image pipeline (#50): uploaded dish photo only. Google Places has no
+    // per-dish imagery, so items skip tier 2 — null -> client typography fallback.
+    imageUrl: t.string({
+      nullable: true,
+      resolve: async (item) => {
+        if (!item.imageAssetId) return null;
+        const a = await prisma.mediaAsset.findUnique({ where: { id: item.imageAssetId } });
+        return a ? (await import("../services/uploads.js")).assetUrl(a.objectKey) : null;
+      },
+    }),
     modifierGroups: t.field({
       type: [ModifierGroupType],
       resolve: async (item) => {

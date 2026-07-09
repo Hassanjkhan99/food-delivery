@@ -21,7 +21,14 @@ type Branch {
   lng: Float!
   minOrderMinor: Int!
   name: String!
+  photo: BranchPhoto
   restaurant: Restaurant!
+}
+
+type BranchPhoto {
+  attributionHtml: String
+  source: String!
+  url: String!
 }
 
 type BranchSearchResult {
@@ -127,6 +134,7 @@ type MenuItem {
   badges: [String!]!
   description: String
   id: ID!
+  imageUrl: String
   isAvailable: Boolean!
   modifierGroups: [ModifierGroup!]!
   name: String!
@@ -190,52 +198,14 @@ type Mutation {
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
-  submitOnboarding(
-    addressText: String!
-    deliveryFeeMinor: Int!
-    deliveryRadiusM: Int!
-    lat: Float!
-    lng: Float!
-    minOrderMinor: Int!
-    name: String!
-  ): Restaurant!
+  submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
-  updateFeeConfig(
-    chainCommissionBps: Int!
-    chainPlatformFeeMinor: Int!
-    smallBusinessCommissionBps: Int!
-    smallBusinessPlatformFeeMinor: Int!
-  ): FeeConfig!
+  updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
-  updateTheme(
-    accentColor: String
-    backgroundColor: String
-    cardStyle: String
-    fontKey: String
-    heroAssetId: String
-    heroEffect: String
-    logoAssetId: String
-    primaryColor: String
-    restaurantId: String!
-    textColor: String
-  ): RestaurantTheme!
-  upsertCategory(
-    branchId: String!
-    description: String
-    id: String
-    name: String!
-    sortOrder: Int
-  ): MenuCategory!
-  upsertMenuItem(
-    badges: [String!]
-    branchId: String!
-    categoryId: String!
-    description: String
-    id: String
-    name: String!
-    priceMinor: Int!
-  ): MenuItem!
+  updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
+  upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
+  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   verifyOtp(code: String!, phone: String!): Viewer!
 }
 

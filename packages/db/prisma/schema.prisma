@@ -315,6 +315,10 @@ model Branch {
   taxProfileId      String
   activeMenuId      String?
   isAcceptingOrders Boolean  @default(true)
+  // Google Places id for this physical location. Enables the venue-photo fallback
+  // (tier 2 of the image pipeline, #50) when the restaurant has no uploaded hero.
+  // Photo bytes are never stored — see services/placesPhoto.ts (Google ToS).
+  googlePlaceId     String?
   createdAt         DateTime @default(now()) @db.Timestamptz()
   updatedAt         DateTime @updatedAt @db.Timestamptz()
 

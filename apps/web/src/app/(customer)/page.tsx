@@ -9,6 +9,7 @@ import { useDeliveryLocation } from "@/lib/location";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RestaurantImage } from "@/components/media/RestaurantImage";
 
 const BrowseQuery = graphql(`
   query Browse($lat: Float!, $lng: Float!) {
@@ -21,6 +22,11 @@ const BrowseQuery = graphql(`
         minOrderMinor
         deliveryFeeMinor
         isAcceptingOrders
+        photo {
+          url
+          source
+          attributionHtml
+        }
         restaurant {
           id
           name
@@ -38,6 +44,18 @@ const BrowseQuery = graphql(`
 `);
 
 export default function HomePage() {
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.log(
+      "BQ_DEBUG",
+      JSON.stringify({
+        t: typeof BrowseQuery,
+        kind: (BrowseQuery as { kind?: string })?.kind,
+        hasDefs: Array.isArray((BrowseQuery as { definitions?: unknown[] })?.definitions),
+        keys: Object.keys(BrowseQuery ?? {}),
+      }),
+    );
+  }
   const loc = useDeliveryLocation();
   const [{ data, fetching, error }] = useQuery({
     query: BrowseQuery,
@@ -73,14 +91,15 @@ export default function HomePage() {
           return (
             <Link key={hit.branch.id} href={`/r/${r.slug}`}>
               <Card className="group h-full overflow-hidden rounded-2xl border-neutral-200 transition-shadow hover:shadow-md">
-                <div
-                  className="flex h-20 items-end px-4 pb-2"
-                  style={{ background: `${r.theme?.primaryColor ?? "#404040"}22` }}
-                >
-                  <span
-                    className="text-lg font-bold"
-                    style={{ color: r.theme?.primaryColor ?? "#171717" }}
-                  >
+                <div className="relative">
+                  <RestaurantImage
+                    photo={hit.branch.photo}
+                    name={r.name}
+                    tint={r.theme?.primaryColor}
+                    className="h-32 w-full transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+                  <span className="absolute bottom-2 left-4 text-lg font-bold text-white drop-shadow">
                     {r.name}
                   </span>
                 </div>

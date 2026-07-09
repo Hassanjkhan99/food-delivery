@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ParallaxHero } from "@/components/theme/ParallaxHero";
 import { TiltCard } from "@/components/theme/TiltCard";
 import { DEFAULT_THEME, cardClasses, themeVars, type ThemeShape } from "@/components/theme/theme";
+import { ItemImage } from "@/components/media/ItemImage";
 import { ItemModal, type MenuItemForModal } from "./item-modal";
 
 const BranchQuery = graphql(`
@@ -58,6 +59,7 @@ const BranchQuery = graphql(`
             priceMinor
             isAvailable
             badges
+            imageUrl
             modifierGroups {
               id
               name
@@ -206,7 +208,14 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
               {cat.items.map((item) => {
                 const inner = (
                   <>
-                    <div className="min-w-0 text-left">
+                    {mode !== "compact" && (
+                      <ItemImage
+                        url={item.imageUrl}
+                        name={item.name}
+                        className="h-20 w-20 rounded-xl"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 text-left">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{item.name}</span>
                         {item.badges.map((b) => (
