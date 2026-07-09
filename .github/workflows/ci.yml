@@ -49,3 +49,47 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prettier --check "**/*.{ts,tsx,json,md,yml}" --ignore-path .gitignore
+
+  # Browser E2E: embedded PG (headless, no Docker) + seed, then dev servers,
+  # then Playwright over the four role UIs. Non-blocking for now (continue-on-
+  # error) while the suite stabilises — flip off once green in the pilot.
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      # Matches e2e/scripts/ci-db.mjs (embedded PG on :5455, role/db "fd"/"fooddelivery").
+      DATABASE_URL: postgresql://fd:fd@localhost:5455/fooddelivery
+      SESSION_SECRET: ci-secret-not-real-0000000000000000
+      NEXT_PUBLIC_API_URL: http://localhost:4000/graphql
+      E2E_WEB_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:4000/graphql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fd/db build
+      - run: pnpm --filter @fd/api codegen && pnpm --filter @fd/web codegen
+      - run: pnpm --filter @fd/e2e exec playwright install --with-deps chromium
+      # Ephemeral PG + migrate deploy + seed; stays alive in the background.
+      - run: node e2e/scripts/ci-db.mjs &
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 60); do
+            if pg_isready -h localhost -p 5455 -U fd >/dev/null 2>&1; then echo "pg up"; exit 0; fi
+            sleep 2
+          done
+          echo "postgres did not become ready" >&2; exit 1
+      # Build + start web/api in production mode is heavier; dev servers are fine
+      # for smoke and boot fast. Started detached; Playwright waits on the URL.
+      - run: pnpm dev &
+      - name: Wait for web
+        run: npx --yes wait-on http://localhost:3000 http://localhost:4000/graphql --timeout 120000
+      - run: pnpm --filter @fd/e2e e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7
