@@ -50,6 +50,14 @@ type CsvPreviewRow {
 
 scalar DateTime
 
+type DeliveryTask {
+  assignedAt: DateTime
+  codAmountMinor: Int!
+  id: ID!
+  order: Order!
+  status: String!
+}
+
 scalar JSON
 
 type LedgerEntry {
@@ -137,8 +145,13 @@ type Mutation {
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
+  reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  riderArrivedAtPickup(taskId: String!): DeliveryTask!
+  riderDelivered(codCollectedMinor: Int!, taskId: String!): DeliveryTask!
+  riderPickedUp(taskId: String!): DeliveryTask!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
+  setAvailability(online: Boolean!): Boolean!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
@@ -238,9 +251,12 @@ type Query {
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
   draftMenu(branchId: String!): Menu!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
+  myEarnings: RiderEarnings!
+  myJobs: [DeliveryTask!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
+  myRiderProfile: RiderProfile
   order(id: String!): Order
   payoutHistory(restaurantId: String!): [Payout!]!
   viewer: Viewer
@@ -315,6 +331,17 @@ type Rider {
   riderType: String!
   user: User!
   verificationStatus: String!
+}
+
+type RiderEarnings {
+  codCollectedMinor: Int!
+  deliveredCount: Int!
+}
+
+type RiderProfile {
+  isOnline: Boolean!
+  riderId: String!
+  riderType: String!
 }
 
 type RoleBinding {
