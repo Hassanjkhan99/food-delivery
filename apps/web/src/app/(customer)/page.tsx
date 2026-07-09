@@ -71,6 +71,7 @@ const OrderAgainQuery = graphql(`
   query OrderAgain {
     myOrders {
       id
+      status
       branch {
         id
         photo {
@@ -183,14 +184,15 @@ export default function HomePage() {
   );
   const freeDelivery = useMemo(() => hits.filter((h) => h.deliveryFeeMinor === 0), [hits]);
 
-  // Only surface reorder targets that actually deliver to the current location —
-  // otherwise the row links to restaurants the server will later reject as
-  // out-of-radius at checkout.
+  // Only surface reorder targets that (a) come from a successfully delivered order —
+  // not in-flight/cancelled/rejected ones — and (b) actually deliver to the current
+  // location, otherwise the row links to restaurants the server rejects at checkout.
   const reorderTargets: ReorderTarget[] = useMemo(() => {
     const deliverable = new Set(hits.map((h) => h.restaurant.slug));
     const seen = new Set<string>();
     const out: ReorderTarget[] = [];
     for (const o of reorderData?.myOrders ?? []) {
+      if (o.status !== "delivered") continue;
       const r = o.branch.restaurant;
       if (!deliverable.has(r.slug) || seen.has(r.slug)) continue;
       seen.add(r.slug);

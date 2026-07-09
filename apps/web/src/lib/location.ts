@@ -62,13 +62,18 @@ export const useLocationStore = create<LocationState>()(
 );
 
 /**
- * Read the current delivery location. Also silently syncs from GPS on first mount
- * IF permission was already granted (never prompts). Backward-compatible shape.
+ * Read the current delivery location. On first mount it silently adopts GPS IF
+ * permission was already granted (never prompts) — but ONLY when the user hasn't
+ * explicitly chosen a preset, otherwise a persisted "Phase 7"/"DHA" choice would be
+ * snapped back to GPS on every reload/navigation. `requestGps()` stays the explicit
+ * override. Backward-compatible shape.
  */
 export function useDeliveryLocation(): DeliveryLocation {
   const { lat, lng, label, source } = useLocationStore();
 
   useEffect(() => {
+    // Never override an explicit preset the customer picked (persisted in fd-location).
+    if (useLocationStore.getState().source === "preset") return;
     if (!navigator.geolocation || !navigator.permissions) return;
     navigator.permissions
       .query({ name: "geolocation" })
