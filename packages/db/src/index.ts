@@ -42,4 +42,6 @@ export async function disconnect(): Promise<void> {
 }
 
 export type { PrismaClient };
+export type { default as PrismaTypes } from "./generated/pothos-types.js";
+export { getDatamodel } from "./generated/pothos-types.js";
 export * from "./generated/prisma/client.js";

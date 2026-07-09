@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@fd/shared": "workspace:*",
+    "@graphql-typed-document-node/core": "^3.2.0",
     "@hookform/resolvers": "^5.2.0",
+    "dotenv": "^17.4.2",
     "framer-motion": "^12.23.0",
     "graphql": "^16.11.0",
     "graphql-sse": "^2.5.4",

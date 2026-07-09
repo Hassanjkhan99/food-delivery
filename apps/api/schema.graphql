@@ -1,0 +1,35 @@
+scalar DateTime
+
+scalar JSON
+
+type Mutation {
+  logout: Boolean
+  requestOtp(phone: String!): OtpRequestResult
+  verifyOtp(code: String!, phone: String!): Viewer
+}
+
+type OtpRequestResult {
+  devCode: String
+}
+
+type Query {
+  viewer: Viewer
+}
+
+type RoleBinding {
+  restaurantId: String
+  role: String
+}
+
+type User {
+  email: String
+  id: ID
+  name: String
+  phone: String
+}
+
+type Viewer {
+  home: String
+  roles: [RoleBinding!]
+  user: User
+}

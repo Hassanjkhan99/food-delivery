@@ -1,25 +1,16 @@
 import "./env.js";
 import { createServer } from "node:http";
-import { createYoga, createSchema } from "graphql-yoga";
+import { createYoga } from "graphql-yoga";
+import { useCookies } from "@whatwg-node/server-plugin-cookies";
 import { env } from "./env.js";
-
-// M0 bootstrap schema — replaced by the Pothos schema in M2.
-const schema = createSchema({
-  typeDefs: /* GraphQL */ `
-    type Query {
-      hello: String!
-    }
-  `,
-  resolvers: {
-    Query: {
-      hello: () => "Food Delivery API is up",
-    },
-  },
-});
+import { buildContext } from "./context.js";
+import { schema } from "./schema/index.js";
 
 const yoga = createYoga({
   schema,
+  context: buildContext,
   graphqlEndpoint: "/graphql",
+  plugins: [useCookies()],
   cors: {
     origin: [env.webOrigin],
     credentials: true,
