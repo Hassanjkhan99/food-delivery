@@ -96,7 +96,7 @@ export default function CheckoutPage() {
   if (!branchId || lines.length === 0) {
     return (
       <main className="py-16 text-center">
-        <p className="text-neutral-500">Nothing to check out.</p>
+        <p className="text-kd-fg-muted">Nothing to check out.</p>
         <Link href="/" className={buttonVariants({ className: "mt-4" })}>
           Browse restaurants
         </Link>
@@ -141,7 +141,7 @@ export default function CheckoutPage() {
   return (
     <main className="mx-auto max-w-lg">
       <h1 className="mb-1 text-2xl font-bold">Checkout</h1>
-      <p className="mb-6 text-sm text-neutral-500">Ordering from {branchName}</p>
+      <p className="mb-6 text-sm text-kd-fg-muted">Ordering from {branchName}</p>
 
       <form onSubmit={submit} className="space-y-4">
         <div>
@@ -156,7 +156,7 @@ export default function CheckoutPage() {
             rows={2}
             className="mt-1"
           />
-          <p className="mt-1 text-xs text-neutral-400">Delivering near {loc.label}</p>
+          <p className="mt-1 text-xs text-kd-fg-subtle">Delivering near {loc.label}</p>
         </div>
 
         <div>
@@ -183,7 +183,7 @@ export default function CheckoutPage() {
           />
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
           <p className="mb-2 text-sm font-semibold">Payment</p>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -204,9 +204,9 @@ export default function CheckoutPage() {
             Pay now by card
           </label>
           {paymentMode === "card" && (
-            <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
+            <div className="mt-3 space-y-2 border-t border-kd-border pt-3">
               {methods.length === 0 && (
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-kd-fg-muted">
                   No saved cards.{" "}
                   <Link href="/payment-methods" className="underline">
                     Add one
@@ -229,25 +229,25 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
-          {quoteState.fetching && <p className="text-neutral-400">Calculating…</p>}
-          {quoteError && <p className="text-red-600">{quoteError}</p>}
+        <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
+          {quoteState.fetching && <p className="text-kd-fg-subtle">Calculating…</p>}
+          {quoteError && <p className="text-kd-danger">{quoteError}</p>}
           {quote && (
             <>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Subtotal</span>
+                <span className="text-kd-fg-muted">Subtotal</span>
                 <span>{formatRs(quote.subtotalMinor)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Tax</span>
+                <span className="text-kd-fg-muted">Tax</span>
                 <span>{formatRs(quote.taxTotalMinor)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Delivery fee</span>
+                <span className="text-kd-fg-muted">Delivery fee</span>
                 <span>{formatRs(quote.deliveryFeeMinor)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutral-500">Platform fee</span>
+                <span className="text-kd-fg-muted">Platform fee</span>
                 <span>{formatRs(quote.platformFeeMinor)}</span>
               </div>
               <Separator className="my-2" />
@@ -255,16 +255,16 @@ export default function CheckoutPage() {
                 <span>Total</span>
                 <span>{formatRs(quote.grandTotalMinor)}</span>
               </div>
-              <p className="mt-2 text-xs text-neutral-400">
+              <p className="mt-2 text-xs text-kd-fg-subtle">
                 Billed by the restaurant. Receipt issued by the restaurant.
               </p>
               {!quote.meetsMinimum && (
-                <p className="mt-2 text-xs font-medium text-amber-600">
+                <p className="mt-2 text-xs font-medium text-kd-warning">
                   Below the minimum order of {formatRs(quote.minOrderMinor)}.
                 </p>
               )}
               {!quote.inRadius && (
-                <p className="mt-2 text-xs font-medium text-red-600">
+                <p className="mt-2 text-xs font-medium text-kd-danger">
                   This address is outside the delivery radius.
                 </p>
               )}
@@ -272,7 +272,7 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-kd-danger">{error}</p>}
 
         <Button
           type="submit"

@@ -91,7 +91,7 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
 
   return (
     <main className="space-y-4">
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{job.order.code}</h1>
           <Badge>{job.status.replace(/_/g, " ")}</Badge>
@@ -111,10 +111,10 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
             </a>
           </p>
           {job.order.customerNote && (
-            <p className="italic text-neutral-500">“{job.order.customerNote}”</p>
+            <p className="italic text-kd-fg-muted">“{job.order.customerNote}”</p>
           )}
         </div>
-        <ul className="mt-3 rounded-lg bg-neutral-50 p-3 text-sm">
+        <ul className="mt-3 rounded-lg bg-kd-surface-muted p-3 text-sm">
           {job.order.items.map((i) => {
             const snap = i.menuSnapshotJson as { name?: string };
             return (
@@ -125,13 +125,13 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
           })}
         </ul>
         {job.codAmountMinor > 0 && (
-          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-center font-semibold text-amber-800">
+          <p className="mt-3 rounded-lg bg-kd-warning-soft p-3 text-center font-semibold text-kd-warning">
             Collect {formatRs(job.codAmountMinor)} in cash
           </p>
         )}
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-kd-danger">{error}</p>}
 
       {job.status === "assigned" && (
         <Button
@@ -160,7 +160,7 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         </Button>
       )}
       {job.status === "picked_up" && (
-        <div className="space-y-2 rounded-2xl border border-neutral-200 bg-white p-4">
+        <div className="space-y-2 rounded-2xl border border-kd-border bg-kd-surface p-4">
           {job.codAmountMinor > 0 && (
             <div>
               <label className="text-sm font-medium">Cash collected (Rs)</label>

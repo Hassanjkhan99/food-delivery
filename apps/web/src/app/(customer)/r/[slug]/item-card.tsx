@@ -68,7 +68,7 @@ export function ItemCard({
         {!compact && item.description && (
           <p className="mt-1 line-clamp-2 text-sm opacity-60">{item.description}</p>
         )}
-        {!item.isAvailable && <p className="mt-1 text-xs font-medium text-red-500">Unavailable</p>}
+        {!item.isAvailable && <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>}
       </div>
       <span className="shrink-0 font-semibold" style={{ color: "var(--brand-primary)" }}>
         {formatRs(item.priceMinor)}

@@ -37,7 +37,7 @@ export default function AccountPage() {
   if (!viewer) {
     return (
       <main className="py-16 text-center">
-        <p className="text-neutral-500">You are not signed in.</p>
+        <p className="text-kd-fg-muted">You are not signed in.</p>
         <Button className="mt-4" onClick={() => router.push("/login")}>
           Sign in
         </Button>
@@ -48,10 +48,10 @@ export default function AccountPage() {
   return (
     <main className="mx-auto max-w-sm">
       <h1 className="mb-6 text-2xl font-bold">Account</h1>
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
-        <p className="font-medium text-neutral-900">{viewer.user?.name ?? "Unnamed"}</p>
-        <p className="text-neutral-500">{viewer.user?.phone}</p>
-        <p className="mt-2 text-xs text-neutral-400">
+      <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
+        <p className="font-medium text-kd-fg">{viewer.user?.name ?? "Unnamed"}</p>
+        <p className="text-kd-fg-muted">{viewer.user?.phone}</p>
+        <p className="mt-2 text-xs text-kd-fg-subtle">
           Roles: {viewer.roles?.map((r) => r?.role).join(", ") || "customer"}
         </p>
       </div>

@@ -57,11 +57,11 @@ export default function AdminFeesPage() {
   return (
     <main className="max-w-lg">
       <h1 className="mb-1 text-xl font-bold">Fee configuration</h1>
-      <p className="mb-4 text-sm text-neutral-500">
+      <p className="mb-4 text-sm text-kd-fg-muted">
         Versioned — new orders snapshot the latest config; past orders never change.
       </p>
 
-      <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4 text-sm">
+      <div className="space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4 text-sm">
         <p className="font-semibold">Small business (lenient)</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -104,7 +104,7 @@ export default function AdminFeesPage() {
             />
           </div>
         </div>
-        {message && <p className="text-neutral-600">{message}</p>}
+        {message && <p className="text-kd-fg-muted">{message}</p>}
         <Button
           className="w-full"
           disabled={saveState.fetching}
@@ -126,7 +126,7 @@ export default function AdminFeesPage() {
           Publish new version
         </Button>
         {current && (
-          <p className="text-xs text-neutral-400">
+          <p className="text-xs text-kd-fg-subtle">
             Active since {new Date(current.createdAt as unknown as string).toLocaleString()} — 100
             bps = 1%.
           </p>

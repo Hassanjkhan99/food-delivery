@@ -184,7 +184,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       </div>
     );
   }
-  if (!branch) return <p className="text-neutral-500">Restaurant not found.</p>;
+  if (!branch) return <p className="text-kd-fg-muted">Restaurant not found.</p>;
 
   const r = branch.restaurant;
   const reviewsHref = `/r/${r.slug}/reviews`;
@@ -242,7 +242,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
           >
             {r.avgRating != null && (
               <Link href={reviewsHref} className="flex items-center gap-1 hover:underline">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                <Star className="h-4 w-4 fill-kd-warning text-kd-warning" />
                 {r.avgRating.toFixed(1)} ({r.ratingCount}) reviews
               </Link>
             )}
@@ -302,7 +302,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
                   mode === "grid"
                     ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
                     : mode === "compact"
-                      ? "divide-y divide-black/5 rounded-xl border border-black/5 bg-white/50"
+                      ? "divide-y divide-kd-border rounded-xl border border-kd-border bg-kd-surface/50"
                       : "grid gap-3 sm:grid-cols-2"
                 }
               >

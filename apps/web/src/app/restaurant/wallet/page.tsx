@@ -36,7 +36,7 @@ export default function WalletPage() {
     requestPolicy: "cache-and-network",
   });
 
-  if (!restaurant) return <p className="text-neutral-500">Complete onboarding first.</p>;
+  if (!restaurant) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   const balance = data?.walletBalance ?? 0;
 
@@ -44,13 +44,13 @@ export default function WalletPage() {
     <main className="max-w-2xl">
       <h1 className="mb-4 text-xl font-bold">Wallet</h1>
 
-      <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-6">
-        <p className="text-sm text-neutral-500">Current balance (payable to you)</p>
-        <p className={`text-3xl font-bold ${balance < 0 ? "text-red-600" : "text-neutral-900"}`}>
+      <div className="mb-6 rounded-2xl border border-kd-border bg-kd-surface p-6">
+        <p className="text-sm text-kd-fg-muted">Current balance (payable to you)</p>
+        <p className={`text-3xl font-bold ${balance < 0 ? "text-kd-danger" : "text-kd-fg"}`}>
           {formatRs(balance)}
         </p>
         {balance < 0 && (
-          <p className="mt-1 text-xs text-red-500">
+          <p className="mt-1 text-xs text-kd-danger">
             Negative balance: platform fees from COD orders exceed card-order earnings. It nets
             against future card orders or is invoiced.
           </p>
@@ -62,12 +62,12 @@ export default function WalletPage() {
         {data?.payoutHistory.map((p) => (
           <div
             key={p.id}
-            className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-3 text-sm"
+            className="flex items-center justify-between rounded-xl border border-kd-border bg-kd-surface p-3 text-sm"
           >
             <span>
               {p.reference ?? p.id.slice(0, 8)}
               {p.paidAt && (
-                <span className="ml-2 text-xs text-neutral-400">
+                <span className="ml-2 text-xs text-kd-fg-subtle">
                   {new Date(p.paidAt as unknown as string).toLocaleDateString()}
                 </span>
               )}
@@ -79,7 +79,7 @@ export default function WalletPage() {
           </div>
         ))}
         {data?.payoutHistory.length === 0 && (
-          <p className="text-sm text-neutral-400">No payouts yet.</p>
+          <p className="text-sm text-kd-fg-subtle">No payouts yet.</p>
         )}
       </div>
 
@@ -88,18 +88,18 @@ export default function WalletPage() {
         {data?.walletStatement.map((e) => (
           <div
             key={e.id}
-            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-lg bg-kd-surface px-3 py-2 text-sm"
           >
-            <span className="min-w-0 truncate text-neutral-600">{e.memo}</span>
+            <span className="min-w-0 truncate text-kd-fg-muted">{e.memo}</span>
             <span
-              className={`ml-3 shrink-0 font-mono ${e.creditMinor > 0 ? "text-green-700" : "text-red-600"}`}
+              className={`ml-3 shrink-0 font-mono ${e.creditMinor > 0 ? "text-kd-success" : "text-kd-danger"}`}
             >
               {e.creditMinor > 0 ? `+${formatRs(e.creditMinor)}` : `−${formatRs(e.debitMinor)}`}
             </span>
           </div>
         ))}
         {data?.walletStatement.length === 0 && (
-          <p className="text-sm text-neutral-400">No entries yet.</p>
+          <p className="text-sm text-kd-fg-subtle">No entries yet.</p>
         )}
       </div>
     </main>

@@ -70,10 +70,10 @@ function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-neutral-900">Sign in</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+    <main className="flex min-h-screen items-center justify-center bg-kd-surface-muted p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-kd-border bg-kd-surface p-8 shadow-sm">
+        <h1 className="text-xl font-semibold text-kd-fg">Sign in</h1>
+        <p className="mt-1 text-sm text-kd-fg-muted">
           {step === "phone"
             ? "Enter your phone number to receive a one-time code."
             : `Code sent to ${phone}.`}
@@ -82,20 +82,20 @@ function LoginForm() {
         {step === "phone" ? (
           <form onSubmit={onRequest} className="mt-6 space-y-4">
             <label className="block">
-              <span className="text-sm font-medium text-neutral-700">Phone</span>
+              <span className="text-sm font-medium text-kd-fg-muted">Phone</span>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+923001234567"
-                className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                className="mt-1 w-full rounded-lg border border-kd-border px-3 py-2 text-sm outline-none focus:border-kd-fg"
                 autoFocus
               />
             </label>
             <button
               type="submit"
               disabled={reqState.fetching}
-              className="w-full rounded-lg bg-neutral-900 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-kd-primary py-2 text-sm font-medium text-white hover:bg-kd-primary-hover disabled:opacity-50"
             >
               {reqState.fetching ? "Sending…" : "Send code"}
             </button>
@@ -103,26 +103,26 @@ function LoginForm() {
         ) : (
           <form onSubmit={onVerify} className="mt-6 space-y-4">
             {devCode && (
-              <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-sm text-kd-warning">
                 Dev mode — your code is <span className="font-mono font-bold">{devCode}</span>
               </div>
             )}
             <label className="block">
-              <span className="text-sm font-medium text-neutral-700">6-digit code</span>
+              <span className="text-sm font-medium text-kd-fg-muted">6-digit code</span>
               <input
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-center font-mono text-lg tracking-[0.5em] outline-none focus:border-neutral-900"
+                className="mt-1 w-full rounded-lg border border-kd-border px-3 py-2 text-center font-mono text-lg tracking-[0.5em] outline-none focus:border-kd-fg"
                 autoFocus
               />
             </label>
             <button
               type="submit"
               disabled={verState.fetching || code.length !== 6}
-              className="w-full rounded-lg bg-neutral-900 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-kd-primary py-2 text-sm font-medium text-white hover:bg-kd-primary-hover disabled:opacity-50"
             >
               {verState.fetching ? "Verifying…" : "Verify & sign in"}
             </button>
@@ -133,14 +133,14 @@ function LoginForm() {
                 setCode("");
                 setDevCode(null);
               }}
-              className="w-full text-center text-sm text-neutral-500 hover:text-neutral-800"
+              className="w-full text-center text-sm text-kd-fg-muted hover:text-kd-fg"
             >
               Use a different number
             </button>
           </form>
         )}
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && <p className="mt-4 text-sm text-kd-danger">{error}</p>}
       </div>
     </main>
   );

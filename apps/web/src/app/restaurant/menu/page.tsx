@@ -127,7 +127,7 @@ export default function MenuManagerPage() {
     return fetching ? (
       <Skeleton className="h-64 rounded-2xl" />
     ) : (
-      <p className="text-neutral-500">Complete onboarding first.</p>
+      <p className="text-kd-fg-muted">Complete onboarding first.</p>
     );
   }
 
@@ -159,7 +159,7 @@ export default function MenuManagerPage() {
         <div>
           <h1 className="text-xl font-bold">Menu manager</h1>
           {menu && (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-kd-fg-muted">
               Editing draft v{menu.version} — customers see the last published version.{" "}
               <a href="/restaurant/menu/import" className="underline">
                 Upload your physical menu →
@@ -184,19 +184,19 @@ export default function MenuManagerPage() {
       </div>
 
       {message && (
-        <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
+        <p className="mb-4 rounded-lg bg-kd-surface-muted px-3 py-2 text-sm text-kd-fg-muted">
           {message}
         </p>
       )}
 
       {menu?.categories.map((cat) => (
-        <section key={cat.id} className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <section key={cat.id} className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">{cat.name}</h2>
             <div className="flex items-center gap-2">
               <select
                 title="How customers see this section"
-                className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
+                className="rounded-lg border border-kd-border px-2 py-1 text-xs"
                 value={
                   ((menu?.layoutJson as { displayModes?: Record<string, string> })?.displayModes?.[
                     cat.name
@@ -238,11 +238,11 @@ export default function MenuManagerPage() {
             {cat.items.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-2 rounded-lg border border-kd-border px-3 py-2 text-sm"
               >
                 <div className="min-w-0">
                   <span className="font-medium">{item.name}</span>{" "}
-                  <span className="text-neutral-500">{formatRs(item.priceMinor)}</span>
+                  <span className="text-kd-fg-muted">{formatRs(item.priceMinor)}</span>
                   {!item.isAvailable && (
                     <Badge variant="secondary" className="ml-2">
                       Unavailable
@@ -278,7 +278,7 @@ export default function MenuManagerPage() {
                   <Button
                     size="xs"
                     variant="ghost"
-                    className="text-red-500"
+                    className="text-kd-danger"
                     onClick={async () => {
                       if (confirm(`Delete '${item.name}' from the draft?`)) {
                         await deleteItem({ itemId: item.id });
@@ -291,7 +291,7 @@ export default function MenuManagerPage() {
                 </div>
               </div>
             ))}
-            {cat.items.length === 0 && <p className="text-xs text-neutral-400">No items yet.</p>}
+            {cat.items.length === 0 && <p className="text-xs text-kd-fg-subtle">No items yet.</p>}
           </div>
         </section>
       ))}

@@ -92,7 +92,7 @@ export default function BrandingPage() {
   const theme: ThemeShape = { ...DEFAULT_THEME, ...(saved ?? {}), ...edits } as ThemeShape;
   const setTheme = (next: ThemeShape) => setEdits((prev) => ({ ...prev, ...next }));
 
-  if (!restaurant) return <p className="text-neutral-500">Complete onboarding first.</p>;
+  if (!restaurant) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   async function handleUpload(file: File, target: "logo" | "hero") {
     setMessage(null);
@@ -117,7 +117,7 @@ export default function BrandingPage() {
         type="color"
         value={theme[key] as string}
         onChange={(e) => setTheme({ ...theme, [key]: e.target.value })}
-        className="h-8 w-14 cursor-pointer rounded border border-neutral-200"
+        className="h-8 w-14 cursor-pointer rounded border border-kd-border"
       />
     </div>
   );
@@ -126,7 +126,7 @@ export default function BrandingPage() {
     <main className="grid max-w-5xl gap-6 lg:grid-cols-2">
       <div>
         <h1 className="mb-4 text-xl font-bold">Branding</h1>
-        <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+        <div className="space-y-4 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
           {colorField("Primary color", "primaryColor")}
           {colorField("Accent color", "accentColor")}
           {colorField("Background", "backgroundColor")}
@@ -137,7 +137,7 @@ export default function BrandingPage() {
             <select
               value={theme.fontKey}
               onChange={(e) => setTheme({ ...theme, fontKey: e.target.value })}
-              className="rounded-lg border border-neutral-300 px-2 py-1"
+              className="rounded-lg border border-kd-border px-2 py-1"
             >
               {Object.keys(FONT_STACKS).map((f) => (
                 <option key={f} value={f}>
@@ -151,7 +151,7 @@ export default function BrandingPage() {
             <select
               value={theme.cardStyle}
               onChange={(e) => setTheme({ ...theme, cardStyle: e.target.value })}
-              className="rounded-lg border border-neutral-300 px-2 py-1"
+              className="rounded-lg border border-kd-border px-2 py-1"
             >
               {CARD_STYLES.map((s) => (
                 <option key={s} value={s}>
@@ -165,7 +165,7 @@ export default function BrandingPage() {
             <select
               value={theme.heroEffect}
               onChange={(e) => setTheme({ ...theme, heroEffect: e.target.value })}
-              className="rounded-lg border border-neutral-300 px-2 py-1"
+              className="rounded-lg border border-kd-border px-2 py-1"
             >
               {HERO_EFFECTS.map((s) => (
                 <option key={s} value={s}>
@@ -194,7 +194,7 @@ export default function BrandingPage() {
             />
           </div>
 
-          {message && <p className="text-red-600">{message}</p>}
+          {message && <p className="text-kd-danger">{message}</p>}
           <Button
             className="w-full"
             disabled={saveState.fetching}
@@ -227,7 +227,7 @@ export default function BrandingPage() {
       <div>
         <h2 className="mb-4 text-xl font-bold">Live preview</h2>
         <div
-          className="overflow-hidden rounded-2xl border border-neutral-200 p-4"
+          className="overflow-hidden rounded-2xl border border-kd-border p-4"
           style={themeVars(theme)}
         >
           <div
@@ -273,7 +273,7 @@ export default function BrandingPage() {
             </span>
           </div>
         </div>
-        <p className="mt-2 text-xs text-neutral-400">
+        <p className="mt-2 text-xs text-kd-fg-subtle">
           Hover the cards to feel the 3D tilt (when selected). Effects auto-disable for customers
           with reduced-motion preferences.
         </p>

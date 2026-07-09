@@ -102,7 +102,7 @@ function Countdown({ deadline }: { deadline: string }) {
   }, [deadline]);
   const s = Math.floor(left / 1000);
   return (
-    <span className={`font-mono text-sm font-bold ${s < 30 ? "text-red-600" : "text-amber-600"}`}>
+    <span className={`font-mono text-sm font-bold ${s < 30 ? "text-kd-danger" : "text-kd-warning"}`}>
       {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
     </span>
   );
@@ -122,14 +122,14 @@ type BoardOrder = {
 
 function OrderCard({ order, children }: { order: BoardOrder; children?: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-3 text-sm shadow-sm">
+    <div className="rounded-xl border border-kd-border bg-kd-surface p-3 text-sm shadow-sm">
       <div className="flex items-center justify-between">
         <span className="font-semibold">{order.code}</span>
         <Badge variant={order.paymentMode === "cod" ? "secondary" : "default"}>
           {order.paymentMode === "cod" ? "COD" : "PAID"} · {formatRs(order.grandTotalMinor)}
         </Badge>
       </div>
-      <ul className="mt-1 text-neutral-600">
+      <ul className="mt-1 text-kd-fg-muted">
         {order.items.map((i) => {
           const snap = i.menuSnapshotJson as { name?: string };
           return (
@@ -140,7 +140,7 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
         })}
       </ul>
       {order.customerNote && (
-        <p className="mt-1 text-xs italic text-neutral-400">“{order.customerNote}”</p>
+        <p className="mt-1 text-xs italic text-kd-fg-subtle">“{order.customerNote}”</p>
       )}
       {children}
     </div>
@@ -179,7 +179,7 @@ export default function OrdersBoardPage() {
     return fetching ? (
       <Skeleton className="h-64 rounded-2xl" />
     ) : (
-      <p className="text-neutral-500">
+      <p className="text-kd-fg-muted">
         No restaurant yet —{" "}
         <a href="/restaurant/onboarding" className="underline">
           complete onboarding
@@ -214,7 +214,7 @@ export default function OrdersBoardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {/* NEW */}
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
             New ({byStatus(["pending_acceptance"]).length})
           </h2>
           <div className="space-y-2">
@@ -257,13 +257,13 @@ export default function OrdersBoardPage() {
 
         {/* PREPARING */}
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
             Preparing ({byStatus(["accepted", "preparing"]).length})
           </h2>
           <div className="space-y-2">
             {byStatus(["accepted", "preparing"]).map((o) => (
               <OrderCard key={o.id} order={o}>
-                <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
+                <div className="mt-2 flex items-center justify-between text-xs text-kd-fg-muted">
                   <span>ETA {o.prepEtaMinutes ?? "?"}m</span>
                   {o.status === "accepted" ? (
                     <Button
@@ -294,7 +294,7 @@ export default function OrdersBoardPage() {
 
         {/* READY */}
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
             Ready ({byStatus(["ready_for_pickup"]).length})
           </h2>
           <div className="space-y-2">
@@ -302,7 +302,7 @@ export default function OrdersBoardPage() {
               <OrderCard key={o.id} order={o}>
                 <div className="mt-2">
                   <select
-                    className="w-full rounded-lg border border-neutral-300 px-2 py-1 text-xs"
+                    className="w-full rounded-lg border border-kd-border px-2 py-1 text-xs"
                     defaultValue=""
                     onChange={async (e) => {
                       if (e.target.value) {
@@ -328,13 +328,13 @@ export default function OrdersBoardPage() {
 
         {/* OUT */}
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
             Out ({byStatus(["rider_assigned", "picked_up", "out_for_delivery"]).length})
           </h2>
           <div className="space-y-2">
             {byStatus(["rider_assigned", "picked_up", "out_for_delivery"]).map((o) => (
               <OrderCard key={o.id} order={o}>
-                <p className="mt-1 text-xs text-neutral-500">{o.status.replace(/_/g, " ")}</p>
+                <p className="mt-1 text-xs text-kd-fg-muted">{o.status.replace(/_/g, " ")}</p>
               </OrderCard>
             ))}
           </div>
@@ -342,11 +342,11 @@ export default function OrdersBoardPage() {
 
         {/* RECENT */}
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Recent</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">Recent</h2>
           <div className="space-y-2 opacity-70">
             {done.map((o) => (
               <OrderCard key={o.id} order={o}>
-                <p className="mt-1 text-xs text-neutral-500">{o.status.replace(/_/g, " ")}</p>
+                <p className="mt-1 text-xs text-kd-fg-muted">{o.status.replace(/_/g, " ")}</p>
               </OrderCard>
             ))}
           </div>

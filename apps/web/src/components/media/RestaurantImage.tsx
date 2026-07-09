@@ -35,7 +35,7 @@ export function RestaurantImage({
 
   return (
     <div
-      className={cn("relative overflow-hidden bg-neutral-100", className)}
+      className={cn("relative overflow-hidden bg-kd-surface-muted", className)}
       style={show ? undefined : { background: fallbackGradient(name, tint) }}
     >
       {show ? (

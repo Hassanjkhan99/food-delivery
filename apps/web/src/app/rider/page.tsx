@@ -80,7 +80,7 @@ export default function RiderHomePage() {
     return fetching ? (
       <Skeleton className="h-40 rounded-2xl" />
     ) : (
-      <p className="text-neutral-500">No rider profile for this account.</p>
+      <p className="text-kd-fg-muted">No rider profile for this account.</p>
     );
   }
 
@@ -90,10 +90,10 @@ export default function RiderHomePage() {
 
   return (
     <main className="space-y-4">
-      <div className="flex items-center justify-between rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="flex items-center justify-between rounded-2xl border border-kd-border bg-kd-surface p-4">
         <div>
           <p className="font-semibold">{profile.isOnline ? "You're online" : "You're offline"}</p>
-          <p className="text-xs text-neutral-500">{profile.riderType} rider</p>
+          <p className="text-xs text-kd-fg-muted">{profile.riderType} rider</p>
         </div>
         <Button
           variant={profile.isOnline ? "destructive" : "default"}
@@ -107,9 +107,9 @@ export default function RiderHomePage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Active jobs</h2>
+        <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">Active jobs</h2>
         {active.length === 0 && (
-          <p className="rounded-xl bg-white p-6 text-center text-sm text-neutral-400">
+          <p className="rounded-xl bg-kd-surface p-6 text-center text-sm text-kd-fg-subtle">
             No active jobs — new assignments appear here.
           </p>
         )}
@@ -120,18 +120,18 @@ export default function RiderHomePage() {
               <Link
                 key={j.id}
                 href={`/rider/jobs/${j.id}`}
-                className="block rounded-2xl border border-neutral-200 bg-white p-4"
+                className="block rounded-2xl border border-kd-border bg-kd-surface p-4"
               >
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{j.order.code}</span>
                   <Badge>{j.status.replace(/_/g, " ")}</Badge>
                 </div>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="mt-1 text-sm text-kd-fg-muted">
                   Pickup: {j.order.branch.restaurant.name}
                 </p>
-                <p className="text-sm text-neutral-600">Drop: {addr?.text ?? "—"}</p>
+                <p className="text-sm text-kd-fg-muted">Drop: {addr?.text ?? "—"}</p>
                 {j.codAmountMinor > 0 && (
-                  <p className="mt-1 text-sm font-semibold text-amber-700">
+                  <p className="mt-1 text-sm font-semibold text-kd-warning">
                     Collect {formatRs(j.codAmountMinor)} (COD)
                   </p>
                 )}
@@ -143,15 +143,15 @@ export default function RiderHomePage() {
 
       {past.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Recent</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">Recent</h2>
           <div className="space-y-1 opacity-70">
             {past.map((j) => (
               <div
                 key={j.id}
-                className="flex justify-between rounded-lg bg-white px-3 py-2 text-sm"
+                className="flex justify-between rounded-lg bg-kd-surface px-3 py-2 text-sm"
               >
                 <span>{j.order.code}</span>
-                <span className="text-neutral-500">{j.status}</span>
+                <span className="text-kd-fg-muted">{j.status}</span>
               </div>
             ))}
           </div>

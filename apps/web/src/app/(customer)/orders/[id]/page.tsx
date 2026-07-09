@@ -158,7 +158,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }, [order, refetch]);
 
   if (fetching && !order) return <Skeleton className="h-96 rounded-2xl" />;
-  if (!order) return <p className="text-neutral-500">Order not found.</p>;
+  if (!order) return <p className="text-kd-fg-muted">Order not found.</p>;
 
   const address = order.addressSnapshotJson as { text?: string } | null;
 
@@ -167,10 +167,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">{order.branch.restaurant.name}</h1>
-          <p className="text-sm text-neutral-500">{order.code}</p>
+          <p className="text-sm text-kd-fg-muted">{order.code}</p>
         </div>
         {order.status === "pending_acceptance" && (
-          <div className="rounded-lg bg-amber-50 px-3 py-2 text-right text-xs text-amber-800">
+          <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-right text-xs text-kd-warning">
             Restaurant has
             <br />
             <Countdown deadline={order.acceptDeadlineAt as unknown as string} /> to accept
@@ -179,14 +179,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* Timeline */}
-      <ol className="relative mb-8 space-y-4 border-l border-neutral-200 pl-5">
+      <ol className="relative mb-8 space-y-4 border-l border-kd-border pl-5">
         {order.events.map((e) => (
           <li key={e.id} className="relative">
-            <span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-neutral-900" />
-            <p className="text-sm font-medium text-neutral-900">
+            <span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-kd-fg" />
+            <p className="text-sm font-medium text-kd-fg">
               {TIMELINE_LABEL[e.toStatus] ?? e.toStatus}
             </p>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-kd-fg-muted">
               {new Date(e.createdAt as unknown as string).toLocaleTimeString()}
               {e.reason ? ` — ${e.reason}` : ""}
             </p>
@@ -195,7 +195,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </ol>
 
       {/* Items */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+      <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
         {order.items.map((i) => {
           const snap = i.menuSnapshotJson as {
             name?: string;
@@ -208,7 +208,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   {i.qty} × {snap.name}
                 </span>
                 {snap.modifiers && snap.modifiers.length > 0 && (
-                  <p className="text-xs text-neutral-400">
+                  <p className="text-xs text-kd-fg-subtle">
                     {snap.modifiers.map((m) => m.optionName).join(", ")}
                   </p>
                 )}
@@ -218,19 +218,19 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           );
         })}
         <Separator className="my-2" />
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-kd-fg-muted">
           <span>Subtotal</span>
           <span>{formatRs(order.subtotalMinor)}</span>
         </div>
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-kd-fg-muted">
           <span>Tax</span>
           <span>{formatRs(order.taxTotalMinor)}</span>
         </div>
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-kd-fg-muted">
           <span>Delivery</span>
           <span>{formatRs(order.deliveryFeeMinor)}</span>
         </div>
-        <div className="flex justify-between text-neutral-500">
+        <div className="flex justify-between text-kd-fg-muted">
           <span>Platform fee</span>
           <span>{formatRs(order.platformFeeMinor)}</span>
         </div>
@@ -241,11 +241,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {address?.text && (
-        <p className="mt-4 text-sm text-neutral-500">Delivering to: {address.text}</p>
+        <p className="mt-4 text-sm text-kd-fg-muted">Delivering to: {address.text}</p>
       )}
 
       {order.status === "delivered" && !rated && (
-        <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 text-center">
+        <div className="mt-6 rounded-xl border border-kd-border bg-kd-surface p-4 text-center">
           <p className="mb-2 text-sm font-medium">How was it?</p>
           <div className="mb-3 flex justify-center gap-1">
             {[1, 2, 3, 4, 5].map((n) => (
@@ -272,8 +272,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       aria-pressed={on}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                         on
-                          ? "border-neutral-900 bg-neutral-900 text-white"
-                          : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                          ? "border-kd-fg bg-kd-fg text-kd-surface"
+                          : "border-kd-border text-kd-fg-muted hover:border-kd-fg-subtle"
                       }`}
                     >
                       {tag.label}
@@ -308,7 +308,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
       {rated && (
-        <p className="mt-6 text-center text-sm text-neutral-500">Thanks for the feedback! ⭐</p>
+        <p className="mt-6 text-center text-sm text-kd-fg-muted">Thanks for the feedback! ⭐</p>
       )}
 
       {["pending_acceptance", "accepted"].includes(order.status) && (

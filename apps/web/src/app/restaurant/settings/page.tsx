@@ -20,17 +20,17 @@ export default function SettingsPage() {
   const { restaurant, branch, refetch } = useConsole();
   const [, setAccepting] = useMutation(SetAcceptingMutation);
 
-  if (!restaurant || !branch) return <p className="text-neutral-500">Complete onboarding first.</p>;
+  if (!restaurant || !branch) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   return (
     <main className="max-w-xl">
       <h1 className="mb-4 text-xl font-bold">Settings</h1>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4">
+        <div className="flex items-center justify-between rounded-xl border border-kd-border bg-kd-surface p-4">
           <div>
             <p className="font-medium">Accepting orders</p>
-            <p className="text-xs text-neutral-500">Pause during rush or when closing early.</p>
+            <p className="text-xs text-kd-fg-muted">Pause during rush or when closing early.</p>
           </div>
           <Button
             variant={branch.isAcceptingOrders ? "destructive" : "default"}
@@ -44,9 +44,9 @@ export default function SettingsPage() {
           </Button>
         </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+        <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
           <p className="mb-2 font-medium">Commercial profile</p>
-          <div className="grid grid-cols-2 gap-2 text-neutral-600">
+          <div className="grid grid-cols-2 gap-2 text-kd-fg-muted">
             <span>Status</span>
             <Badge
               variant={restaurant.status === "approved" ? "default" : "secondary"}
@@ -63,7 +63,7 @@ export default function SettingsPage() {
             <span>Delivery radius</span>
             <span className="text-right">{(branch.deliveryRadiusM / 1000).toFixed(1)} km</span>
           </div>
-          <p className="mt-3 text-xs text-neutral-400">
+          <p className="mt-3 text-xs text-kd-fg-subtle">
             Tier and commission are managed by the platform. Contact support to change commercial
             terms.
           </p>
