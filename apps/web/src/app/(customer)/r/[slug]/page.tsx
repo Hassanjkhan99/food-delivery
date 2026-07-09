@@ -29,7 +29,7 @@ import { useCart } from "@/lib/cart";
 import { ItemModal, type MenuItemForModal } from "./item-modal";
 import { ItemCard, type ItemForCard } from "./item-card";
 import { MenuNav, type NavSection } from "./menu-nav";
-import { FloatingCartBar } from "./floating-cart-bar";
+import { CartBarSpacer, FloatingCartBar } from "./floating-cart-bar";
 import { useHeroCollapsed, useScrollSpy } from "./use-menu-scroll";
 
 const BranchQuery = graphql(`
@@ -323,6 +323,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         })
       )}
 
+      <CartBarSpacer branchId={branch.id} />
       <FloatingCartBar branchId={branch.id} />
 
       {openItem && (

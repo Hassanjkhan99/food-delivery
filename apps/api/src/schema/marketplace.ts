@@ -171,11 +171,14 @@ builder.prismaObject("Branch", {
     }),
     // "Popular" pseudo-category: top items by quantity across the last 30 days of
     // delivered orders at this branch, resolved back to their *current* menu items
-    // (so renamed/removed/unavailable items drop out gracefully). New branches with
-    // no order history simply return [] and the client omits the section.
+    // (so removed/unavailable items drop out gracefully). New branches with no order
+    // history simply return [] and the client omits the section.
     //
-    // MVP is fully computed. A future curated override (issue #38 "hybrid") would
-    // slot in here: fetch pinned items first, then top up from the computed tally.
+    // We tally by the snapshot *name*, not menuItemId: publishing a menu draft clones
+    // it into fresh MenuItem rows with new ids (cloneMenu), so old snapshot ids would
+    // stop matching the active menu and Popular would reset on every publish. Names are
+    // stable across clones, so popularity survives edits. MVP is fully computed; a
+    // future curated override (#38 "hybrid") would fetch pinned items first here.
     popularItems: t.prismaField({
       type: ["MenuItem"],
       args: { limit: t.arg.int({ required: false }) },
@@ -191,25 +194,29 @@ builder.prismaObject("Branch", {
         });
         const tally = new Map<string, number>();
         for (const row of rows) {
-          const snap = row.menuSnapshotJson as { menuItemId?: string } | null;
-          const id = snap?.menuItemId;
-          if (id) tally.set(id, (tally.get(id) ?? 0) + row.qty);
+          const snap = row.menuSnapshotJson as { name?: string } | null;
+          const name = snap?.name;
+          if (name) tally.set(name, (tally.get(name) ?? 0) + row.qty);
         }
-        const topIds = [...tally.entries()]
+        const topNames = [...tally.entries()]
           .sort((a, b) => b[1] - a[1])
           .slice(0, limit)
-          .map(([id]) => id);
-        if (topIds.length === 0) return [];
+          .map(([name]) => name);
+        if (topNames.length === 0) return [];
         const items = await prisma.menuItem.findMany({
           ...query,
           where: {
-            id: { in: topIds },
+            name: { in: topNames },
             isAvailable: true,
             category: { menuId: branch.activeMenuId },
           },
         });
-        const rank = new Map(topIds.map((id, i) => [id, i]));
-        return items.sort((a, b) => (rank.get(a.id) ?? 99) - (rank.get(b.id) ?? 99));
+        // Rank by tally order; dedupe if two current items share a popular name.
+        const rank = new Map(topNames.map((name, i) => [name, i]));
+        const seen = new Set<string>();
+        return items
+          .filter((it) => (seen.has(it.name) ? false : (seen.add(it.name), true)))
+          .sort((a, b) => (rank.get(a.name) ?? 99) - (rank.get(b.name) ?? 99));
       },
     }),
   }),

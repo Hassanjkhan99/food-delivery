@@ -10,12 +10,25 @@ import { ShoppingBag } from "lucide-react";
 import { formatRs } from "@fd/shared";
 import { cartSubtotal, useCart } from "@/lib/cart";
 
+/** Shows the bar for *this* branch's cart only. */
+function useCartBarVisible(branchId: string) {
+  const lines = useCart((s) => s.lines);
+  const cartBranchId = useCart((s) => s.branchId);
+  return cartBranchId === branchId && lines.length > 0;
+}
+
+/**
+ * Bottom spacer that reserves room while the fixed bar is up, so the last menu items
+ * never sit underneath it (they'd be unreadable/untappable at the end of a long menu).
+ */
+export function CartBarSpacer({ branchId }: { branchId: string }) {
+  return useCartBarVisible(branchId) ? <div aria-hidden className="h-24" /> : null;
+}
+
 export function FloatingCartBar({ branchId }: { branchId: string }) {
   const reduced = useReducedMotion();
   const lines = useCart((s) => s.lines);
-  const cartBranchId = useCart((s) => s.branchId);
-
-  const show = cartBranchId === branchId && lines.length > 0;
+  const show = useCartBarVisible(branchId);
   const count = lines.reduce((n, l) => n + l.qty, 0);
   const subtotal = cartSubtotal(lines);
 

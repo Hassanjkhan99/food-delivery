@@ -4,7 +4,7 @@
 // paginated list (stars, tags, comment, relative date). Data is Rating rows exposed
 // via Restaurant.ratings / ratingDistribution (approved only — moderation gate is a
 // later layer). Themed with the restaurant's brand vars so it reads as one journey.
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "urql";
 import { ArrowLeft, Star } from "lucide-react";
@@ -17,7 +17,7 @@ import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/th
 const PAGE = 10;
 
 const ReviewsQuery = graphql(`
-  query RestaurantReviews($slug: String!, $limit: Int!) {
+  query RestaurantReviews($slug: String!, $limit: Int!, $offset: Int!) {
     branchBySlug(slug: $slug) {
       id
       restaurant {
@@ -35,7 +35,7 @@ const ReviewsQuery = graphql(`
           cardStyle
           heroEffect
         }
-        ratings(limit: $limit) {
+        ratings(limit: $limit, offset: $offset) {
           id
           stars
           tags
@@ -46,6 +46,14 @@ const ReviewsQuery = graphql(`
     }
   }
 `);
+
+type ReviewRow = {
+  id: string;
+  stars: number;
+  tags: string[];
+  comment?: string | null;
+  createdAt: string;
+};
 
 function Stars({ n, className }: { n: number; className?: string }) {
   return (
@@ -74,11 +82,30 @@ function relativeDate(value: string): string {
 
 export default function ReviewsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const [limit, setLimit] = useState(PAGE);
-  const [{ data, fetching }] = useQuery({ query: ReviewsQuery, variables: { slug, limit } });
+  // Offset pagination: bump `offset` a page at a time and accumulate the rows the
+  // server returns (it clamps a single page's limit, so growing `limit` alone would
+  // stall at the clamp and never reach later reviews).
+  const [offset, setOffset] = useState(0);
+  const [{ data, fetching }] = useQuery({
+    query: ReviewsQuery,
+    variables: { slug, limit: PAGE, offset },
+  });
 
   const r = data?.branchBySlug?.restaurant;
   const theme: ThemeShape = { ...DEFAULT_THEME, ...(r?.theme ?? {}) } as ThemeShape;
+
+  const [reviews, setReviews] = useState<ReviewRow[]>([]);
+  const loadedOffsets = useRef(new Set<number>());
+  useEffect(() => {
+    if (fetching || !r) return;
+    if (loadedOffsets.current.has(offset)) return;
+    loadedOffsets.current.add(offset);
+    const page = r.ratings as ReviewRow[];
+    setReviews((prev) => {
+      const seen = new Set(prev.map((x) => x.id));
+      return [...prev, ...page.filter((x) => !seen.has(x.id))];
+    });
+  }, [fetching, r, offset]);
 
   if (fetching && !r) {
     return (
@@ -92,8 +119,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
 
   const dist = r.ratingDistribution; // index 0 => 1★ … index 4 => 5★
   const maxBucket = Math.max(1, ...dist);
-  const reviews = r.ratings;
-  const canLoadMore = reviews.length >= limit && reviews.length < r.ratingCount;
+  const canLoadMore = reviews.length < r.ratingCount;
 
   return (
     <main className="-mx-4 -my-6 min-h-screen px-4 py-6" style={themeVars(theme)}>
@@ -176,7 +202,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
 
       {canLoadMore && (
         <div className="mt-5 flex justify-center">
-          <Button variant="outline" disabled={fetching} onClick={() => setLimit((l) => l + PAGE)}>
+          <Button variant="outline" disabled={fetching} onClick={() => setOffset((o) => o + PAGE)}>
             {fetching ? "Loading…" : "Load more"}
           </Button>
         </div>
