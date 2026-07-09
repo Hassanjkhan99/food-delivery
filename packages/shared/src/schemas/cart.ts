@@ -1,0 +1,30 @@
+// Cart/checkout validation shared by the web forms and API resolvers.
+import { z } from "zod";
+
+export const cartLineSchema = z.object({
+  menuItemId: z.string().min(1),
+  qty: z.number().int().min(1).max(50),
+  // Selected modifier option ids, validated server-side against group min/max.
+  modifierOptionIds: z.array(z.string()).default([]),
+  notes: z.string().max(300).optional(),
+});
+
+export const quoteInputSchema = z.object({
+  branchId: z.string().min(1),
+  lines: z.array(cartLineSchema).min(1).max(50),
+  deliveryLat: z.number().gte(-90).lte(90),
+  deliveryLng: z.number().gte(-180).lte(180),
+});
+
+export const placeOrderInputSchema = quoteInputSchema.extend({
+  addressText: z.string().min(5).max(500),
+  addressLabel: z.string().max(50).default("Home"),
+  contactPhone: z.string().regex(/^\+92\d{10}$/, "Phone must be in +92XXXXXXXXXX format"),
+  customerNote: z.string().max(500).optional(),
+  paymentMode: z.enum(["cod", "card"]),
+  paymentMethodId: z.string().optional(),
+});
+
+export type CartLineInput = z.infer<typeof cartLineSchema>;
+export type QuoteInput = z.infer<typeof quoteInputSchema>;
+export type PlaceOrderInput = z.infer<typeof placeOrderInputSchema>;

@@ -20,8 +20,10 @@ export const builder = new SchemaBuilder<{
     DateTime: { Input: Date; Output: Date };
     JSON: { Input: unknown; Output: unknown };
   };
+  DefaultFieldNullability: false;
 }>({
   plugins: [ScopeAuthPlugin, PrismaPlugin],
+  defaultFieldNullability: false,
   scopeAuth: {
     authScopes: (ctx) => ({
       loggedIn: ctx.userId !== null,

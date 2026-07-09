@@ -1,35 +1,216 @@
+type Branch {
+  activeMenu: Menu
+  addressText: String!
+  deliveryFeeMinor: Int!
+  deliveryRadiusM: Int!
+  hoursJson: JSON
+  id: ID!
+  isAcceptingOrders: Boolean!
+  lat: Float!
+  lng: Float!
+  minOrderMinor: Int!
+  name: String!
+  restaurant: Restaurant!
+}
+
+type BranchSearchResult {
+  branch: Branch!
+  distanceM: Int!
+  etaMinutes: Int!
+}
+
+input CartLineInput {
+  menuItemId: String!
+  modifierOptionIds: [String!]
+  notes: String
+  qty: Int!
+}
+
 scalar DateTime
 
 scalar JSON
 
+type Menu {
+  categories: [MenuCategory!]!
+  id: ID!
+  layoutJson: JSON
+  status: String!
+  version: Int!
+}
+
+type MenuCategory {
+  description: String
+  id: ID!
+  items: [MenuItem!]!
+  name: String!
+  sortOrder: Int!
+}
+
+type MenuItem {
+  badges: [String!]!
+  description: String
+  id: ID!
+  isAvailable: Boolean!
+  modifierGroups: [ModifierGroup!]!
+  name: String!
+  priceMinor: Int!
+}
+
+type ModifierGroup {
+  id: ID!
+  maxSelect: Int!
+  minSelect: Int!
+  name: String!
+  options: [ModifierOption!]!
+}
+
+type ModifierOption {
+  id: ID!
+  isAvailable: Boolean!
+  name: String!
+  priceDeltaMinor: Int!
+}
+
 type Mutation {
-  logout: Boolean
-  requestOtp(phone: String!): OtpRequestResult
-  verifyOtp(code: String!, phone: String!): Viewer
+  cancelOrder(id: String!, reason: String): Order!
+  logout: Boolean!
+  placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
+  quoteCart(input: QuoteCartInput!): Quote!
+  requestOtp(phone: String!): OtpRequestResult!
+  verifyOtp(code: String!, phone: String!): Viewer!
+}
+
+type Order {
+  acceptDeadlineAt: DateTime!
+  addressSnapshotJson: JSON!
+  branch: Branch!
+  code: String!
+  contactPhone: String!
+  customerNote: String
+  deliveredAt: DateTime
+  deliveryFeeMinor: Int!
+  events: [OrderEvent!]!
+  grandTotalMinor: Int!
+  id: ID!
+  items: [OrderItem!]!
+  paymentMode: String!
+  placedAt: DateTime!
+  platformFeeMinor: Int!
+  prepEtaMinutes: Int
+  status: String!
+  subtotalMinor: Int!
+  taxTotalMinor: Int!
+}
+
+type OrderEvent {
+  actorRole: String
+  createdAt: DateTime!
+  fromStatus: String
+  id: ID!
+  reason: String
+  toStatus: String!
+}
+
+type OrderItem {
+  id: ID!
+  lineTotalMinor: Int!
+  menuSnapshotJson: JSON!
+  notes: String
+  qty: Int!
+  unitPriceMinor: Int!
 }
 
 type OtpRequestResult {
   devCode: String
 }
 
+input PlaceOrderInput {
+  addressLabel: String
+  addressText: String!
+  branchId: String!
+  contactPhone: String!
+  customerNote: String
+  deliveryLat: Float!
+  deliveryLng: Float!
+  lines: [CartLineInput!]!
+  paymentMethodId: String
+  paymentMode: String!
+}
+
 type Query {
+  branchBySlug(slug: String!): Branch
+  browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  myOrders: [Order!]!
+  order(id: String!): Order
   viewer: Viewer
+}
+
+type Quote {
+  branchId: String!
+  deliveryFeeMinor: Int!
+  distanceM: Int!
+  grandTotalMinor: Int!
+  inRadius: Boolean!
+  lines: [QuoteLine!]!
+  meetsMinimum: Boolean!
+  minOrderMinor: Int!
+  platformFeeMinor: Int!
+  subtotalMinor: Int!
+  taxTotalMinor: Int!
+}
+
+input QuoteCartInput {
+  branchId: String!
+  deliveryLat: Float!
+  deliveryLng: Float!
+  lines: [CartLineInput!]!
+}
+
+type QuoteLine {
+  lineTotalMinor: Int!
+  menuItemId: String!
+  name: String!
+  qty: Int!
+  unitPriceMinor: Int!
+}
+
+type Restaurant {
+  avgRating: Float
+  branches: [Branch!]!
+  id: ID!
+  name: String!
+  ratingCount: Int!
+  slug: String!
+  status: String!
+  theme: RestaurantTheme
+  tier: String!
+}
+
+type RestaurantTheme {
+  accentColor: String!
+  backgroundColor: String!
+  cardStyle: String!
+  fontKey: String!
+  heroEffect: String!
+  id: ID!
+  primaryColor: String!
+  textColor: String!
 }
 
 type RoleBinding {
   restaurantId: String
-  role: String
+  role: String!
 }
 
 type User {
   email: String
-  id: ID
+  id: ID!
   name: String
-  phone: String
+  phone: String!
 }
 
 type Viewer {
-  home: String
-  roles: [RoleBinding!]
-  user: User
+  home: String!
+  roles: [RoleBinding!]!
+  user: User!
 }

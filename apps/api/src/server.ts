@@ -5,6 +5,7 @@ import { useCookies } from "@whatwg-node/server-plugin-cookies";
 import { env } from "./env.js";
 import { buildContext } from "./context.js";
 import { schema } from "./schema/index.js";
+import { startExpirySweeper } from "./jobs/expirePendingOrders.js";
 
 const yoga = createYoga({
   schema,
@@ -22,3 +23,5 @@ const server = createServer(yoga);
 server.listen(env.apiPort, () => {
   console.log(`[api] GraphQL Yoga listening on http://localhost:${env.apiPort}/graphql`);
 });
+
+startExpirySweeper();

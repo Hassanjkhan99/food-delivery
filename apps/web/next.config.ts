@@ -8,6 +8,10 @@ loadEnv({ path: resolve(__dirname, "../../.env"), quiet: true });
 const nextConfig: NextConfig = {
   // Internal workspace packages ship TS source; Next transpiles them.
   transpilePackages: ["@fd/shared"],
+  turbopack: {
+    // Monorepo root (otherwise Next infers a wrong root from stray lockfiles above the repo).
+    root: resolve(__dirname, "../.."),
+  },
 };
 
 export default nextConfig;
