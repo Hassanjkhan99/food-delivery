@@ -1,6 +1,8 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
 import { branchOpenState, haversineMeters } from "@fd/shared";
+import { GraphQLError } from "graphql";
+import { z } from "zod";
 import { builder } from "./builder.js";
 
 builder.prismaObject("RestaurantTheme", {
@@ -331,6 +333,16 @@ builder.prismaObject("HomeBanner", {
   }),
 });
 
+// Delivery-area waitlist entry (#64). Public "notify me" sign-up, upserted by email.
+builder.prismaObject("Waitlist", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    email: t.exposeString("email"),
+    areaLabel: t.exposeString("areaLabel", { nullable: true }),
+    createdAt: t.field({ type: "DateTime", resolve: (w) => w.createdAt }),
+  }),
+});
+
 builder.queryFields((t) => ({
   // Active promo banners for the home carousel, ordered by sortOrder. The active
   // window (startsAt/endsAt) is enforced here so the client never sees expired ones.
@@ -383,5 +395,47 @@ builder.queryFields((t) => ({
         ...query,
         where: { restaurant: { slug: args.slug, status: "approved" } },
       }),
+  }),
+}));
+
+const joinWaitlistSchema = z.object({
+  email: z.string().email().max(320),
+  areaLabel: z.string().max(120).optional(),
+  lat: z.number().gte(-90).lte(90).optional(),
+  lng: z.number().gte(-180).lte(180).optional(),
+});
+
+builder.mutationFields((t) => ({
+  // Persist an empty-delivery-area "notify me" sign-up (#64). Public (no auth).
+  // Upsert by email so a repeat submit refreshes the recorded area/pin.
+  joinWaitlist: t.prismaField({
+    type: "Waitlist",
+    args: {
+      email: t.arg.string({ required: true }),
+      areaLabel: t.arg.string({ required: false }),
+      lat: t.arg.float({ required: false }),
+      lng: t.arg.float({ required: false }),
+    },
+    resolve: (query, _root, args) => {
+      const parsed = joinWaitlistSchema.safeParse({
+        email: args.email,
+        areaLabel: args.areaLabel ?? undefined,
+        lat: args.lat ?? undefined,
+        lng: args.lng ?? undefined,
+      });
+      if (!parsed.success) throw new GraphQLError("Enter a valid email address");
+      const email = parsed.data.email.trim().toLowerCase();
+      const data = {
+        areaLabel: parsed.data.areaLabel ?? null,
+        lat: parsed.data.lat ?? null,
+        lng: parsed.data.lng ?? null,
+      };
+      return prisma.waitlist.upsert({
+        ...query,
+        where: { email },
+        update: data,
+        create: { email, ...data },
+      });
+    },
   }),
 }));

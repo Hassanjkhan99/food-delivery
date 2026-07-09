@@ -257,6 +257,9 @@ model Address {
   lng       Decimal  @db.Decimal(9, 6)
   phone     String?
   notes     String?
+  // Customer's preferred address, pre-selected at checkout. At most one per user is
+  // true — enforced in app code (setAddress/saveAddress clear the others in a tx).
+  isDefault Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id])
@@ -537,6 +540,12 @@ model Order {
   taxTotalMinor         Int
   platformFeeMinor      Int
   commissionMinor       Int
+  // Optional rider tip (minor units), included in grandTotalMinor and — for COD — in
+  // the cash the rider collects. There is no rider ledger split yet, so it is not
+  // posted as a separate rider credit; see orderService TODO.
+  tipAmount             Int         @default(0)
+  // Whether to include cutlery/napkins with the order (sustainability opt-out).
+  cutleryRequested      Boolean     @default(true)
   grandTotalMinor       Int
   commissionBpsSnapshot Int
   paymentMode           PaymentMode
@@ -875,4 +884,17 @@ model Campaign {
 
   @@index([restaurantId])
   @@map("campaigns")
+}
+
+// Delivery-area waitlist (#64): captures "notify me" sign-ups from areas we don't
+// serve yet. Upserted by email so re-submitting just refreshes the pin/area.
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  areaLabel String?
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  @@map("waitlist")
 }

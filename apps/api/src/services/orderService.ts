@@ -6,7 +6,9 @@ import { prisma, type Order } from "@fd/db";
 import {
   ACCEPTANCE_SLA_SECONDS,
   assertTransition,
+  branchOpenState,
   type ActorRole,
+  type BranchHours,
   type OrderStatus,
   type PlaceOrderInput,
 } from "@fd/shared";
@@ -43,6 +45,19 @@ export async function placeOrder(
   const quote = await quoteCart(input);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
+
+  // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
+  // rejects when isAcceptingOrders is false; here we also honour the published hours so
+  // an order can't be placed after close. Uses a stable error code the client maps to a
+  // friendly "closed" message. TODO(slice 2): once an hours *model* replaces hoursJson,
+  // switch branchOpenState to read it — the code/behaviour below stays the same.
+  const branch = await prisma.branch.findUnique({ where: { id: quote.branchId } });
+  if (!branch) throw new GraphQLError("Restaurant not available");
+  if (!branch.isAcceptingOrders || !branchOpenState(branch.hoursJson as BranchHours, Date.now()).isOpen) {
+    throw new GraphQLError("This restaurant is currently closed", {
+      extensions: { code: "branch_closed" },
+    });
+  }
 
   // Card orders charge at placement (Foodpanda-style): validate the saved method first.
   let cardToken: string | null = null;
@@ -82,6 +97,8 @@ export async function placeOrder(
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,
           commissionBpsSnapshot: quote.commissionBps,
+          tipAmount: quote.tipAmount,
+          cutleryRequested: input.cutleryRequested,
           grandTotalMinor: quote.grandTotalMinor,
           paymentMode: input.paymentMode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),

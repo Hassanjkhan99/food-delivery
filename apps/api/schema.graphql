@@ -1,3 +1,15 @@
+type Address {
+  createdAt: DateTime!
+  id: ID!
+  isDefault: Boolean!
+  label: String!
+  lat: Float!
+  lng: Float!
+  notes: String
+  phone: String
+  text: String!
+}
+
 type AuditLog {
   action: String!
   actorRole: String
@@ -181,10 +193,12 @@ type Mutation {
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
+  deleteAddress(id: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
+  joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
   logout: Boolean!
   markReady(id: String!): Order!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
@@ -203,6 +217,7 @@ type Mutation {
   riderDelivered(codCollectedMinor: Int!, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
   runPayoutBatch(restaurantId: String): [Payout!]!
+  saveAddress(input: SaveAddressInput!): Address!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
@@ -210,6 +225,7 @@ type Mutation {
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
+  updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
@@ -226,6 +242,7 @@ type Order {
   code: String!
   contactPhone: String!
   customerNote: String
+  cutleryRequested: Boolean!
   deliveredAt: DateTime
   deliveryFeeMinor: Int!
   events: [OrderEvent!]!
@@ -239,6 +256,7 @@ type Order {
   status: String!
   subtotalMinor: Int!
   taxTotalMinor: Int!
+  tipAmount: Int!
 }
 
 type OrderChanged {
@@ -300,11 +318,13 @@ input PlaceOrderInput {
   branchId: String!
   contactPhone: String!
   customerNote: String
+  cutleryRequested: Boolean
   deliveryLat: Float!
   deliveryLng: Float!
   lines: [CartLineInput!]!
   paymentMethodId: String
   paymentMode: String!
+  tipAmount: Int
 }
 
 type PresignResult {
@@ -324,6 +344,7 @@ type Query {
   draftMenu(branchId: String!): Menu!
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
+  myAddresses: [Address!]!
   myEarnings: RiderEarnings!
   myJobs: [DeliveryTask!]!
   myOrders: [Order!]!
@@ -352,6 +373,7 @@ type Quote {
   platformFeeMinor: Int!
   subtotalMinor: Int!
   taxTotalMinor: Int!
+  tipAmount: Int!
 }
 
 input QuoteCartInput {
@@ -359,6 +381,7 @@ input QuoteCartInput {
   deliveryLat: Float!
   deliveryLng: Float!
   lines: [CartLineInput!]!
+  tipAmount: Int
 }
 
 type QuoteLine {
@@ -439,10 +462,30 @@ type RoleBinding {
   role: String!
 }
 
+input SaveAddressInput {
+  isDefault: Boolean
+  label: String!
+  lat: Float!
+  lng: Float!
+  notes: String
+  phone: String
+  text: String!
+}
+
 type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
+}
+
+input UpdateAddressInput {
+  isDefault: Boolean
+  label: String
+  lat: Float
+  lng: Float
+  notes: String
+  phone: String
+  text: String
 }
 
 type User {
@@ -456,4 +499,11 @@ type Viewer {
   home: String!
   roles: [RoleBinding!]!
   user: User!
+}
+
+type Waitlist {
+  areaLabel: String
+  createdAt: DateTime!
+  email: String!
+  id: ID!
 }
