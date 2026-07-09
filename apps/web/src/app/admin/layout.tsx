@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeDollarSign, FileClock, Gauge, HandCoins, Store, Undo2 } from "lucide-react";
+import {
+  BadgeDollarSign,
+  FileClock,
+  FileSpreadsheet,
+  Gauge,
+  HandCoins,
+  Store,
+  Undo2,
+} from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: Gauge },
@@ -10,6 +18,7 @@ const NAV = [
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },
+  { href: "/admin/metrics/export", label: "Metrics export", icon: FileSpreadsheet },
   { href: "/admin/audit", label: "Audit", icon: FileClock },
 ];
 

@@ -6,6 +6,7 @@ import {
   BarChart3,
   ClipboardList,
   CookingPot,
+  FileSpreadsheet,
   Palette,
   Settings,
   Users,
@@ -19,6 +20,7 @@ const NAV = [
   { href: "/restaurant/branding", label: "Branding", icon: Palette },
   { href: "/restaurant/riders", label: "Riders", icon: Users },
   { href: "/restaurant/wallet", label: "Wallet", icon: Wallet },
+  { href: "/restaurant/settlements", label: "Settlements", icon: FileSpreadsheet },
   { href: "/restaurant/settings", label: "Settings", icon: Settings },
 ];
 

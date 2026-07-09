@@ -367,6 +367,7 @@ type PresignResult {
 }
 
 type Query {
+  adminMetricsCsv(from: DateTime, granularity: String, to: DateTime): String!
   allRestaurants: [Restaurant!]!
   auditLogs(take: Int): [AuditLog!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
@@ -376,6 +377,7 @@ type Query {
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
+  eimsInvoiceCsv(branchId: String!, from: DateTime, to: DateTime): String!
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
@@ -393,6 +395,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  settlementReportCsv(from: DateTime, restaurantId: String!, to: DateTime): String!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
