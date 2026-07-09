@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { Search, WifiOff, X } from "lucide-react";
 import { CUISINE_TAGS } from "@fd/shared";
@@ -113,6 +114,7 @@ function rank(a: FeedHit, b: FeedHit): number {
 export default function HomePage() {
   const loc = useDeliveryLocation();
   const online = useOnlineStatus();
+  const router = useRouter();
   useScrollRestoration("home-feed");
 
   const [{ data, fetching, error }, refetch] = useQuery({
@@ -221,12 +223,28 @@ export default function HomePage() {
       {/* Top bar: address + search */}
       <div className="space-y-3">
         <AddressChip />
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kd-fg-subtle" />
+        {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
+            the dedicated /search screen, which also matches dishes (#37). */}
+        <form
+          role="search"
+          className="relative"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = search.trim();
+            router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
+          }}
+        >
+          <button
+            type="submit"
+            aria-label="Search restaurants and dishes"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-kd-fg-subtle hover:text-kd-fg"
+          >
+            <Search className="h-4 w-4" />
+          </button>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search for restaurants or cuisines…"
+            placeholder="Search restaurants, cuisines or dishes…"
             className="w-full rounded-xl border border-kd-border bg-kd-surface py-2.5 pl-9 pr-9 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
           />
           {search && (
@@ -239,7 +257,7 @@ export default function HomePage() {
               <X className="h-4 w-4" />
             </button>
           )}
-        </div>
+        </form>
       </div>
 
       {!online && (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "urql";
-import { ShoppingBag, User } from "lucide-react";
+import { Search, ShoppingBag, User } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
 
@@ -32,6 +32,13 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             🍜 Khaana<span className="text-kd-primary">Do</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm">
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="text-kd-fg-muted hover:text-kd-fg"
+            >
+              <Search className="h-5 w-5" />
+            </Link>
             <Link href="/orders" className="text-kd-fg-muted hover:text-kd-fg">
               Orders
             </Link>

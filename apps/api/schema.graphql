@@ -142,6 +142,12 @@ type HomeBanner {
   title: String!
 }
 
+type ItemSearchResult {
+  branch: Branch!
+  distanceM: Int!
+  item: MenuItem!
+}
+
 scalar JSON
 
 type LedgerEntry {
@@ -393,6 +399,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  searchMarketplace(lat: Float!, lng: Float!, query: String!): SearchMarketplaceResult!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -545,6 +552,11 @@ input SaveAddressInput {
   notes: String
   phone: String
   text: String!
+}
+
+type SearchMarketplaceResult {
+  items: [ItemSearchResult!]!
+  restaurants: [BranchSearchResult!]!
 }
 
 type Subscription {

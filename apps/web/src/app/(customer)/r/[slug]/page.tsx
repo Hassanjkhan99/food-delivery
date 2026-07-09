@@ -8,6 +8,7 @@
 // synced category rail, a collapsing hero, one-tap quick-add, and a floating cart bar.
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "urql";
 import { motion, useReducedMotion } from "framer-motion";
 import { Star, Timer } from "lucide-react";
@@ -121,11 +122,18 @@ type Section = { domId: string; name: string; description?: string | null; items
 
 export default function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const searchParams = useSearchParams();
+  const deepLinkItemId = searchParams.get("item");
   const [{ data, fetching }] = useQuery({ query: BranchQuery, variables: { slug } });
   const reduced = useReducedMotion();
   const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
   const [conflict, setConflict] = useState<ItemForCard | null>(null);
   const [search, setSearch] = useState("");
+  // Which ?item= deep-link we've already auto-opened, so closing the sheet doesn't
+  // immediately reopen it and a param change opens the new one exactly once. State
+  // (not a ref) so it's readable/settable during render per React's "adjust state on
+  // prop change" pattern.
+  const [openedDeepLink, setOpenedDeepLink] = useState<string | null>(null);
 
   const addLine = useCart((s) => s.addLine);
   const clearCart = useCart((s) => s.clear);
@@ -158,6 +166,23 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       ? [{ domId: "cat-popular", name: "Popular", items: popular }, ...real]
       : real;
   }, [branch, layout.categoryOrder]);
+
+  // Deep-link (#37): /r/[slug]?item=<id> auto-opens that item's sheet once the menu
+  // loads. We adjust state during render (guarded by a ref) rather than in an effect,
+  // per React's "adjust state on prop change" guidance — so it fires exactly once per
+  // id and closing the sheet doesn't reopen it. Search the real categories (source of
+  // truth) so it works even when the item isn't in the computed "Popular" section; a
+  // missing/stale id simply no-ops.
+  if (deepLinkItemId && branch && openedDeepLink !== deepLinkItemId) {
+    setOpenedDeepLink(deepLinkItemId);
+    for (const cat of branch.activeMenu?.categories ?? []) {
+      const found = cat.items.find((i) => i.id === deepLinkItemId);
+      if (found) {
+        setOpenItem(found as MenuItemForModal);
+        break;
+      }
+    }
+  }
 
   // Client-side in-menu search. Popular is hidden while searching so items don't
   // appear twice (once under Popular, once under their real category).

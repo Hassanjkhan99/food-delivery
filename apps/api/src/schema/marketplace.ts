@@ -342,6 +342,37 @@ BranchSearchResult.implement({
   }),
 });
 
+// A dish hit from searchMarketplace: the matched menu item plus the branch/restaurant
+// it belongs to (and its distance) so the client can render a thumbnail row that
+// deep-links into /r/[slug]?item=<menuItemId>.
+type ItemSearchHit = { menuItemId: string; branchId: string; distanceM: number };
+const ItemSearchResult = builder.objectRef<ItemSearchHit>("ItemSearchResult");
+ItemSearchResult.implement({
+  fields: (t) => ({
+    distanceM: t.exposeInt("distanceM"),
+    item: t.prismaField({
+      type: "MenuItem",
+      resolve: (query, hit) =>
+        prisma.menuItem.findUniqueOrThrow({ ...query, where: { id: hit.menuItemId } }),
+    }),
+    branch: t.prismaField({
+      type: "Branch",
+      resolve: (query, hit) =>
+        prisma.branch.findUniqueOrThrow({ ...query, where: { id: hit.branchId } }),
+    }),
+  }),
+});
+
+// Combined typeahead/results payload for the /search screen (#37).
+type SearchPayload = { restaurants: BranchSearchHit[]; items: ItemSearchHit[] };
+const SearchMarketplaceResult = builder.objectRef<SearchPayload>("SearchMarketplaceResult");
+SearchMarketplaceResult.implement({
+  fields: (t) => ({
+    restaurants: t.field({ type: [BranchSearchResult], resolve: (p) => p.restaurants }),
+    items: t.field({ type: [ItemSearchResult], resolve: (p) => p.items }),
+  }),
+});
+
 builder.prismaObject("HomeBanner", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -413,6 +444,93 @@ builder.queryFields((t) => ({
         ...query,
         where: { restaurant: { slug: args.slug, status: "approved" } },
       }),
+  }),
+
+  // Marketplace search (#37): case-insensitive match over restaurant names,
+  // cuisine tags, and ACTIVE menu item names — restricted to approved restaurants
+  // whose branch delivers to (lat,lng). Returns two parallel lists (restaurants +
+  // dishes) so the /search UI can tab between them. Distance-sorted like the home feed.
+  //
+  // v1 uses Prisma `contains`/`hasSome` (ILIKE under the hood) rather than pg_trgm
+  // (#37 target) — it needs no extension/index migration (DB is offline) and is plenty
+  // for the pilot dataset. Swapping in a trigram index later is a pure perf change.
+  searchMarketplace: t.field({
+    type: SearchMarketplaceResult,
+    args: {
+      query: t.arg.string({ required: true }),
+      lat: t.arg.float({ required: true }),
+      lng: t.arg.float({ required: true }),
+    },
+    resolve: async (_root, args): Promise<SearchPayload> => {
+      const q = args.query.trim();
+      if (q.length < 2) return { restaurants: [], items: [] };
+
+      // Branches that deliver here, keyed for distance lookup.
+      const nearby = await prisma.branch.findMany({
+        where: { restaurant: { status: "approved" }, activeMenuId: { not: null } },
+        select: { id: true, lat: true, lng: true, deliveryRadiusM: true, activeMenuId: true },
+      });
+      const inRange = nearby
+        .map((b) => ({
+          id: b.id,
+          activeMenuId: b.activeMenuId,
+          distanceM: haversineMeters(Number(b.lat), Number(b.lng), args.lat, args.lng),
+          radius: b.deliveryRadiusM,
+        }))
+        .filter((b) => b.distanceM <= b.radius);
+      const distanceById = new Map(inRange.map((b) => [b.id, b.distanceM]));
+      const menuIdToBranch = new Map(
+        inRange.flatMap((b) => (b.activeMenuId ? [[b.activeMenuId, b.id] as const] : [])),
+      );
+
+      // Restaurant hits: name OR cuisine tag matches. Collapse to the single nearest
+      // in-range branch per restaurant so a chain doesn't flood the list.
+      const restaurants = await prisma.restaurant.findMany({
+        where: {
+          status: "approved",
+          OR: [{ name: { contains: q, mode: "insensitive" } }, { cuisineTags: { has: q } }],
+          branches: { some: { id: { in: [...distanceById.keys()] } } },
+        },
+        select: { branches: { select: { id: true } } },
+      });
+      const restaurantHits: BranchSearchHit[] = [];
+      const seenBranch = new Set<string>();
+      for (const r of restaurants) {
+        const candidates = r.branches
+          .map((b) => ({ id: b.id, distanceM: distanceById.get(b.id) }))
+          .filter((b): b is { id: string; distanceM: number } => b.distanceM !== undefined)
+          .sort((a, b) => a.distanceM - b.distanceM);
+        const best = candidates[0];
+        if (best && !seenBranch.has(best.id)) {
+          seenBranch.add(best.id);
+          restaurantHits.push({ branchId: best.id, distanceM: best.distanceM });
+        }
+      }
+      restaurantHits.sort((a, b) => a.distanceM - b.distanceM);
+
+      // Dish hits: available items in an in-range active menu whose name matches.
+      const menuIds = [...menuIdToBranch.keys()];
+      const items = menuIds.length
+        ? await prisma.menuItem.findMany({
+            where: {
+              name: { contains: q, mode: "insensitive" },
+              isAvailable: true,
+              category: { menuId: { in: menuIds } },
+            },
+            select: { id: true, category: { select: { menuId: true } } },
+            take: 50,
+          })
+        : [];
+      const itemHits: ItemSearchHit[] = [];
+      for (const it of items) {
+        const branchId = menuIdToBranch.get(it.category.menuId);
+        if (!branchId) continue;
+        itemHits.push({ menuItemId: it.id, branchId, distanceM: distanceById.get(branchId) ?? 0 });
+      }
+      itemHits.sort((a, b) => a.distanceM - b.distanceM);
+
+      return { restaurants: restaurantHits, items: itemHits };
+    },
   }),
 }));
 
