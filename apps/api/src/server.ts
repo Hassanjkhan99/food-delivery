@@ -29,14 +29,15 @@ const CORS_HEADERS: Record<string, string> = {
 const server = createServer(async (req, res) => {
   const url = req.url ?? "/";
   if (url.startsWith("/uploads") || url.startsWith("/files/")) {
-    const { handleLocalUploadPut, handleLocalFileGet } = await import(
-      "./services/storage/objectStore.js"
-    );
+    const { handleLocalUploadPut, handleLocalFileGet } =
+      await import("./services/storage/objectStore.js");
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk as Buffer);
     const request = new Request(`http://localhost:${env.apiPort}${url}`, {
       method: req.method,
-      body: ["PUT", "POST"].includes(req.method ?? "") ? new Uint8Array(Buffer.concat(chunks)) : undefined,
+      body: ["PUT", "POST"].includes(req.method ?? "")
+        ? new Uint8Array(Buffer.concat(chunks))
+        : undefined,
     });
     const response =
       req.method === "OPTIONS"

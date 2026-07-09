@@ -27,10 +27,15 @@ export default function AdminAuditPage() {
       <h1 className="mb-4 text-xl font-bold">Audit explorer</h1>
       <div className="space-y-1">
         {data?.auditLogs.map((a) => (
-          <details key={a.id} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm">
+          <details
+            key={a.id}
+            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
+          >
             <summary className="flex cursor-pointer items-center justify-between">
               <span>
-                <Badge variant="outline" className="mr-2">{a.actorRole ?? "system"}</Badge>
+                <Badge variant="outline" className="mr-2">
+                  {a.actorRole ?? "system"}
+                </Badge>
                 <span className="font-mono text-xs">{a.action}</span>
                 <span className="ml-2 text-xs text-neutral-400">
                   {a.subjectType}/{a.subjectId.slice(0, 10)}…

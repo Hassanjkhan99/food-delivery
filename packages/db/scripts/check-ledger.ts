@@ -5,7 +5,9 @@ const unbalanced = await prisma.$queryRaw<Array<{ txId: string }>>`
   SELECT "txId" FROM ledger_entries
   GROUP BY "txId"
   HAVING SUM("debitMinor") <> SUM("creditMinor")`;
-console.log(`${unbalanced.length === 0 ? "PASS" : "FAIL"}  all ledger txs balanced (${unbalanced.length} unbalanced)`);
+console.log(
+  `${unbalanced.length === 0 ? "PASS" : "FAIL"}  all ledger txs balanced (${unbalanced.length} unbalanced)`,
+);
 
 // A charged-then-refunded order's customer prepaid legs must net to zero.
 const refunded = await prisma.payment.findFirst({
@@ -22,9 +24,13 @@ if (refunded) {
   const net = legs
     .filter((l) => ids.has(l.accountId))
     .reduce((s, l) => s + l.creditMinor - l.debitMinor, 0);
-  console.log(`${net === 0 ? "PASS" : "FAIL"}  refunded order ${refunded.order.code}: customer prepaid nets to ${net}`);
+  console.log(
+    `${net === 0 ? "PASS" : "FAIL"}  refunded order ${refunded.order.code}: customer prepaid nets to ${net}`,
+  );
   const refundRow = await prisma.refund.findFirst({ where: { orderId: refunded.orderId } });
-  console.log(`${refundRow?.status === "refunded" ? "PASS" : "FAIL"}  Refund row auto-created (${refundRow?.status})`);
+  console.log(
+    `${refundRow?.status === "refunded" ? "PASS" : "FAIL"}  Refund row auto-created (${refundRow?.status})`,
+  );
 } else {
   console.log("SKIP  no refunded card payment found");
 }

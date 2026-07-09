@@ -170,9 +170,7 @@ builder.mutationFields((t) => ({
     type: QuoteType,
     args: { input: t.arg({ type: QuoteCartInput, required: true }) },
     resolve: (_root, args) =>
-      quoteCart(
-        quoteInputSchema.parse({ ...args.input, lines: normalizeLines(args.input.lines) }),
-      ),
+      quoteCart(quoteInputSchema.parse({ ...args.input, lines: normalizeLines(args.input.lines) })),
   }),
 
   placeOrder: t.prismaField({

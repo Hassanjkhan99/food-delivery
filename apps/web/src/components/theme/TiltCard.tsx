@@ -33,9 +33,7 @@ export function TiltCard({
       disabled={disabled}
       className={className}
       style={
-        active
-          ? { rotateX, rotateY, transformStyle: "preserve-3d", perspective: 800 }
-          : undefined
+        active ? { rotateX, rotateY, transformStyle: "preserve-3d", perspective: 800 } : undefined
       }
       onPointerMove={(e) => {
         if (!active) return;

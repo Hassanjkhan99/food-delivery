@@ -55,7 +55,9 @@ export async function placeOrder(
     cardToken = method.providerToken;
   }
 
-  const code = `FD-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36).toString(36).toUpperCase()}`;
+  const code = `FD-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36)
+    .toString(36)
+    .toUpperCase()}`;
 
   try {
     const order = await prisma.$transaction(async (tx) => {
@@ -165,7 +167,11 @@ export async function placeOrder(
         await onCardCharged(tx, withMoney);
         return withMoney;
       });
-      publishOrderChanged({ orderId: chargedOrder.id, branchId: chargedOrder.branchId, status: chargedOrder.status });
+      publishOrderChanged({
+        orderId: chargedOrder.id,
+        branchId: chargedOrder.branchId,
+        status: chargedOrder.status,
+      });
       return chargedOrder;
     }
 

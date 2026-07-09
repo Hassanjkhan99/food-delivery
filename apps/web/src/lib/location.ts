@@ -30,5 +30,8 @@ export function useDeliveryLocation() {
       .catch(() => {});
   }, []);
 
-  return { ...loc, source: loc.label === "Current location" ? ("gps" as const) : ("default" as const) };
+  return {
+    ...loc,
+    source: loc.label === "Current location" ? ("gps" as const) : ("default" as const),
+  };
 }

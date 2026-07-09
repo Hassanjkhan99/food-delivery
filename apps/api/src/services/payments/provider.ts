@@ -22,9 +22,7 @@ export type TokenizedCard = {
   expYear: number;
 };
 
-export type ChargeResult =
-  | { ok: true; providerRef: string }
-  | { ok: false; declineReason: string };
+export type ChargeResult = { ok: true; providerRef: string } | { ok: false; declineReason: string };
 
 export type RefundResult = { ok: true; providerRef: string };
 

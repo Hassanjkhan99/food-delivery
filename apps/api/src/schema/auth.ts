@@ -63,8 +63,7 @@ builder.queryFields((t) => ({
   viewer: t.field({
     type: ViewerType,
     nullable: true,
-    resolve: (_root, _args, ctx) =>
-      ctx.userId ? toViewer(ctx.userId, ctx.roles) : null,
+    resolve: (_root, _args, ctx) => (ctx.userId ? toViewer(ctx.userId, ctx.roles) : null),
   }),
 }));
 
@@ -93,7 +92,10 @@ builder.mutationFields((t) => ({
       });
 
       const roles = await prisma.userRole.findMany({ where: { userId } });
-      const roleClaims = roles.map((r) => ({ role: r.role as string, restaurantId: r.restaurantId }));
+      const roleClaims = roles.map((r) => ({
+        role: r.role as string,
+        restaurantId: r.restaurantId,
+      }));
       const token = await signSessionToken({ sid: session.id, uid: userId, roles: roleClaims });
 
       // Host-only cookie (no Domain) so it flows to both :3000 and :4000 on localhost.

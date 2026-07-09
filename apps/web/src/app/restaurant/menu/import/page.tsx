@@ -51,7 +51,12 @@ const RegisterDocMutation = graphql(`
 
 const QuickAddMutation = graphql(`
   mutation QuickAdd($branchId: String!, $categoryId: String!, $name: String!, $priceMinor: Int!) {
-    upsertMenuItem(branchId: $branchId, categoryId: $categoryId, name: $name, priceMinor: $priceMinor) {
+    upsertMenuItem(
+      branchId: $branchId
+      categoryId: $categoryId
+      name: $name
+      priceMinor: $priceMinor
+    ) {
       id
       name
     }
@@ -165,7 +170,9 @@ export default function MenuImportPage() {
         </Link>
       </div>
 
-      {message && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p>}
+      {message && (
+        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left: source documents */}
@@ -203,10 +210,18 @@ export default function MenuImportPage() {
                 ))}
               </div>
               {active?.asset.contentType === "application/pdf" ? (
-                <iframe src={active.asset.url ?? ""} className="h-96 w-full rounded-lg border" title="menu pdf" />
+                <iframe
+                  src={active.asset.url ?? ""}
+                  className="h-96 w-full rounded-lg border"
+                  title="menu pdf"
+                />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={active?.asset.url ?? ""} alt="menu source" className="max-h-96 w-full rounded-lg object-contain" />
+                <img
+                  src={active?.asset.url ?? ""}
+                  alt="menu source"
+                  className="max-h-96 w-full rounded-lg object-contain"
+                />
               )}
             </>
           )}
@@ -246,11 +261,20 @@ export default function MenuImportPage() {
               </div>
               <div>
                 <Label>Item name</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1" />
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label>Price (Rs)</Label>
-                <Input inputMode="decimal" value={form.priceRs} onChange={(e) => setForm({ ...form, priceRs: e.target.value })} className="mt-1" />
+                <Input
+                  inputMode="decimal"
+                  value={form.priceRs}
+                  onChange={(e) => setForm({ ...form, priceRs: e.target.value })}
+                  className="mt-1"
+                />
               </div>
               <Button
                 className="w-full"
@@ -273,8 +297,8 @@ export default function MenuImportPage() {
                 Add to draft
               </Button>
               <p className="text-xs text-neutral-400">
-                Modifiers, photos and descriptions can be added later in the menu manager.
-                Publish from there when you're done.
+                Modifiers, photos and descriptions can be added later in the menu manager. Publish
+                from there when you&apos;re done.
               </p>
             </div>
           </div>
@@ -314,7 +338,11 @@ export default function MenuImportPage() {
                           <td className="p-1.5">{r.name}</td>
                           <td className="p-1.5">{r.error ? "—" : formatRs(r.priceMinor)}</td>
                           <td className="p-1.5">
-                            {r.error ? <Badge variant="destructive">{r.error}</Badge> : <Badge variant="secondary">ok</Badge>}
+                            {r.error ? (
+                              <Badge variant="destructive">{r.error}</Badge>
+                            ) : (
+                              <Badge variant="secondary">ok</Badge>
+                            )}
                           </td>
                         </tr>
                       ))}

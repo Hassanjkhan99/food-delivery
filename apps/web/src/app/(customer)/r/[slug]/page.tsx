@@ -124,7 +124,11 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         <div>
           {theme.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={theme.logoUrl} alt="" className="mb-2 h-12 w-12 rounded-xl object-cover shadow" />
+            <img
+              src={theme.logoUrl}
+              alt=""
+              className="mb-2 h-12 w-12 rounded-xl object-cover shadow"
+            />
           )}
           <h1
             className="text-4xl font-bold drop-shadow-sm"
@@ -152,14 +156,20 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       </ParallaxHero>
 
       {/* Category rail */}
-      <nav className="sticky top-14 z-30 -mx-4 mb-6 overflow-x-auto px-4 py-2 backdrop-blur" style={{ backgroundColor: "color-mix(in srgb, var(--brand-bg) 85%, transparent)" }}>
+      <nav
+        className="sticky top-14 z-30 -mx-4 mb-6 overflow-x-auto px-4 py-2 backdrop-blur"
+        style={{ backgroundColor: "color-mix(in srgb, var(--brand-bg) 85%, transparent)" }}
+      >
         <div className="flex gap-2">
           {categories.map((c) => (
             <a
               key={c.id}
               href={`#cat-${c.id}`}
               className="whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition hover:scale-105"
-              style={{ backgroundColor: "color-mix(in srgb, var(--brand-primary) 12%, transparent)", color: "var(--brand-primary)" }}
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--brand-primary) 12%, transparent)",
+                color: "var(--brand-primary)",
+              }}
             >
               {c.name}
             </a>
@@ -200,7 +210,14 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{item.name}</span>
                         {item.badges.map((b) => (
-                          <span key={b} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--brand-accent) 25%, transparent)" }}>
+                          <span
+                            key={b}
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              backgroundColor:
+                                "color-mix(in srgb, var(--brand-accent) 25%, transparent)",
+                            }}
+                          >
                             {b}
                           </span>
                         ))}
@@ -212,7 +229,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
                         <p className="mt-1 text-xs font-medium text-red-500">Unavailable</p>
                       )}
                     </div>
-                    <span className="shrink-0 font-semibold" style={{ color: "var(--brand-primary)" }}>
+                    <span
+                      className="shrink-0 font-semibold"
+                      style={{ color: "var(--brand-primary)" }}
+                    >
                       {formatRs(item.priceMinor)}
                     </span>
                   </>

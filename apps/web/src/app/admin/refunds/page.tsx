@@ -39,14 +39,19 @@ const DecideRefundMutation = graphql(`
 `);
 
 export default function AdminRefundsPage() {
-  const [{ data }, refetch] = useQuery({ query: RefundQueueQuery, requestPolicy: "cache-and-network" });
+  const [{ data }, refetch] = useQuery({
+    query: RefundQueueQuery,
+    requestPolicy: "cache-and-network",
+  });
   const [, decide] = useMutation(DecideRefundMutation);
   const refresh = () => refetch({ requestPolicy: "network-only" });
 
   return (
     <main className="max-w-2xl">
       <h1 className="mb-4 text-xl font-bold">Refund workbench</h1>
-      {data?.refundQueue.length === 0 && <p className="text-sm text-neutral-500">Queue is empty. 🎉</p>}
+      {data?.refundQueue.length === 0 && (
+        <p className="text-sm text-neutral-500">Queue is empty. 🎉</p>
+      )}
       <div className="space-y-2">
         {data?.refundQueue.map((r) => (
           <div key={r.id} className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
@@ -63,7 +68,13 @@ export default function AdminRefundsPage() {
               Order total {formatRs(r.order.grandTotalMinor)} · {r.order.paymentMode.toUpperCase()}
             </p>
             <div className="mt-3 flex gap-2">
-              <Button size="xs" onClick={async () => { await decide({ id: r.id, approve: true }); refresh(); }}>
+              <Button
+                size="xs"
+                onClick={async () => {
+                  await decide({ id: r.id, approve: true });
+                  refresh();
+                }}
+              >
                 Approve refund
               </Button>
               <Button
@@ -85,7 +96,7 @@ export default function AdminRefundsPage() {
       </div>
       <p className="mt-4 text-xs text-neutral-400">
         Approved card refunds go back via the payment provider; wallet refunds credit the
-        customer's prepaid balance. The restaurant bears the cost per the cancellation policy.
+        customer&apos;s prepaid balance. The restaurant bears the cost per the cancellation policy.
       </p>
     </main>
   );

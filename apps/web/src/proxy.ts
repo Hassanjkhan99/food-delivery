@@ -45,9 +45,7 @@ export async function proxy(request: NextRequest) {
   let roles: string[];
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-    roles = (Array.isArray(payload.roles) ? (payload.roles as RoleClaim[]) : []).map(
-      (r) => r.role,
-    );
+    roles = (Array.isArray(payload.roles) ? (payload.roles as RoleClaim[]) : []).map((r) => r.role);
   } catch {
     return loginRedirect();
   }

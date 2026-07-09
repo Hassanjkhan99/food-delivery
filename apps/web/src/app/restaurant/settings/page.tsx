@@ -48,16 +48,24 @@ export default function SettingsPage() {
           <p className="mb-2 font-medium">Commercial profile</p>
           <div className="grid grid-cols-2 gap-2 text-neutral-600">
             <span>Status</span>
-            <Badge variant={restaurant.status === "approved" ? "default" : "secondary"} className="justify-self-end">
+            <Badge
+              variant={restaurant.status === "approved" ? "default" : "secondary"}
+              className="justify-self-end"
+            >
               {restaurant.status}
             </Badge>
-            <span>Tier</span><span className="text-right">{restaurant.tier}</span>
-            <span>Minimum order</span><span className="text-right">{formatRs(branch.minOrderMinor)}</span>
-            <span>Delivery fee</span><span className="text-right">{formatRs(branch.deliveryFeeMinor)}</span>
-            <span>Delivery radius</span><span className="text-right">{(branch.deliveryRadiusM / 1000).toFixed(1)} km</span>
+            <span>Tier</span>
+            <span className="text-right">{restaurant.tier}</span>
+            <span>Minimum order</span>
+            <span className="text-right">{formatRs(branch.minOrderMinor)}</span>
+            <span>Delivery fee</span>
+            <span className="text-right">{formatRs(branch.deliveryFeeMinor)}</span>
+            <span>Delivery radius</span>
+            <span className="text-right">{(branch.deliveryRadiusM / 1000).toFixed(1)} km</span>
           </div>
           <p className="mt-3 text-xs text-neutral-400">
-            Tier and commission are managed by the platform. Contact support to change commercial terms.
+            Tier and commission are managed by the platform. Contact support to change commercial
+            terms.
           </p>
         </div>
       </div>

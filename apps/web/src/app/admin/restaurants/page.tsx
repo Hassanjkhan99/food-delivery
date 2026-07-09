@@ -45,7 +45,10 @@ const SetTierMutation = graphql(`
 `);
 
 export default function AdminRestaurantsPage() {
-  const [{ data }, refetch] = useQuery({ query: RestaurantsQuery, requestPolicy: "cache-and-network" });
+  const [{ data }, refetch] = useQuery({
+    query: RestaurantsQuery,
+    requestPolicy: "cache-and-network",
+  });
   const [, approve] = useMutation(ApproveMutation);
   const [, suspend] = useMutation(SuspendMutation);
   const [, setTier] = useMutation(SetTierMutation);
@@ -56,17 +59,30 @@ export default function AdminRestaurantsPage() {
       <h1 className="mb-4 text-xl font-bold">Restaurants</h1>
       <div className="space-y-2">
         {data?.allRestaurants.map((r) => (
-          <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-4 text-sm">
+          <div
+            key={r.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-4 text-sm"
+          >
             <div>
               <p className="font-medium">
                 {r.name} <span className="text-xs text-neutral-400">/{r.slug}</span>
               </p>
               <div className="mt-1 flex gap-2">
-                <Badge variant={r.status === "approved" ? "default" : r.status === "suspended" ? "destructive" : "secondary"}>
+                <Badge
+                  variant={
+                    r.status === "approved"
+                      ? "default"
+                      : r.status === "suspended"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
                   {r.status}
                 </Badge>
                 {r.avgRating != null && (
-                  <span className="text-xs text-neutral-500">★ {r.avgRating.toFixed(1)} ({r.ratingCount})</span>
+                  <span className="text-xs text-neutral-500">
+                    ★ {r.avgRating.toFixed(1)} ({r.ratingCount})
+                  </span>
                 )}
               </div>
             </div>
@@ -83,7 +99,13 @@ export default function AdminRestaurantsPage() {
                 <option value="chain">chain (full commission)</option>
               </select>
               {r.status === "pending_approval" && (
-                <Button size="xs" onClick={async () => { await approve({ id: r.id }); refresh(); }}>
+                <Button
+                  size="xs"
+                  onClick={async () => {
+                    await approve({ id: r.id });
+                    refresh();
+                  }}
+                >
                   Approve
                 </Button>
               )}
@@ -103,7 +125,14 @@ export default function AdminRestaurantsPage() {
                 </Button>
               )}
               {r.status === "suspended" && (
-                <Button size="xs" variant="outline" onClick={async () => { await approve({ id: r.id }); refresh(); }}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={async () => {
+                    await approve({ id: r.id });
+                    refresh();
+                  }}
+                >
                   Reinstate
                 </Button>
               )}

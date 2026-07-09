@@ -88,7 +88,11 @@ builder.prismaObject("FeeConfig", {
   }),
 });
 
-const PayoutCandidate = builder.objectRef<{ restaurantId: string; name: string; balanceMinor: number }>("PayoutCandidate");
+const PayoutCandidate = builder.objectRef<{
+  restaurantId: string;
+  name: string;
+  balanceMinor: number;
+}>("PayoutCandidate");
 PayoutCandidate.implement({
   fields: (t) => ({
     restaurantId: t.exposeString("restaurantId"),
@@ -111,7 +115,15 @@ builder.queryFields((t) => ({
           prisma.order.count({
             where: {
               status: {
-                in: ["pending_acceptance", "accepted", "preparing", "ready_for_pickup", "rider_assigned", "picked_up", "out_for_delivery"],
+                in: [
+                  "pending_acceptance",
+                  "accepted",
+                  "preparing",
+                  "ready_for_pickup",
+                  "rider_assigned",
+                  "picked_up",
+                  "out_for_delivery",
+                ],
               },
             },
           }),
@@ -120,11 +132,15 @@ builder.queryFields((t) => ({
           prisma.refund.count({ where: { status: "refund_pending" } }),
         ]);
 
-      const decided = today.filter((o) => o.acceptedAt || ["rejected", "auto_expired"].includes(o.status));
+      const decided = today.filter(
+        (o) => o.acceptedAt || ["rejected", "auto_expired"].includes(o.status),
+      );
       const acceptedInSla = decided.filter(
         (o) => o.acceptedAt && o.acceptedAt <= o.acceptDeadlineAt,
       );
-      const cancelled = today.filter((o) => ["cancelled", "rejected", "auto_expired"].includes(o.status));
+      const cancelled = today.filter((o) =>
+        ["cancelled", "rejected", "auto_expired"].includes(o.status),
+      );
 
       return {
         ordersToday: today.length,
@@ -214,7 +230,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         data: { status: "approved" },
       });
-      await audit(ctx.userId, "restaurant.approve", "Restaurant", args.id, { status: before.status }, { status: "approved" });
+      await audit(
+        ctx.userId,
+        "restaurant.approve",
+        "Restaurant",
+        args.id,
+        { status: before.status },
+        { status: "approved" },
+      );
       return updated;
     },
   }),
@@ -229,7 +252,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         data: { status: "suspended" },
       });
-      await audit(ctx.userId, "restaurant.suspend", "Restaurant", args.id, { status: before.status }, { status: "suspended", reason: args.reason });
+      await audit(
+        ctx.userId,
+        "restaurant.suspend",
+        "Restaurant",
+        args.id,
+        { status: before.status },
+        { status: "suspended", reason: args.reason },
+      );
       return updated;
     },
   }),
@@ -245,7 +275,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         data: { tier: args.tier as never },
       });
-      await audit(ctx.userId, "restaurant.set_tier", "Restaurant", args.id, { tier: before.tier }, { tier: args.tier });
+      await audit(
+        ctx.userId,
+        "restaurant.set_tier",
+        "Restaurant",
+        args.id,
+        { tier: before.tier },
+        { tier: args.tier },
+      );
       return updated;
     },
   }),
@@ -260,7 +297,12 @@ builder.mutationFields((t) => ({
     },
     resolve: (_q, _root, args, ctx) =>
       // transition() audits admin/system actors internally.
-      transition(args.id, args.toStatus as OrderStatus, { userId: ctx.userId, role: "admin" }, { reason: args.reason }),
+      transition(
+        args.id,
+        args.toStatus as OrderStatus,
+        { userId: ctx.userId, role: "admin" },
+        { reason: args.reason },
+      ),
   }),
 
   decideRefund: t.prismaField({
@@ -284,7 +326,14 @@ builder.mutationFields((t) => ({
           where: { id: args.id },
           data: { status: "refund_rejected", decidedByUserId: ctx.userId, decidedAt: new Date() },
         });
-        await audit(ctx.userId, "refund.reject", "Refund", args.id, { status: "refund_pending" }, { status: "refund_rejected", reason: args.reason ?? null });
+        await audit(
+          ctx.userId,
+          "refund.reject",
+          "Refund",
+          args.id,
+          { status: "refund_pending" },
+          { status: "refund_rejected", reason: args.reason ?? null },
+        );
         return updated;
       }
 
@@ -313,7 +362,12 @@ builder.mutationFields((t) => ({
             tx,
             `Refund ${order.code} approved (card)`,
             [
-              { code: `restaurant:${restaurantId}:payable`, ownerType: "restaurant", ownerId: restaurantId, debit: refund.amountMinor },
+              {
+                code: `restaurant:${restaurantId}:payable`,
+                ownerType: "restaurant",
+                ownerId: restaurantId,
+                debit: refund.amountMinor,
+              },
               { code: "platform:cash", ownerType: "platform", credit: refund.amountMinor },
             ],
             { orderId: order.id, refundId: refund.id },
@@ -324,8 +378,18 @@ builder.mutationFields((t) => ({
             tx,
             `Refund ${order.code} approved (wallet credit)`,
             [
-              { code: `restaurant:${restaurantId}:payable`, ownerType: "restaurant", ownerId: restaurantId, debit: refund.amountMinor },
-              { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, credit: refund.amountMinor },
+              {
+                code: `restaurant:${restaurantId}:payable`,
+                ownerType: "restaurant",
+                ownerId: restaurantId,
+                debit: refund.amountMinor,
+              },
+              {
+                code: `customer:${order.customerId}:prepaid`,
+                ownerType: "customer",
+                ownerId: order.customerId,
+                credit: refund.amountMinor,
+              },
             ],
             { orderId: order.id, refundId: refund.id },
           );
@@ -335,7 +399,14 @@ builder.mutationFields((t) => ({
           data: { status: "refunded", decidedByUserId: ctx.userId, decidedAt: new Date() },
         });
       });
-      await audit(ctx.userId, "refund.approve", "Refund", args.id, { status: "refund_pending" }, { status: "refunded", amountMinor: refund.amountMinor, destination: refund.destination });
+      await audit(
+        ctx.userId,
+        "refund.approve",
+        "Refund",
+        args.id,
+        { status: "refund_pending" },
+        { status: "refunded", amountMinor: refund.amountMinor, destination: refund.destination },
+      );
       return updated;
     },
   }),
@@ -389,7 +460,12 @@ builder.mutationFields((t) => ({
             tx,
             `Payout ${created.reference} to ${r.name}`,
             [
-              { code: `restaurant:${r.id}:payable`, ownerType: "restaurant", ownerId: r.id, debit: balance },
+              {
+                code: `restaurant:${r.id}:payable`,
+                ownerType: "restaurant",
+                ownerId: r.id,
+                debit: balance,
+              },
               { code: "platform:cash", ownerType: "platform", credit: balance },
             ],
             { payoutId: created.id },

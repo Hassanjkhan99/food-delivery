@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { Button } from "@/components/ui/button";
@@ -36,20 +36,23 @@ const UpdateFeesMutation = graphql(`
 export default function AdminFeesPage() {
   const [{ data }, refetch] = useQuery({ query: FeeQuery, requestPolicy: "cache-and-network" });
   const [saveState, save] = useMutation(UpdateFeesMutation);
-  const [form, setForm] = useState({ sbBps: "0", sbFee: "20", chBps: "800", chFee: "30" });
+  // Explicit edits win; otherwise render the active config (no sync effect needed).
+  const [edited, setEdited] = useState<{
+    sbBps: string;
+    sbFee: string;
+    chBps: string;
+    chFee: string;
+  } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const current = data?.currentFeeConfig;
 
-  useEffect(() => {
-    if (current) {
-      setForm({
-        sbBps: String(current.smallBusinessCommissionBps),
-        sbFee: String(current.smallBusinessPlatformFeeMinor / 100),
-        chBps: String(current.chainCommissionBps),
-        chFee: String(current.chainPlatformFeeMinor / 100),
-      });
-    }
-  }, [current]);
+  const form = edited ?? {
+    sbBps: String(current?.smallBusinessCommissionBps ?? 0),
+    sbFee: String((current?.smallBusinessPlatformFeeMinor ?? 2000) / 100),
+    chBps: String(current?.chainCommissionBps ?? 800),
+    chFee: String((current?.chainPlatformFeeMinor ?? 3000) / 100),
+  };
+  const setForm = setEdited;
 
   return (
     <main className="max-w-lg">
@@ -63,22 +66,42 @@ export default function AdminFeesPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Commission (bps)</Label>
-            <Input inputMode="numeric" value={form.sbBps} onChange={(e) => setForm({ ...form, sbBps: e.target.value })} className="mt-1" />
+            <Input
+              inputMode="numeric"
+              value={form.sbBps}
+              onChange={(e) => setForm({ ...form, sbBps: e.target.value })}
+              className="mt-1"
+            />
           </div>
           <div>
             <Label>Platform fee (Rs/order)</Label>
-            <Input inputMode="numeric" value={form.sbFee} onChange={(e) => setForm({ ...form, sbFee: e.target.value })} className="mt-1" />
+            <Input
+              inputMode="numeric"
+              value={form.sbFee}
+              onChange={(e) => setForm({ ...form, sbFee: e.target.value })}
+              className="mt-1"
+            />
           </div>
         </div>
         <p className="font-semibold">Chains (full rate)</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Commission (bps)</Label>
-            <Input inputMode="numeric" value={form.chBps} onChange={(e) => setForm({ ...form, chBps: e.target.value })} className="mt-1" />
+            <Input
+              inputMode="numeric"
+              value={form.chBps}
+              onChange={(e) => setForm({ ...form, chBps: e.target.value })}
+              className="mt-1"
+            />
           </div>
           <div>
             <Label>Platform fee (Rs/order)</Label>
-            <Input inputMode="numeric" value={form.chFee} onChange={(e) => setForm({ ...form, chFee: e.target.value })} className="mt-1" />
+            <Input
+              inputMode="numeric"
+              value={form.chFee}
+              onChange={(e) => setForm({ ...form, chFee: e.target.value })}
+              className="mt-1"
+            />
           </div>
         </div>
         {message && <p className="text-neutral-600">{message}</p>}
@@ -92,7 +115,11 @@ export default function AdminFeesPage() {
               chBps: Number(form.chBps),
               chFee: Math.round(Number(form.chFee) * 100),
             });
-            setMessage(r.error ? r.error.graphQLErrors[0]?.message ?? "Save failed" : "New fee version active.");
+            setMessage(
+              r.error
+                ? (r.error.graphQLErrors[0]?.message ?? "Save failed")
+                : "New fee version active.",
+            );
             refetch({ requestPolicy: "network-only" });
           }}
         >
@@ -100,7 +127,8 @@ export default function AdminFeesPage() {
         </Button>
         {current && (
           <p className="text-xs text-neutral-400">
-            Active since {new Date(current.createdAt as unknown as string).toLocaleString()} — 100 bps = 1%.
+            Active since {new Date(current.createdAt as unknown as string).toLocaleString()} — 100
+            bps = 1%.
           </p>
         )}
       </div>

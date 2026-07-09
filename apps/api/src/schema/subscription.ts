@@ -22,7 +22,10 @@ builder.subscriptionType({
       args: { branchId: t.arg.string({ required: true }) },
       subscribe: async (_root, args, ctx) => {
         const branch = await prisma.branch.findUnique({ where: { id: args.branchId } });
-        if (!branch || (!ctx.restaurantIds.includes(branch.restaurantId) && !ctx.hasRole("admin"))) {
+        if (
+          !branch ||
+          (!ctx.restaurantIds.includes(branch.restaurantId) && !ctx.hasRole("admin"))
+        ) {
           throw new GraphQLError("Not a member of this restaurant");
         }
         return pubsub.subscribe("branchOrders", args.branchId);

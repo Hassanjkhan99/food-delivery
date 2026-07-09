@@ -46,8 +46,15 @@ const OverrideMutation = graphql(`
 `);
 
 const STATUSES = [
-  "accepted", "preparing", "ready_for_pickup", "rider_assigned", "picked_up",
-  "out_for_delivery", "delivered", "cancelled", "rejected",
+  "accepted",
+  "preparing",
+  "ready_for_pickup",
+  "rider_assigned",
+  "picked_up",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+  "rejected",
 ];
 
 export default function AdminOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -88,7 +95,9 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
             className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
           >
             {STATUSES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
           <input
@@ -112,15 +121,18 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
         </div>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         <p className="mt-2 text-xs text-neutral-400">
-          Illegal transitions are rejected by the state machine even for admins overriding
-          from terminal states.
+          Illegal transitions are rejected by the state machine even for admins overriding from
+          terminal states.
         </p>
       </div>
 
       <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Event chain</h2>
       <div className="space-y-1">
         {order.events.map((e) => (
-          <div key={e.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+          <div
+            key={e.id}
+            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
+          >
             <span>
               <span className="font-mono text-xs text-neutral-400">{e.fromStatus ?? "∅"} → </span>
               <span className="font-medium">{e.toStatus}</span>

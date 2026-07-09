@@ -24,13 +24,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="space-y-1">
           {NAV.map((n) => {
             const Icon = n.icon;
-            const active = n.href === "/admin" ? pathname === "/admin" : pathname.startsWith(n.href);
+            const active =
+              n.href === "/admin" ? pathname === "/admin" : pathname.startsWith(n.href);
             return (
               <Link
                 key={n.href}
                 href={n.href}
                 className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                  active ? "bg-white font-medium text-neutral-900" : "text-neutral-300 hover:bg-neutral-800"
+                  active
+                    ? "bg-white font-medium text-neutral-900"
+                    : "text-neutral-300 hover:bg-neutral-800"
                 }`}
               >
                 <Icon className="h-4 w-4" />

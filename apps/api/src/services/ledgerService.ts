@@ -10,7 +10,13 @@ type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 type OrderWithMoney = Order & { payment: Payment | null; branch: { restaurantId: string } };
 
-export type Leg = { code: string; ownerType: LedgerOwnerType; ownerId?: string | null; debit?: number; credit?: number };
+export type Leg = {
+  code: string;
+  ownerType: LedgerOwnerType;
+  ownerId?: string | null;
+  debit?: number;
+  credit?: number;
+};
 
 export async function postLedgerTx(
   tx: Tx,
@@ -67,8 +73,18 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
       tx,
       `Settlement ${order.code} (card)`,
       [
-        { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, debit: order.grandTotalMinor },
-        { code: `restaurant:${restaurantId}:payable`, ownerType: "restaurant", ownerId: restaurantId, credit: restaurantShare },
+        {
+          code: `customer:${order.customerId}:prepaid`,
+          ownerType: "customer",
+          ownerId: order.customerId,
+          debit: order.grandTotalMinor,
+        },
+        {
+          code: `restaurant:${restaurantId}:payable`,
+          ownerType: "restaurant",
+          ownerId: restaurantId,
+          credit: restaurantShare,
+        },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
       ],
       { orderId: order.id },
@@ -79,7 +95,12 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
       tx,
       `Settlement ${order.code} (COD receivable)`,
       [
-        { code: `restaurant:${restaurantId}:payable`, ownerType: "restaurant", ownerId: restaurantId, debit: fees },
+        {
+          code: `restaurant:${restaurantId}:payable`,
+          ownerType: "restaurant",
+          ownerId: restaurantId,
+          debit: fees,
+        },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
       ],
       { orderId: order.id },
@@ -145,7 +166,12 @@ export async function onOrderMoneyReversal(
     tx,
     `Refund ${order.code} (${to})`,
     [
-      { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, debit: order.payment.amountMinor },
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        debit: order.payment.amountMinor,
+      },
       { code: "platform:cash", ownerType: "platform", credit: order.payment.amountMinor },
     ],
     { orderId: order.id, refundId: refund.id },
@@ -159,7 +185,12 @@ export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void
     `Card charge ${order.code}`,
     [
       { code: "platform:cash", ownerType: "platform", debit: order.grandTotalMinor },
-      { code: `customer:${order.customerId}:prepaid`, ownerType: "customer", ownerId: order.customerId, credit: order.grandTotalMinor },
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        credit: order.grandTotalMinor,
+      },
     ],
     { orderId: order.id },
   );

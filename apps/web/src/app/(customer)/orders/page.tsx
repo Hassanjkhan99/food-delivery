@@ -43,7 +43,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-  const [{ data, fetching }] = useQuery({ query: MyOrdersQuery, requestPolicy: "cache-and-network" });
+  const [{ data, fetching }] = useQuery({
+    query: MyOrdersQuery,
+    requestPolicy: "cache-and-network",
+  });
 
   return (
     <main className="mx-auto max-w-lg">

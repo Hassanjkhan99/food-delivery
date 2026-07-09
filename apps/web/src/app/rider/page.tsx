@@ -77,7 +77,9 @@ export default function RiderHomePage() {
 
   const profile = data?.myRiderProfile;
   if (!profile) {
-    return fetching ? <Skeleton className="h-40 rounded-2xl" /> : (
+    return fetching ? (
+      <Skeleton className="h-40 rounded-2xl" />
+    ) : (
       <p className="text-neutral-500">No rider profile for this account.</p>
     );
   }
@@ -144,7 +146,10 @@ export default function RiderHomePage() {
           <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Recent</h2>
           <div className="space-y-1 opacity-70">
             {past.map((j) => (
-              <div key={j.id} className="flex justify-between rounded-lg bg-white px-3 py-2 text-sm">
+              <div
+                key={j.id}
+                className="flex justify-between rounded-lg bg-white px-3 py-2 text-sm"
+              >
                 <span>{j.order.code}</span>
                 <span className="text-neutral-500">{j.status}</span>
               </div>

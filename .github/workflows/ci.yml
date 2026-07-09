@@ -1,0 +1,49 @@
+# Three independent gates (compliance-project pattern): build, typecheck+lint, format.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+  SESSION_SECRET: ci-secret-not-real-0000000000000000
+  NEXT_PUBLIC_API_URL: http://localhost:4000/graphql
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  typecheck-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @fd/db build
+      - run: pnpm --filter @fd/api codegen && pnpm --filter @fd/web codegen
+      - run: pnpm typecheck
+      - run: pnpm lint
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --check "**/*.{ts,tsx,json,md,yml}" --ignore-path .gitignore

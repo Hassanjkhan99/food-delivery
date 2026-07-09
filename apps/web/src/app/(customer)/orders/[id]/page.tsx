@@ -91,8 +91,14 @@ const TIMELINE_LABEL: Record<string, string> = {
 };
 
 const ACTIVE_STATUSES = [
-  "pending_acceptance", "accepted", "preparing", "ready_for_pickup",
-  "rider_assigned", "picked_up", "out_for_delivery", "reassigning",
+  "pending_acceptance",
+  "accepted",
+  "preparing",
+  "ready_for_pickup",
+  "rider_assigned",
+  "picked_up",
+  "out_for_delivery",
+  "reassigning",
 ];
 
 function Countdown({ deadline }: { deadline: string }) {
@@ -183,7 +189,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       {/* Items */}
       <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm">
         {order.items.map((i) => {
-          const snap = i.menuSnapshotJson as { name?: string; modifiers?: Array<{ optionName: string }> };
+          const snap = i.menuSnapshotJson as {
+            name?: string;
+            modifiers?: Array<{ optionName: string }>;
+          };
           return (
             <div key={i.id} className="mb-2 flex justify-between">
               <div>
@@ -201,11 +210,26 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           );
         })}
         <Separator className="my-2" />
-        <div className="flex justify-between text-neutral-500"><span>Subtotal</span><span>{formatRs(order.subtotalMinor)}</span></div>
-        <div className="flex justify-between text-neutral-500"><span>Tax</span><span>{formatRs(order.taxTotalMinor)}</span></div>
-        <div className="flex justify-between text-neutral-500"><span>Delivery</span><span>{formatRs(order.deliveryFeeMinor)}</span></div>
-        <div className="flex justify-between text-neutral-500"><span>Platform fee</span><span>{formatRs(order.platformFeeMinor)}</span></div>
-        <div className="mt-1 flex justify-between font-semibold"><span>Total ({order.paymentMode === "cod" ? "cash on delivery" : "paid by card"})</span><span>{formatRs(order.grandTotalMinor)}</span></div>
+        <div className="flex justify-between text-neutral-500">
+          <span>Subtotal</span>
+          <span>{formatRs(order.subtotalMinor)}</span>
+        </div>
+        <div className="flex justify-between text-neutral-500">
+          <span>Tax</span>
+          <span>{formatRs(order.taxTotalMinor)}</span>
+        </div>
+        <div className="flex justify-between text-neutral-500">
+          <span>Delivery</span>
+          <span>{formatRs(order.deliveryFeeMinor)}</span>
+        </div>
+        <div className="flex justify-between text-neutral-500">
+          <span>Platform fee</span>
+          <span>{formatRs(order.platformFeeMinor)}</span>
+        </div>
+        <div className="mt-1 flex justify-between font-semibold">
+          <span>Total ({order.paymentMode === "cod" ? "cash on delivery" : "paid by card"})</span>
+          <span>{formatRs(order.grandTotalMinor)}</span>
+        </div>
       </div>
 
       {address?.text && (
@@ -217,7 +241,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <p className="mb-2 text-sm font-medium">How was it?</p>
           <div className="mb-3 flex justify-center gap-1">
             {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} onClick={() => setStars(n)} className="text-2xl" aria-label={`${n} stars`}>
+              <button
+                key={n}
+                onClick={() => setStars(n)}
+                className="text-2xl"
+                aria-label={`${n} stars`}
+              >
                 {n <= stars ? "★" : "☆"}
               </button>
             ))}
@@ -234,7 +263,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           </Button>
         </div>
       )}
-      {rated && <p className="mt-6 text-center text-sm text-neutral-500">Thanks for the feedback! ⭐</p>}
+      {rated && (
+        <p className="mt-6 text-center text-sm text-neutral-500">Thanks for the feedback! ⭐</p>
+      )}
 
       {["pending_acceptance", "accepted"].includes(order.status) && (
         <Button

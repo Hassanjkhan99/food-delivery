@@ -2,10 +2,7 @@
 import { prisma, disconnect } from "../src/index.js";
 
 const statuses = await prisma.order.groupBy({ by: ["status"], _count: true });
-console.log(
-  "orders by status:",
-  Object.fromEntries(statuses.map((s) => [s.status, s._count])),
-);
+console.log("orders by status:", Object.fromEntries(statuses.map((s) => [s.status, s._count])));
 
 const unbalanced = await prisma.$queryRaw<Array<{ txId: string }>>`
   SELECT "txId" FROM ledger_entries

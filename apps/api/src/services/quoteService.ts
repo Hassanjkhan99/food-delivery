@@ -11,7 +11,12 @@ export type ResolvedLine = {
   unitPriceMinor: number; // base + selected modifier deltas
   lineTotalMinor: number;
   notes?: string;
-  modifiers: Array<{ groupName: string; optionId: string; optionName: string; priceDeltaMinor: number }>;
+  modifiers: Array<{
+    groupName: string;
+    optionId: string;
+    optionName: string;
+    priceDeltaMinor: number;
+  }>;
 };
 
 export type QuoteResult = {

@@ -65,7 +65,11 @@ async function wipe() {
 // ── ledger helpers ──────────────────────────────────────────────────────────
 
 const accountIds = new Map<string, string>();
-async function account(ownerType: "platform" | "restaurant" | "customer", code: string, ownerId?: string) {
+async function account(
+  ownerType: "platform" | "restaurant" | "customer",
+  code: string,
+  ownerId?: string,
+) {
   if (accountIds.has(code)) return accountIds.get(code)!;
   const a = await prisma.ledgerAccount.create({ data: { ownerType, ownerId, code } });
   accountIds.set(code, a.id);
@@ -108,8 +112,7 @@ async function main() {
   await wipe();
 
   // Users
-  const mkUser = (phone: string, name: string) =>
-    prisma.user.create({ data: { phone, name } });
+  const mkUser = (phone: string, name: string) => prisma.user.create({ data: { phone, name } });
   const admin = await mkUser("+920000000001", "Demo Admin");
   const owner1 = await mkUser("+920000000002", "Owner Karachi Biryani");
   const owner2 = await mkUser("+920000000003", "Owner Burger Theory");
@@ -173,21 +176,37 @@ async function main() {
   }
 
   const kbh = await mkRestaurant({
-    name: "Karachi Biryani House", slug: "karachi-biryani-house",
-    tier: "small_business", ownerId: owner1.id, lat: 33.5205, lng: 73.1005,
+    name: "Karachi Biryani House",
+    slug: "karachi-biryani-house",
+    tier: "small_business",
+    ownerId: owner1.id,
+    lat: 33.5205,
+    lng: 73.1005,
   });
   const gb = await mkRestaurant({
-    name: "Green Bowl", slug: "green-bowl",
-    tier: "small_business", ownerId: owner1.id, lat: 33.5312, lng: 73.0871,
+    name: "Green Bowl",
+    slug: "green-bowl",
+    tier: "small_business",
+    ownerId: owner1.id,
+    lat: 33.5312,
+    lng: 73.0871,
   });
   const bt = await mkRestaurant({
-    name: "Burger Theory", slug: "burger-theory",
-    tier: "chain", ownerId: owner2.id, lat: 33.5104, lng: 73.1152,
+    name: "Burger Theory",
+    slug: "burger-theory",
+    tier: "chain",
+    ownerId: owner2.id,
+    lat: 33.5104,
+    lng: 73.1152,
   });
   const pending = await mkRestaurant({
-    name: "Lajawab Bites", slug: "lajawab-bites",
-    tier: "small_business", ownerId: owner2.id, status: "pending_approval",
-    lat: 33.5411, lng: 73.0968,
+    name: "Lajawab Bites",
+    slug: "lajawab-bites",
+    tier: "small_business",
+    ownerId: owner2.id,
+    status: "pending_approval",
+    lat: 33.5411,
+    lng: 73.0968,
   });
 
   // Roles
@@ -209,60 +228,98 @@ async function main() {
   // Riders
   const riderRestaurant = await prisma.rider.create({
     data: {
-      userId: riderR.id, riderType: "restaurant", restaurantId: kbh.r.id,
-      vehicleType: "motorbike", verificationStatus: "verified",
+      userId: riderR.id,
+      riderType: "restaurant",
+      restaurantId: kbh.r.id,
+      vehicleType: "motorbike",
+      verificationStatus: "verified",
     },
   });
   await prisma.rider.create({
     data: {
-      userId: riderI.id, riderType: "independent",
-      vehicleType: "motorbike", verificationStatus: "verified",
+      userId: riderI.id,
+      riderType: "independent",
+      vehicleType: "motorbike",
+      verificationStatus: "verified",
     },
   });
   await prisma.riderAvailability.create({
-    data: { riderId: riderRestaurant.id, isOnline: true, lat: new Prisma.Decimal(33.5207), lng: new Prisma.Decimal(73.1009) },
+    data: {
+      riderId: riderRestaurant.id,
+      isOnline: true,
+      lat: new Prisma.Decimal(33.5207),
+      lng: new Prisma.Decimal(73.1009),
+    },
   });
 
   // Customer addresses + one saved mock card
   const addr1 = await prisma.address.create({
     data: {
-      userId: cust1.id, label: "Home", text: "House 12, Street 4, Phase 8, Bahria Town",
-      lat: new Prisma.Decimal(33.5251), lng: new Prisma.Decimal(73.0952), phone: cust1.phone,
+      userId: cust1.id,
+      label: "Home",
+      text: "House 12, Street 4, Phase 8, Bahria Town",
+      lat: new Prisma.Decimal(33.5251),
+      lng: new Prisma.Decimal(73.0952),
+      phone: cust1.phone,
     },
   });
   await prisma.address.create({
     data: {
-      userId: cust2.id, label: "Office", text: "Plaza 9, Business Bay, Phase 8",
-      lat: new Prisma.Decimal(33.5152), lng: new Prisma.Decimal(73.1101), phone: cust2.phone,
+      userId: cust2.id,
+      label: "Office",
+      text: "Plaza 9, Business Bay, Phase 8",
+      lat: new Prisma.Decimal(33.5152),
+      lng: new Prisma.Decimal(73.1101),
+      phone: cust2.phone,
     },
   });
   const card1 = await prisma.paymentMethod.create({
     data: {
-      userId: cust1.id, providerToken: "mocktok_seed_visa_4242",
-      brand: "visa", last4: "4242", expMonth: 12, expYear: 2030, isDefault: true,
+      userId: cust1.id,
+      providerToken: "mocktok_seed_visa_4242",
+      brand: "visa",
+      last4: "4242",
+      expMonth: 12,
+      expYear: 2030,
+      isDefault: true,
     },
   });
 
   // Themes (distinct look & feel per restaurant, demoable from first boot)
   await prisma.restaurantTheme.create({
     data: {
-      restaurantId: kbh.r.id, primaryColor: "#b45309", accentColor: "#f59e0b",
-      backgroundColor: "#fffbeb", textColor: "#451a03", fontKey: "serif",
-      cardStyle: "tilt3d", heroEffect: "parallax",
+      restaurantId: kbh.r.id,
+      primaryColor: "#b45309",
+      accentColor: "#f59e0b",
+      backgroundColor: "#fffbeb",
+      textColor: "#451a03",
+      fontKey: "serif",
+      cardStyle: "tilt3d",
+      heroEffect: "parallax",
     },
   });
   await prisma.restaurantTheme.create({
     data: {
-      restaurantId: gb.r.id, primaryColor: "#15803d", accentColor: "#84cc16",
-      backgroundColor: "#f0fdf4", textColor: "#14532d", fontKey: "sans",
-      cardStyle: "glass", heroEffect: "depth",
+      restaurantId: gb.r.id,
+      primaryColor: "#15803d",
+      accentColor: "#84cc16",
+      backgroundColor: "#f0fdf4",
+      textColor: "#14532d",
+      fontKey: "sans",
+      cardStyle: "glass",
+      heroEffect: "depth",
     },
   });
   await prisma.restaurantTheme.create({
     data: {
-      restaurantId: bt.r.id, primaryColor: "#dc2626", accentColor: "#fbbf24",
-      backgroundColor: "#171717", textColor: "#fafafa", fontKey: "display",
-      cardStyle: "flat", heroEffect: "none",
+      restaurantId: bt.r.id,
+      primaryColor: "#dc2626",
+      accentColor: "#fbbf24",
+      backgroundColor: "#171717",
+      textColor: "#fafafa",
+      fontKey: "display",
+      cardStyle: "flat",
+      heroEffect: "none",
     },
   });
 
@@ -270,10 +327,17 @@ async function main() {
   type ItemDef = { name: string; desc?: string; price: number; badges?: string[] };
   type CatDef = { name: string; desc?: string; mode?: string; items: ItemDef[] };
 
-  async function mkMenu(branchId: string, cats: CatDef[], opts?: { spiceOn?: string[]; addonsOn?: string[] }) {
+  async function mkMenu(
+    branchId: string,
+    cats: CatDef[],
+    opts?: { spiceOn?: string[]; addonsOn?: string[] },
+  ) {
     const menu = await prisma.menu.create({
       data: {
-        branchId, version: 1, status: "published", publishedAt: daysAgo(7),
+        branchId,
+        version: 1,
+        status: "published",
+        publishedAt: daysAgo(7),
         layoutJson: {
           categoryOrder: cats.map((c) => c.name),
           displayModes: Object.fromEntries(cats.map((c) => [c.name, c.mode ?? "list"])),
@@ -282,22 +346,32 @@ async function main() {
     });
     const spice = await prisma.modifierGroup.create({
       data: {
-        menuId: menu.id, name: "Spice level", minSelect: 1, maxSelect: 1,
-        options: { create: [
-          { name: "Mild", priceDeltaMinor: 0, sortOrder: 0 },
-          { name: "Medium", priceDeltaMinor: 0, sortOrder: 1 },
-          { name: "Extra Hot", priceDeltaMinor: 0, sortOrder: 2 },
-        ]},
+        menuId: menu.id,
+        name: "Spice level",
+        minSelect: 1,
+        maxSelect: 1,
+        options: {
+          create: [
+            { name: "Mild", priceDeltaMinor: 0, sortOrder: 0 },
+            { name: "Medium", priceDeltaMinor: 0, sortOrder: 1 },
+            { name: "Extra Hot", priceDeltaMinor: 0, sortOrder: 2 },
+          ],
+        },
       },
     });
     const addons = await prisma.modifierGroup.create({
       data: {
-        menuId: menu.id, name: "Add-ons", minSelect: 0, maxSelect: 3,
-        options: { create: [
-          { name: "Raita", priceDeltaMinor: 5_000, sortOrder: 0 },
-          { name: "Salad", priceDeltaMinor: 7_000, sortOrder: 1 },
-          { name: "Extra Sauce", priceDeltaMinor: 4_000, sortOrder: 2 },
-        ]},
+        menuId: menu.id,
+        name: "Add-ons",
+        minSelect: 0,
+        maxSelect: 3,
+        options: {
+          create: [
+            { name: "Raita", priceDeltaMinor: 5_000, sortOrder: 0 },
+            { name: "Salad", priceDeltaMinor: 7_000, sortOrder: 1 },
+            { name: "Extra Sauce", priceDeltaMinor: 4_000, sortOrder: 2 },
+          ],
+        },
       },
     });
     const itemIds = new Map<string, string>();
@@ -308,8 +382,12 @@ async function main() {
       for (const [ii, item] of cat.items.entries()) {
         const created = await prisma.menuItem.create({
           data: {
-            categoryId: category.id, name: item.name, description: item.desc,
-            priceMinor: item.price, badges: item.badges ?? [], sortOrder: ii,
+            categoryId: category.id,
+            name: item.name,
+            description: item.desc,
+            priceMinor: item.price,
+            badges: item.badges ?? [],
+            sortOrder: ii,
           },
         });
         itemIds.set(item.name, created.id);
@@ -329,57 +407,136 @@ async function main() {
     return { menu, itemIds };
   }
 
-  const kbhMenu = await mkMenu(kbh.b.id, [
-    { name: "Biryani", desc: "Slow-cooked, dum style", mode: "grid", items: [
-      { name: "Chicken Biryani", desc: "Signature dum biryani", price: 45_000, badges: ["Bestseller"] },
-      { name: "Beef Biryani", price: 55_000 },
-      { name: "Sindhi Biryani", desc: "Extra spicy, aloo included", price: 50_000, badges: ["Spicy"] },
-    ]},
-    { name: "Karahi", mode: "list", items: [
-      { name: "Chicken Karahi (Half)", price: 90_000 },
-      { name: "Chicken Karahi (Full)", price: 170_000 },
-      { name: "Mutton Karahi (Half)", price: 140_000 },
-    ]},
-    { name: "Sides & Drinks", mode: "compact", items: [
-      { name: "Naan", price: 3_000 },
-      { name: "Zeera Raita", price: 5_000 },
-      { name: "Soft Drink 500ml", price: 12_000 },
-    ]},
-  ], { spiceOn: ["Chicken Biryani", "Beef Biryani", "Sindhi Biryani", "Chicken Karahi (Half)", "Chicken Karahi (Full)", "Mutton Karahi (Half)"], addonsOn: ["Chicken Biryani", "Beef Biryani", "Chicken Karahi (Full)"] });
+  const kbhMenu = await mkMenu(
+    kbh.b.id,
+    [
+      {
+        name: "Biryani",
+        desc: "Slow-cooked, dum style",
+        mode: "grid",
+        items: [
+          {
+            name: "Chicken Biryani",
+            desc: "Signature dum biryani",
+            price: 45_000,
+            badges: ["Bestseller"],
+          },
+          { name: "Beef Biryani", price: 55_000 },
+          {
+            name: "Sindhi Biryani",
+            desc: "Extra spicy, aloo included",
+            price: 50_000,
+            badges: ["Spicy"],
+          },
+        ],
+      },
+      {
+        name: "Karahi",
+        mode: "list",
+        items: [
+          { name: "Chicken Karahi (Half)", price: 90_000 },
+          { name: "Chicken Karahi (Full)", price: 170_000 },
+          { name: "Mutton Karahi (Half)", price: 140_000 },
+        ],
+      },
+      {
+        name: "Sides & Drinks",
+        mode: "compact",
+        items: [
+          { name: "Naan", price: 3_000 },
+          { name: "Zeera Raita", price: 5_000 },
+          { name: "Soft Drink 500ml", price: 12_000 },
+        ],
+      },
+    ],
+    {
+      spiceOn: [
+        "Chicken Biryani",
+        "Beef Biryani",
+        "Sindhi Biryani",
+        "Chicken Karahi (Half)",
+        "Chicken Karahi (Full)",
+        "Mutton Karahi (Half)",
+      ],
+      addonsOn: ["Chicken Biryani", "Beef Biryani", "Chicken Karahi (Full)"],
+    },
+  );
 
-  const gbMenu = await mkMenu(gb.b.id, [
-    { name: "Signature Bowls", mode: "grid", items: [
-      { name: "Grilled Chicken Bowl", desc: "Brown rice, greens, house dressing", price: 65_000, badges: ["Healthy"] },
-      { name: "Falafel Bowl", price: 55_000, badges: ["Veg"] },
-      { name: "Steak Bowl", price: 85_000 },
-    ]},
-    { name: "Wraps", mode: "list", items: [
-      { name: "Chicken Caesar Wrap", price: 48_000 },
-      { name: "Halloumi Wrap", price: 52_000, badges: ["Veg"] },
-    ]},
-    { name: "Juices", mode: "compact", items: [
-      { name: "Fresh Orange", price: 25_000 },
-      { name: "Green Detox", price: 28_000 },
-    ]},
-  ], { addonsOn: ["Grilled Chicken Bowl", "Steak Bowl"] });
+  const gbMenu = await mkMenu(
+    gb.b.id,
+    [
+      {
+        name: "Signature Bowls",
+        mode: "grid",
+        items: [
+          {
+            name: "Grilled Chicken Bowl",
+            desc: "Brown rice, greens, house dressing",
+            price: 65_000,
+            badges: ["Healthy"],
+          },
+          { name: "Falafel Bowl", price: 55_000, badges: ["Veg"] },
+          { name: "Steak Bowl", price: 85_000 },
+        ],
+      },
+      {
+        name: "Wraps",
+        mode: "list",
+        items: [
+          { name: "Chicken Caesar Wrap", price: 48_000 },
+          { name: "Halloumi Wrap", price: 52_000, badges: ["Veg"] },
+        ],
+      },
+      {
+        name: "Juices",
+        mode: "compact",
+        items: [
+          { name: "Fresh Orange", price: 25_000 },
+          { name: "Green Detox", price: 28_000 },
+        ],
+      },
+    ],
+    { addonsOn: ["Grilled Chicken Bowl", "Steak Bowl"] },
+  );
 
-  const btMenu = await mkMenu(bt.b.id, [
-    { name: "Smash Burgers", mode: "grid", items: [
-      { name: "Classic Smash", desc: "Double patty, house sauce", price: 60_000, badges: ["Bestseller"] },
-      { name: "Cheese Overload", price: 72_000 },
-      { name: "Jalapeño Heat", price: 68_000, badges: ["Spicy"] },
-      { name: "Crispy Chicken Burger", price: 58_000 },
-    ]},
-    { name: "Sides", mode: "compact", items: [
-      { name: "Fries", price: 20_000 },
-      { name: "Loaded Fries", price: 35_000 },
-      { name: "Nuggets (6pc)", price: 30_000 },
-    ]},
-    { name: "Shakes", mode: "list", items: [
-      { name: "Chocolate Shake", price: 32_000 },
-      { name: "Oreo Shake", price: 35_000 },
-    ]},
-  ], { spiceOn: ["Jalapeño Heat"], addonsOn: ["Classic Smash", "Cheese Overload"] });
+  const btMenu = await mkMenu(
+    bt.b.id,
+    [
+      {
+        name: "Smash Burgers",
+        mode: "grid",
+        items: [
+          {
+            name: "Classic Smash",
+            desc: "Double patty, house sauce",
+            price: 60_000,
+            badges: ["Bestseller"],
+          },
+          { name: "Cheese Overload", price: 72_000 },
+          { name: "Jalapeño Heat", price: 68_000, badges: ["Spicy"] },
+          { name: "Crispy Chicken Burger", price: 58_000 },
+        ],
+      },
+      {
+        name: "Sides",
+        mode: "compact",
+        items: [
+          { name: "Fries", price: 20_000 },
+          { name: "Loaded Fries", price: 35_000 },
+          { name: "Nuggets (6pc)", price: 30_000 },
+        ],
+      },
+      {
+        name: "Shakes",
+        mode: "list",
+        items: [
+          { name: "Chocolate Shake", price: 32_000 },
+          { name: "Oreo Shake", price: 35_000 },
+        ],
+      },
+    ],
+    { spiceOn: ["Jalapeño Heat"], addonsOn: ["Classic Smash", "Cheese Overload"] },
+  );
 
   // Draft menu with pending edits on KBH (exercises draft/publish).
   // IMPORTANT: drafts must be FULL clones of the live menu — publishing replaces the
@@ -394,7 +551,9 @@ async function main() {
     });
     const draft = await prisma.menu.create({
       data: {
-        branchId: kbh.b.id, version: 2, status: "draft",
+        branchId: kbh.b.id,
+        version: 2,
+        status: "draft",
         layoutJson: { categoryOrder: ["Biryani", "Karahi", "Sides & Drinks", "Desserts"] },
       },
     });
@@ -402,24 +561,41 @@ async function main() {
     for (const g of source.modGroups) {
       const ng = await prisma.modifierGroup.create({
         data: {
-          menuId: draft.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
-          options: { create: g.options.map((o) => ({
-            name: o.name, priceDeltaMinor: o.priceDeltaMinor, isAvailable: o.isAvailable, sortOrder: o.sortOrder,
-          }))},
+          menuId: draft.id,
+          name: g.name,
+          minSelect: g.minSelect,
+          maxSelect: g.maxSelect,
+          options: {
+            create: g.options.map((o) => ({
+              name: o.name,
+              priceDeltaMinor: o.priceDeltaMinor,
+              isAvailable: o.isAvailable,
+              sortOrder: o.sortOrder,
+            })),
+          },
         },
       });
       groupMap.set(g.id, ng.id);
     }
     for (const cat of source.categories) {
       const nc = await prisma.menuCategory.create({
-        data: { menuId: draft.id, name: cat.name, description: cat.description, sortOrder: cat.sortOrder },
+        data: {
+          menuId: draft.id,
+          name: cat.name,
+          description: cat.description,
+          sortOrder: cat.sortOrder,
+        },
       });
       for (const item of cat.items) {
         const ni = await prisma.menuItem.create({
           data: {
-            categoryId: nc.id, name: item.name, description: item.description,
-            priceMinor: item.priceMinor, isAvailable: item.isAvailable,
-            badges: item.badges, sortOrder: item.sortOrder,
+            categoryId: nc.id,
+            name: item.name,
+            description: item.description,
+            priceMinor: item.priceMinor,
+            isAvailable: item.isAvailable,
+            badges: item.badges,
+            sortOrder: item.sortOrder,
           },
         });
         for (const join of item.modGroups) {
@@ -435,7 +611,9 @@ async function main() {
     // ...and the pending edit: a new Desserts category only in the draft.
     await prisma.menuCategory.create({
       data: {
-        menuId: draft.id, name: "Desserts", sortOrder: 3,
+        menuId: draft.id,
+        name: "Desserts",
+        sortOrder: 3,
         items: { create: [{ name: "Gulab Jamun (2pc)", priceMinor: 15_000, sortOrder: 0 }] },
       },
     });
@@ -466,8 +644,25 @@ async function main() {
   };
 
   const PATHS: Record<string, OrderStatus[]> = {
-    delivered: ["pending_acceptance", "accepted", "preparing", "ready_for_pickup", "rider_assigned", "picked_up", "out_for_delivery", "delivered"],
-    out_for_delivery: ["pending_acceptance", "accepted", "preparing", "ready_for_pickup", "rider_assigned", "picked_up", "out_for_delivery"],
+    delivered: [
+      "pending_acceptance",
+      "accepted",
+      "preparing",
+      "ready_for_pickup",
+      "rider_assigned",
+      "picked_up",
+      "out_for_delivery",
+      "delivered",
+    ],
+    out_for_delivery: [
+      "pending_acceptance",
+      "accepted",
+      "preparing",
+      "ready_for_pickup",
+      "rider_assigned",
+      "picked_up",
+      "out_for_delivery",
+    ],
     ready_for_pickup: ["pending_acceptance", "accepted", "preparing", "ready_for_pickup"],
     preparing: ["pending_acceptance", "accepted", "preparing"],
     rejected: ["pending_acceptance", "rejected"],
@@ -494,7 +689,12 @@ async function main() {
         branchId: spec.rest.b.id,
         status: spec.status,
         idempotencyKey: `seed-${code}`,
-        addressSnapshotJson: { label: "Home", text: "House 12, Street 4, Phase 8", lat: 33.5251, lng: 73.0952 },
+        addressSnapshotJson: {
+          label: "Home",
+          text: "House 12, Street 4, Phase 8",
+          lat: 33.5251,
+          lng: 73.0952,
+        },
         contactPhone: spec.customer.phone,
         subtotalMinor: subtotal,
         deliveryFeeMinor: deliveryFee,
@@ -504,19 +704,27 @@ async function main() {
         grandTotalMinor: grand,
         commissionBpsSnapshot: fees.commissionBps,
         paymentMode: spec.mode,
-        acceptDeadlineAt: spec.status === "pending_acceptance"
-          ? new Date(now.getTime() + 120_000)
-          : new Date(placedAt.getTime() + 120_000),
+        acceptDeadlineAt:
+          spec.status === "pending_acceptance"
+            ? new Date(now.getTime() + 120_000)
+            : new Date(placedAt.getTime() + 120_000),
         placedAt,
         prepEtaMinutes: path.includes("accepted") ? 25 : null,
         acceptedAt: path.includes("accepted") ? new Date(placedAt.getTime() + 60_000) : null,
-        readyAt: path.includes("ready_for_pickup") ? new Date(placedAt.getTime() + 20 * 60_000) : null,
+        readyAt: path.includes("ready_for_pickup")
+          ? new Date(placedAt.getTime() + 20 * 60_000)
+          : null,
         pickedUpAt: path.includes("picked_up") ? new Date(placedAt.getTime() + 25 * 60_000) : null,
         deliveredAt: path.includes("delivered") ? new Date(placedAt.getTime() + 40 * 60_000) : null,
         cancelledAt: spec.status === "cancelled" ? new Date(placedAt.getTime() + 5 * 60_000) : null,
         items: {
           create: spec.items.map((i) => ({
-            menuSnapshotJson: { menuItemId: i.menuItemId, name: i.name, priceMinor: i.price, modifiers: [] },
+            menuSnapshotJson: {
+              menuItemId: i.menuItemId,
+              name: i.name,
+              priceMinor: i.price,
+              modifiers: [],
+            },
             qty: i.qty,
             unitPriceMinor: i.price,
             lineTotalMinor: i.price * i.qty,
@@ -532,7 +740,8 @@ async function main() {
           orderId: order.id,
           fromStatus: i === 0 ? null : path[i - 1],
           toStatus: path[i]!,
-          actorRole: i === 0 ? "customer" : path[i] === "auto_expired" ? "system" : "restaurant_staff",
+          actorRole:
+            i === 0 ? "customer" : path[i] === "auto_expired" ? "system" : "restaurant_staff",
           reason: path[i] === "rejected" ? (spec.rejectReason ?? "Out of stock") : null,
           createdAt: new Date(placedAt.getTime() + i * 4 * 60_000),
         },
@@ -540,7 +749,12 @@ async function main() {
     }
 
     // Delivery task for rider-involved states
-    if (spec.rider && ["rider_assigned", "picked_up", "out_for_delivery", "delivered"].some((s) => path.includes(s as OrderStatus))) {
+    if (
+      spec.rider &&
+      ["rider_assigned", "picked_up", "out_for_delivery", "delivered"].some((s) =>
+        path.includes(s as OrderStatus),
+      )
+    ) {
       const delivered = path.includes("delivered");
       const task = await prisma.deliveryTask.create({
         data: {
@@ -551,31 +765,51 @@ async function main() {
           assignedAt: new Date(placedAt.getTime() + 18 * 60_000),
         },
       });
-      const evts: Array<{ type: "assigned" | "arrived_pickup" | "picked_up" | "delivered"; at: number }> = [
-        { type: "assigned", at: 18 }, { type: "arrived_pickup", at: 22 }, { type: "picked_up", at: 25 },
+      const evts: Array<{
+        type: "assigned" | "arrived_pickup" | "picked_up" | "delivered";
+        at: number;
+      }> = [
+        { type: "assigned", at: 18 },
+        { type: "arrived_pickup", at: 22 },
+        { type: "picked_up", at: 25 },
       ];
       if (delivered) evts.push({ type: "delivered", at: 40 });
       for (const e of evts) {
         await prisma.deliveryEvent.create({
-          data: { taskId: task.id, type: e.type, createdAt: new Date(placedAt.getTime() + e.at * 60_000) },
+          data: {
+            taskId: task.id,
+            type: e.type,
+            createdAt: new Date(placedAt.getTime() + e.at * 60_000),
+          },
         });
       }
     }
 
     // Payment row
-    const captured = spec.mode === "card"
-      ? !["auto_expired", "pending_acceptance"].includes(spec.status)
-      : spec.status === "delivered";
+    const captured =
+      spec.mode === "card"
+        ? !["auto_expired", "pending_acceptance"].includes(spec.status)
+        : spec.status === "delivered";
     await prisma.payment.create({
       data: {
         orderId: order.id,
         mode: spec.mode,
-        status: spec.status === "rejected" && spec.mode === "card" ? "refunded" : captured ? "captured" : "pending",
+        status:
+          spec.status === "rejected" && spec.mode === "card"
+            ? "refunded"
+            : captured
+              ? "captured"
+              : "pending",
         providerRef: spec.mode === "card" ? `mockch_${code}` : null,
         paymentMethodId: spec.mode === "card" && spec.customer.id === cust1.id ? card1.id : null,
         amountMinor: grand,
         refundedMinor: spec.status === "rejected" && spec.mode === "card" ? grand : 0,
-        capturedAt: spec.mode === "card" ? placedAt : path.includes("delivered") ? new Date(placedAt.getTime() + 40 * 60_000) : null,
+        capturedAt:
+          spec.mode === "card"
+            ? placedAt
+            : path.includes("delivered")
+              ? new Date(placedAt.getTime() + 40 * 60_000)
+              : null,
       },
     });
 
@@ -583,130 +817,256 @@ async function main() {
     const restPayable = `restaurant:${spec.rest.r.id}:payable`;
     const custPrepaid = `customer:${spec.customer.id}:prepaid`;
     if (spec.mode === "card" && captured) {
-      await postTx(`Card charge ${code}`, [
-        { account: "platform:cash", debit: grand },
-        { account: custPrepaid, credit: grand },
-      ], { orderId: order.id }, placedAt);
+      await postTx(
+        `Card charge ${code}`,
+        [
+          { account: "platform:cash", debit: grand },
+          { account: custPrepaid, credit: grand },
+        ],
+        { orderId: order.id },
+        placedAt,
+      );
     }
     if (spec.status === "delivered") {
       const restaurantShare = subtotal + taxTotal + deliveryFee - commission;
       if (spec.mode === "card") {
-        await postTx(`Settlement ${code} (card)`, [
-          { account: custPrepaid, debit: grand },
-          { account: restPayable, credit: restaurantShare },
-          { account: "platform:revenue", credit: commission + fees.platformFeeMinor },
-        ], { orderId: order.id }, new Date(placedAt.getTime() + 40 * 60_000));
+        await postTx(
+          `Settlement ${code} (card)`,
+          [
+            { account: custPrepaid, debit: grand },
+            { account: restPayable, credit: restaurantShare },
+            { account: "platform:revenue", credit: commission + fees.platformFeeMinor },
+          ],
+          { orderId: order.id },
+          new Date(placedAt.getTime() + 40 * 60_000),
+        );
       } else {
         // COD: restaurant holds the cash; platform books its cut as receivable.
-        await postTx(`Settlement ${code} (COD receivable)`, [
-          { account: restPayable, debit: commission + fees.platformFeeMinor },
-          { account: "platform:revenue", credit: commission + fees.platformFeeMinor },
-        ], { orderId: order.id }, new Date(placedAt.getTime() + 40 * 60_000));
+        await postTx(
+          `Settlement ${code} (COD receivable)`,
+          [
+            { account: restPayable, debit: commission + fees.platformFeeMinor },
+            { account: "platform:revenue", credit: commission + fees.platformFeeMinor },
+          ],
+          { orderId: order.id },
+          new Date(placedAt.getTime() + 40 * 60_000),
+        );
       }
     }
     if (spec.status === "rejected" && spec.mode === "card") {
       const refund = await prisma.refund.create({
         data: {
-          orderId: order.id, status: "refunded", amountMinor: grand,
-          destination: "card", reason: "Automatic refund — order rejected",
+          orderId: order.id,
+          status: "refunded",
+          amountMinor: grand,
+          destination: "card",
+          reason: "Automatic refund — order rejected",
           decidedAt: new Date(placedAt.getTime() + 10 * 60_000),
         },
       });
-      await postTx(`Refund ${code} (rejected)`, [
-        { account: custPrepaid, debit: grand },
-        { account: "platform:cash", credit: grand },
-      ], { orderId: order.id, refundId: refund.id }, new Date(placedAt.getTime() + 10 * 60_000));
+      await postTx(
+        `Refund ${code} (rejected)`,
+        [
+          { account: custPrepaid, debit: grand },
+          { account: "platform:cash", credit: grand },
+        ],
+        { orderId: order.id, refundId: refund.id },
+        new Date(placedAt.getTime() + 10 * 60_000),
+      );
     }
     return order;
   }
 
   const item = (ids: Map<string, string>, name: string, price: number, qty = 1) => ({
-    menuItemId: ids.get(name)!, name, price, qty,
+    menuItemId: ids.get(name)!,
+    name,
+    price,
+    qty,
   });
 
   // 12 orders across all states, mixed COD/card
   const o1 = await mkOrder({
-    rest: kbh, customer: cust1, mode: "card", status: "delivered", placedMinutesAgo: 60 * 26, rider: riderRestaurant.id,
-    items: [item(kbhMenu.itemIds, "Chicken Biryani", 45_000, 2), item(kbhMenu.itemIds, "Naan", 3_000, 4)],
+    rest: kbh,
+    customer: cust1,
+    mode: "card",
+    status: "delivered",
+    placedMinutesAgo: 60 * 26,
+    rider: riderRestaurant.id,
+    items: [
+      item(kbhMenu.itemIds, "Chicken Biryani", 45_000, 2),
+      item(kbhMenu.itemIds, "Naan", 3_000, 4),
+    ],
   });
   const o2 = await mkOrder({
-    rest: kbh, customer: cust2, mode: "cod", status: "delivered", placedMinutesAgo: 60 * 20, rider: riderRestaurant.id,
+    rest: kbh,
+    customer: cust2,
+    mode: "cod",
+    status: "delivered",
+    placedMinutesAgo: 60 * 20,
+    rider: riderRestaurant.id,
     items: [item(kbhMenu.itemIds, "Chicken Karahi (Full)", 170_000)],
   });
   const o3 = await mkOrder({
-    rest: bt, customer: cust1, mode: "card", status: "delivered", placedMinutesAgo: 60 * 44, rider: riderRestaurant.id,
-    items: [item(btMenu.itemIds, "Classic Smash", 60_000, 2), item(btMenu.itemIds, "Fries", 20_000, 2)],
+    rest: bt,
+    customer: cust1,
+    mode: "card",
+    status: "delivered",
+    placedMinutesAgo: 60 * 44,
+    rider: riderRestaurant.id,
+    items: [
+      item(btMenu.itemIds, "Classic Smash", 60_000, 2),
+      item(btMenu.itemIds, "Fries", 20_000, 2),
+    ],
   });
   await mkOrder({
-    rest: gb, customer: cust3, mode: "cod", status: "delivered", placedMinutesAgo: 60 * 30, rider: riderRestaurant.id,
-    items: [item(gbMenu.itemIds, "Grilled Chicken Bowl", 65_000), item(gbMenu.itemIds, "Fresh Orange", 25_000)],
+    rest: gb,
+    customer: cust3,
+    mode: "cod",
+    status: "delivered",
+    placedMinutesAgo: 60 * 30,
+    rider: riderRestaurant.id,
+    items: [
+      item(gbMenu.itemIds, "Grilled Chicken Bowl", 65_000),
+      item(gbMenu.itemIds, "Fresh Orange", 25_000),
+    ],
   });
   await mkOrder({
-    rest: kbh, customer: cust2, mode: "card", status: "rejected", placedMinutesAgo: 60 * 50,
-    items: [item(kbhMenu.itemIds, "Mutton Karahi (Half)", 140_000)], rejectReason: "Mutton finished for the day",
+    rest: kbh,
+    customer: cust2,
+    mode: "card",
+    status: "rejected",
+    placedMinutesAgo: 60 * 50,
+    items: [item(kbhMenu.itemIds, "Mutton Karahi (Half)", 140_000)],
+    rejectReason: "Mutton finished for the day",
   });
   await mkOrder({
-    rest: bt, customer: cust3, mode: "cod", status: "auto_expired", placedMinutesAgo: 60 * 48,
+    rest: bt,
+    customer: cust3,
+    mode: "cod",
+    status: "auto_expired",
+    placedMinutesAgo: 60 * 48,
     items: [item(btMenu.itemIds, "Oreo Shake", 35_000, 2)],
   });
   await mkOrder({
-    rest: gb, customer: cust1, mode: "cod", status: "cancelled", placedMinutesAgo: 60 * 28,
+    rest: gb,
+    customer: cust1,
+    mode: "cod",
+    status: "cancelled",
+    placedMinutesAgo: 60 * 28,
     items: [item(gbMenu.itemIds, "Falafel Bowl", 55_000)],
   });
   const o8 = await mkOrder({
-    rest: bt, customer: cust2, mode: "card", status: "delivered", placedMinutesAgo: 60 * 8, rider: riderRestaurant.id,
-    items: [item(btMenu.itemIds, "Cheese Overload", 72_000), item(btMenu.itemIds, "Loaded Fries", 35_000)],
+    rest: bt,
+    customer: cust2,
+    mode: "card",
+    status: "delivered",
+    placedMinutesAgo: 60 * 8,
+    rider: riderRestaurant.id,
+    items: [
+      item(btMenu.itemIds, "Cheese Overload", 72_000),
+      item(btMenu.itemIds, "Loaded Fries", 35_000),
+    ],
   });
   const o9 = await mkOrder({
-    rest: kbh, customer: cust1, mode: "card", status: "out_for_delivery", placedMinutesAgo: 35, rider: riderRestaurant.id,
-    items: [item(kbhMenu.itemIds, "Sindhi Biryani", 50_000), item(kbhMenu.itemIds, "Soft Drink 500ml", 12_000, 2)],
+    rest: kbh,
+    customer: cust1,
+    mode: "card",
+    status: "out_for_delivery",
+    placedMinutesAgo: 35,
+    rider: riderRestaurant.id,
+    items: [
+      item(kbhMenu.itemIds, "Sindhi Biryani", 50_000),
+      item(kbhMenu.itemIds, "Soft Drink 500ml", 12_000, 2),
+    ],
   });
   await mkOrder({
-    rest: gb, customer: cust2, mode: "cod", status: "preparing", placedMinutesAgo: 15,
+    rest: gb,
+    customer: cust2,
+    mode: "cod",
+    status: "preparing",
+    placedMinutesAgo: 15,
     items: [item(gbMenu.itemIds, "Steak Bowl", 85_000)],
   });
   await mkOrder({
-    rest: kbh, customer: cust3, mode: "cod", status: "ready_for_pickup", placedMinutesAgo: 25,
+    rest: kbh,
+    customer: cust3,
+    mode: "cod",
+    status: "ready_for_pickup",
+    placedMinutesAgo: 25,
     items: [item(kbhMenu.itemIds, "Beef Biryani", 55_000, 2)],
   });
   await mkOrder({
-    rest: bt, customer: cust1, mode: "cod", status: "pending_acceptance", placedMinutesAgo: 0,
-    items: [item(btMenu.itemIds, "Jalapeño Heat", 68_000), item(btMenu.itemIds, "Chocolate Shake", 32_000)],
+    rest: bt,
+    customer: cust1,
+    mode: "cod",
+    status: "pending_acceptance",
+    placedMinutesAgo: 0,
+    items: [
+      item(btMenu.itemIds, "Jalapeño Heat", 68_000),
+      item(btMenu.itemIds, "Chocolate Shake", 32_000),
+    ],
   });
 
   // Cancellation row for the cancelled order
   const cancelledOrder = await prisma.order.findFirst({ where: { status: "cancelled" } });
   await prisma.cancellation.create({
     data: {
-      orderId: cancelledOrder!.id, cancelledBy: "customer",
-      reasonCode: "customer_changed_mind", feeAssessedMinor: 0,
+      orderId: cancelledOrder!.id,
+      cancelledBy: "customer",
+      reasonCode: "customer_changed_mind",
+      feeAssessedMinor: 0,
     },
   });
 
   // Refund pending on o8 (wrong item complaint) + support ticket
   const refund = await prisma.refund.create({
     data: {
-      orderId: o8.id, status: "refund_pending", amountMinor: 35_000,
-      destination: "wallet", reason: "Loaded Fries missing from bag",
+      orderId: o8.id,
+      status: "refund_pending",
+      amountMinor: 35_000,
+      destination: "wallet",
+      reason: "Loaded Fries missing from bag",
     },
   });
   await prisma.supportTicket.create({
     data: {
-      customerId: cust2.id, orderId: o8.id, category: "missing_item",
-      subject: "Missing Loaded Fries", body: "Order arrived without the Loaded Fries. Requesting refund.",
+      customerId: cust2.id,
+      orderId: o8.id,
+      category: "missing_item",
+      subject: "Missing Loaded Fries",
+      body: "Order arrived without the Loaded Fries. Requesting refund.",
       status: "open",
     },
   });
 
   // Ratings on delivered orders
   await prisma.rating.create({
-    data: { orderId: o1.id, customerId: cust1.id, restaurantId: kbh.r.id, stars: 5, tags: ["tasty", "on-time"], comment: "Best biryani in Phase 8!" },
+    data: {
+      orderId: o1.id,
+      customerId: cust1.id,
+      restaurantId: kbh.r.id,
+      stars: 5,
+      tags: ["tasty", "on-time"],
+      comment: "Best biryani in Phase 8!",
+    },
   });
   await prisma.rating.create({
-    data: { orderId: o2.id, customerId: cust2.id, restaurantId: kbh.r.id, stars: 4, tags: ["tasty"] },
+    data: {
+      orderId: o2.id,
+      customerId: cust2.id,
+      restaurantId: kbh.r.id,
+      stars: 4,
+      tags: ["tasty"],
+    },
   });
   await prisma.rating.create({
-    data: { orderId: o3.id, customerId: cust1.id, restaurantId: bt.r.id, stars: 4, tags: ["hot", "on-time"] },
+    data: {
+      orderId: o3.id,
+      customerId: cust1.id,
+      restaurantId: bt.r.id,
+      stars: 4,
+      tags: ["hot", "on-time"],
+    },
   });
 
   // One completed payout for KBH (books against payable)
@@ -717,14 +1077,24 @@ async function main() {
   if (payoutAmount > 0) {
     const payout = await prisma.payout.create({
       data: {
-        restaurantId: kbh.r.id, periodStart: daysAgo(7), periodEnd: daysAgo(1),
-        amountMinor: payoutAmount, status: "paid", reference: "SEED-PAYOUT-001", paidAt: daysAgo(1),
+        restaurantId: kbh.r.id,
+        periodStart: daysAgo(7),
+        periodEnd: daysAgo(1),
+        amountMinor: payoutAmount,
+        status: "paid",
+        reference: "SEED-PAYOUT-001",
+        paidAt: daysAgo(1),
       },
     });
-    const txId = await postTx(`Payout ${payout.reference} to Karachi Biryani House`, [
-      { account: `restaurant:${kbh.r.id}:payable`, debit: payoutAmount },
-      { account: "platform:cash", credit: payoutAmount },
-    ], { payoutId: payout.id }, daysAgo(1));
+    const txId = await postTx(
+      `Payout ${payout.reference} to Karachi Biryani House`,
+      [
+        { account: `restaurant:${kbh.r.id}:payable`, debit: payoutAmount },
+        { account: "platform:cash", credit: payoutAmount },
+      ],
+      { payoutId: payout.id },
+      daysAgo(1),
+    );
     await prisma.payout.update({ where: { id: payout.id }, data: { ledgerTxId: txId } });
   }
 
@@ -732,16 +1102,21 @@ async function main() {
   for (const { r } of [kbh, gb, bt]) {
     await prisma.auditLog.create({
       data: {
-        actorUserId: admin.id, actorRole: "admin", action: "restaurant.approve",
-        subjectType: "Restaurant", subjectId: r.id,
-        beforeJson: { status: "pending_approval" }, afterJson: { status: "approved" },
+        actorUserId: admin.id,
+        actorRole: "admin",
+        action: "restaurant.approve",
+        subjectType: "Restaurant",
+        subjectId: r.id,
+        beforeJson: { status: "pending_approval" },
+        afterJson: { status: "approved" },
       },
     });
   }
 
   // Verify ledger balance per txId
   const entries = await prisma.ledgerEntry.groupBy({
-    by: ["txId"], _sum: { debitMinor: true, creditMinor: true },
+    by: ["txId"],
+    _sum: { debitMinor: true, creditMinor: true },
   });
   for (const e of entries) {
     if (e._sum.debitMinor !== e._sum.creditMinor) {

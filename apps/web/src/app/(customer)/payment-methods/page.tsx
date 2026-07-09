@@ -112,7 +112,10 @@ export default function PaymentMethodsPage() {
         )}
       </div>
 
-      <form onSubmit={onAdd} className="mt-8 space-y-4 rounded-xl border border-neutral-200 bg-white p-4">
+      <form
+        onSubmit={onAdd}
+        className="mt-8 space-y-4 rounded-xl border border-neutral-200 bg-white p-4"
+      >
         <p className="font-semibold">Add a card</p>
         <p className="text-xs text-neutral-400">
           Mock gateway — try 4242 4242 4242 4242. (4000 0000 0000 0002 simulates a decline.)

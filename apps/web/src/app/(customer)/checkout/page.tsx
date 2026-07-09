@@ -60,16 +60,13 @@ export default function CheckoutPage() {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
-  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null);
+  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
 
   const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
-  const methods = methodsData?.myPaymentMethods ?? [];
-
-  useEffect(() => {
-    if (paymentMode === "card" && !paymentMethodId && methods.length > 0) {
-      setPaymentMethodId(methods.find((m) => m.isDefault)?.id ?? methods[0]!.id);
-    }
-  }, [paymentMode, paymentMethodId, methods]);
+  const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
+  // Derived default (no effect needed): explicit selection wins, else default card.
+  const paymentMethodId =
+    selectedMethodId ?? methods.find((m) => m.isDefault)?.id ?? methods[0]?.id ?? null;
 
   // Generated when checkout renders — NOT on click — so retries are idempotent.
   const idempotencyKey = useRef<string>(crypto.randomUUID());
@@ -223,7 +220,7 @@ export default function CheckoutPage() {
                     type="radio"
                     name="paymethod"
                     checked={paymentMethodId === m.id}
-                    onChange={() => setPaymentMethodId(m.id)}
+                    onChange={() => setSelectedMethodId(m.id)}
                   />
                   {m.brand} •••• {m.last4}
                 </label>
@@ -237,15 +234,30 @@ export default function CheckoutPage() {
           {quoteError && <p className="text-red-600">{quoteError}</p>}
           {quote && (
             <>
-              <div className="flex justify-between"><span className="text-neutral-500">Subtotal</span><span>{formatRs(quote.subtotalMinor)}</span></div>
-              <div className="flex justify-between"><span className="text-neutral-500">Tax</span><span>{formatRs(quote.taxTotalMinor)}</span></div>
-              <div className="flex justify-between"><span className="text-neutral-500">Delivery fee</span><span>{formatRs(quote.deliveryFeeMinor)}</span></div>
-              <div className="flex justify-between"><span className="text-neutral-500">Platform fee</span><span>{formatRs(quote.platformFeeMinor)}</span></div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Subtotal</span>
+                <span>{formatRs(quote.subtotalMinor)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Tax</span>
+                <span>{formatRs(quote.taxTotalMinor)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Delivery fee</span>
+                <span>{formatRs(quote.deliveryFeeMinor)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">Platform fee</span>
+                <span>{formatRs(quote.platformFeeMinor)}</span>
+              </div>
               <Separator className="my-2" />
               <div className="flex justify-between text-base font-semibold">
-                <span>Total</span><span>{formatRs(quote.grandTotalMinor)}</span>
+                <span>Total</span>
+                <span>{formatRs(quote.grandTotalMinor)}</span>
               </div>
-              <p className="mt-2 text-xs text-neutral-400">Billed by the restaurant. Receipt issued by the restaurant.</p>
+              <p className="mt-2 text-xs text-neutral-400">
+                Billed by the restaurant. Receipt issued by the restaurant.
+              </p>
               {!quote.meetsMinimum && (
                 <p className="mt-2 text-xs font-medium text-amber-600">
                   Below the minimum order of {formatRs(quote.minOrderMinor)}.
@@ -268,7 +280,9 @@ export default function CheckoutPage() {
           className="w-full"
           disabled={placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius}
         >
-          {placeState.fetching ? "Placing order…" : `Place order${quote ? ` · ${formatRs(quote.grandTotalMinor)}` : ""}`}
+          {placeState.fetching
+            ? "Placing order…"
+            : `Place order${quote ? ` · ${formatRs(quote.grandTotalMinor)}` : ""}`}
         </Button>
       </form>
     </main>

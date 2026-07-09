@@ -23,10 +23,7 @@ export function makeClient() {
         forwardSubscription(operation) {
           return {
             subscribe: (sink) => ({
-              unsubscribe: sse.subscribe(
-                { ...operation, query: operation.query ?? "" },
-                sink,
-              ),
+              unsubscribe: sse.subscribe({ ...operation, query: operation.query ?? "" }, sink),
             }),
           };
         },
@@ -37,6 +34,6 @@ export function makeClient() {
 }
 
 export function GraphQLProvider({ children }: { children: ReactNode }) {
-  const client = useMemo(makeClient, []);
+  const client = useMemo(() => makeClient(), []);
   return <Provider value={client}>{children}</Provider>;
 }

@@ -9,9 +9,7 @@ import { useConsole } from "../useConsole";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,8 +46,22 @@ const UpsertCategoryMutation = graphql(`
   }
 `);
 const UpsertItemMutation = graphql(`
-  mutation UpsertItem($branchId: String!, $categoryId: String!, $id: String, $name: String!, $description: String, $priceMinor: Int!) {
-    upsertMenuItem(branchId: $branchId, categoryId: $categoryId, id: $id, name: $name, description: $description, priceMinor: $priceMinor) {
+  mutation UpsertItem(
+    $branchId: String!
+    $categoryId: String!
+    $id: String
+    $name: String!
+    $description: String
+    $priceMinor: Int!
+  ) {
+    upsertMenuItem(
+      branchId: $branchId
+      categoryId: $categoryId
+      id: $id
+      name: $name
+      description: $description
+      priceMinor: $priceMinor
+    ) {
       id
     }
   }
@@ -112,7 +124,9 @@ export default function MenuManagerPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   if (!restaurant || !branch) {
-    return fetching ? <Skeleton className="h-64 rounded-2xl" /> : (
+    return fetching ? (
+      <Skeleton className="h-64 rounded-2xl" />
+    ) : (
       <p className="text-neutral-500">Complete onboarding first.</p>
     );
   }
@@ -159,7 +173,7 @@ export default function MenuManagerPage() {
             const r = await publish({ branchId: branch.id });
             setMessage(
               r.error
-                ? r.error.graphQLErrors[0]?.message ?? "Publish failed"
+                ? (r.error.graphQLErrors[0]?.message ?? "Publish failed")
                 : `Published v${r.data?.publishMenu?.version} — live for customers now.`,
             );
             refresh();
@@ -170,7 +184,9 @@ export default function MenuManagerPage() {
       </div>
 
       {message && (
-        <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-700">{message}</p>
+        <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
+          {message}
+        </p>
       )}
 
       {menu?.categories.map((cat) => (
@@ -220,11 +236,18 @@ export default function MenuManagerPage() {
           </div>
           <div className="space-y-2">
             {cat.items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2 text-sm">
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-neutral-100 px-3 py-2 text-sm"
+              >
                 <div className="min-w-0">
                   <span className="font-medium">{item.name}</span>{" "}
                   <span className="text-neutral-500">{formatRs(item.priceMinor)}</span>
-                  {!item.isAvailable && <Badge variant="secondary" className="ml-2">Unavailable</Badge>}
+                  {!item.isAvailable && (
+                    <Badge variant="secondary" className="ml-2">
+                      Unavailable
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
@@ -295,17 +318,35 @@ export default function MenuManagerPage() {
             <div className="space-y-3">
               <div>
                 <Label>Name</Label>
-                <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="mt-1" />
+                <Input
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label>Description</Label>
-                <Textarea value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={2} className="mt-1" />
+                <Textarea
+                  value={editing.description}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  rows={2}
+                  className="mt-1"
+                />
               </div>
               <div>
                 <Label>Price (Rs)</Label>
-                <Input inputMode="decimal" value={editing.priceRs} onChange={(e) => setEditing({ ...editing, priceRs: e.target.value })} className="mt-1" />
+                <Input
+                  inputMode="decimal"
+                  value={editing.priceRs}
+                  onChange={(e) => setEditing({ ...editing, priceRs: e.target.value })}
+                  className="mt-1"
+                />
               </div>
-              <Button className="w-full" onClick={saveItem} disabled={!editing.name || !Number(editing.priceRs)}>
+              <Button
+                className="w-full"
+                onClick={saveItem}
+                disabled={!editing.name || !Number(editing.priceRs)}
+              >
                 Save to draft
               </Button>
             </div>

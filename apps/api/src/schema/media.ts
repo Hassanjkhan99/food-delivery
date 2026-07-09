@@ -226,7 +226,8 @@ builder.mutationFields((t) => ({
         include: { branch: true },
       });
       if (!order || order.customerId !== ctx.userId) throw new GraphQLError("Order not found");
-      if (order.status !== "delivered") throw new GraphQLError("Only delivered orders can be rated");
+      if (order.status !== "delivered")
+        throw new GraphQLError("Only delivered orders can be rated");
       const existing = await prisma.rating.findUnique({ where: { orderId: args.orderId } });
       if (existing) throw new GraphQLError("Order already rated");
       return prisma.rating.create({

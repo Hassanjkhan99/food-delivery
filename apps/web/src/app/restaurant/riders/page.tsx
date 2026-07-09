@@ -53,7 +53,10 @@ export default function RidersPage() {
 
       <div className="space-y-2">
         {data?.branchRiders.map((r) => (
-          <div key={r.id} className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-3 text-sm">
+          <div
+            key={r.id}
+            className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-3 text-sm"
+          >
             <div>
               <p className="font-medium">{r.user.name ?? "Unnamed rider"}</p>
               <p className="text-xs text-neutral-500">{r.user.phone}</p>
@@ -93,7 +96,12 @@ export default function RidersPage() {
         </div>
         <div>
           <Label>Phone</Label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" required />
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="mt-1"
+            required
+          />
           <p className="mt-1 text-xs text-neutral-400">They sign in with this number via OTP.</p>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}

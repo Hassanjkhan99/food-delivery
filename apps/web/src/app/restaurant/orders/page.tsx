@@ -94,7 +94,10 @@ const BranchFeedSubscription = graphql(`
 function Countdown({ deadline }: { deadline: string }) {
   const [left, setLeft] = useState(() => Math.max(0, new Date(deadline).getTime() - Date.now()));
   useEffect(() => {
-    const t = setInterval(() => setLeft(Math.max(0, new Date(deadline).getTime() - Date.now())), 1000);
+    const t = setInterval(
+      () => setLeft(Math.max(0, new Date(deadline).getTime() - Date.now())),
+      1000,
+    );
     return () => clearInterval(t);
   }, [deadline]);
   const s = Math.floor(left / 1000);
@@ -117,13 +120,7 @@ type BoardOrder = {
   items: Array<{ id: string; qty: number; menuSnapshotJson: unknown }>;
 };
 
-function OrderCard({
-  order,
-  children,
-}: {
-  order: BoardOrder;
-  children?: React.ReactNode;
-}) {
+function OrderCard({ order, children }: { order: BoardOrder; children?: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-3 text-sm shadow-sm">
       <div className="flex items-center justify-between">
@@ -179,9 +176,15 @@ export default function OrdersBoardPage() {
   }, [branch, refetch]);
 
   if (!restaurant) {
-    return fetching ? <Skeleton className="h-64 rounded-2xl" /> : (
+    return fetching ? (
+      <Skeleton className="h-64 rounded-2xl" />
+    ) : (
       <p className="text-neutral-500">
-        No restaurant yet — <a href="/restaurant/onboarding" className="underline">complete onboarding</a>.
+        No restaurant yet —{" "}
+        <a href="/restaurant/onboarding" className="underline">
+          complete onboarding
+        </a>
+        .
       </p>
     );
   }
@@ -189,7 +192,13 @@ export default function OrdersBoardPage() {
   const orders = data?.boardOrders ?? [];
   const riders = data?.branchRiders ?? [];
   const byStatus = (statuses: string[]) => orders.filter((o) => statuses.includes(o.status));
-  const done = byStatus(["delivered", "rejected", "cancelled", "auto_expired", "failed_delivery_attempt"]).slice(0, 6);
+  const done = byStatus([
+    "delivered",
+    "rejected",
+    "cancelled",
+    "auto_expired",
+    "failed_delivery_attempt",
+  ]).slice(0, 6);
 
   const refresh = () => refetch({ requestPolicy: "network-only" });
 
@@ -197,7 +206,9 @@ export default function OrdersBoardPage() {
     <main>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">{restaurant.name} — live board</h1>
-        {!branch?.isAcceptingOrders && <Badge variant="destructive">Paused — not accepting orders</Badge>}
+        {!branch?.isAcceptingOrders && (
+          <Badge variant="destructive">Paused — not accepting orders</Badge>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -255,11 +266,23 @@ export default function OrdersBoardPage() {
                 <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
                   <span>ETA {o.prepEtaMinutes ?? "?"}m</span>
                   {o.status === "accepted" ? (
-                    <Button size="xs" onClick={async () => { await startPreparing({ id: o.id }); refresh(); }}>
+                    <Button
+                      size="xs"
+                      onClick={async () => {
+                        await startPreparing({ id: o.id });
+                        refresh();
+                      }}
+                    >
                       Start preparing
                     </Button>
                   ) : (
-                    <Button size="xs" onClick={async () => { await markReady({ id: o.id }); refresh(); }}>
+                    <Button
+                      size="xs"
+                      onClick={async () => {
+                        await markReady({ id: o.id });
+                        refresh();
+                      }}
+                    >
                       Mark ready
                     </Button>
                   )}

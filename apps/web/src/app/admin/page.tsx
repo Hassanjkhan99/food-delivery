@@ -60,8 +60,15 @@ export default function AdminOverviewPage() {
       <div className="mt-8 max-w-md rounded-2xl border border-neutral-200 bg-white p-4">
         <p className="mb-2 text-sm font-semibold">Order escalation</p>
         <div className="flex gap-2">
-          <Input placeholder="Order id…" value={orderId} onChange={(e) => setOrderId(e.target.value)} />
-          <Button disabled={!orderId.trim()} onClick={() => router.push(`/admin/orders/${orderId.trim()}`)}>
+          <Input
+            placeholder="Order id…"
+            value={orderId}
+            onChange={(e) => setOrderId(e.target.value)}
+          />
+          <Button
+            disabled={!orderId.trim()}
+            onClick={() => router.push(`/admin/orders/${orderId.trim()}`)}
+          >
             Open
           </Button>
         </div>

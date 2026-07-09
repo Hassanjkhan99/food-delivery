@@ -1,12 +1,7 @@
 const EARTH_RADIUS_M = 6_371_000;
 
 /** Great-circle distance in meters between two lat/lng points (haversine). */
-export function haversineMeters(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
+export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);

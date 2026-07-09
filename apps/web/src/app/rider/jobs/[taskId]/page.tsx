@@ -72,7 +72,10 @@ const IncidentMutation = graphql(`
 export default function RiderJobPage({ params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = use(params);
   const router = useRouter();
-  const [{ data, fetching }, refetch] = useQuery({ query: JobQuery, requestPolicy: "cache-and-network" });
+  const [{ data, fetching }, refetch] = useQuery({
+    query: JobQuery,
+    requestPolicy: "cache-and-network",
+  });
   const [, arrived] = useMutation(ArrivedMutation);
   const [, pickedUp] = useMutation(PickedUpMutation);
   const [deliveredState, delivered] = useMutation(DeliveredMutation);
@@ -131,12 +134,22 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {job.status === "assigned" && (
-        <Button className="w-full" size="lg" onClick={async () => { await arrived({ taskId }); refresh(); }}>
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={async () => {
+            await arrived({ taskId });
+            refresh();
+          }}
+        >
           Arrived at pickup
         </Button>
       )}
       {["assigned", "arrived_pickup"].includes(job.status) && (
-        <Button className="w-full" size="lg" variant={job.status === "assigned" ? "outline" : "default"}
+        <Button
+          className="w-full"
+          size="lg"
+          variant={job.status === "assigned" ? "outline" : "default"}
           onClick={async () => {
             const r = await pickedUp({ taskId });
             if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Failed");

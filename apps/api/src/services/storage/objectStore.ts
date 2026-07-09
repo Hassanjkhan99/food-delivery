@@ -44,7 +44,10 @@ export const localDiskStore: ObjectStore = {
     const s = await stat(path);
     const hash = createHash("sha256");
     await new Promise<void>((res, rej) => {
-      createReadStream(path).on("data", (c) => hash.update(c)).on("end", res).on("error", rej);
+      createReadStream(path)
+        .on("data", (c) => hash.update(c))
+        .on("end", res)
+        .on("error", rej);
     });
     return { exists: true, byteSize: s.size, sha256: hash.digest("hex") };
   },

@@ -190,7 +190,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       await assertOrderBranchMember(ctx, args.id);
-      const updated = await transition(args.id, "accepted", restaurantActor(ctx), {
+      await transition(args.id, "accepted", restaurantActor(ctx), {
         expectedFrom: "pending_acceptance",
       });
       return prisma.order.update({
@@ -276,7 +276,9 @@ builder.mutationFields((t) => ({
       });
       await prisma.deliveryEvent.create({
         data: {
-          taskId: (await prisma.deliveryTask.findUniqueOrThrow({ where: { orderId: args.orderId } })).id,
+          taskId: (
+            await prisma.deliveryTask.findUniqueOrThrow({ where: { orderId: args.orderId } })
+          ).id,
           type: "assigned",
           actorUserId: ctx.userId,
         },
@@ -393,7 +395,8 @@ builder.mutationFields((t) => ({
       await assertBranchMember(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       const category = await prisma.menuCategory.findUnique({ where: { id: args.categoryId } });
-      if (!category || category.menuId !== draft.id) throw new GraphQLError("Category not in draft");
+      if (!category || category.menuId !== draft.id)
+        throw new GraphQLError("Category not in draft");
       if (args.priceMinor <= 0) throw new GraphQLError("Price must be positive");
       const data = {
         categoryId: args.categoryId,
@@ -447,7 +450,8 @@ builder.mutationFields((t) => ({
         include: { category: { include: { menu: true } } },
       });
       if (!item) throw new GraphQLError("Item not found");
-      if (item.category.menu.status !== "draft") throw new GraphQLError("Only draft items can be deleted");
+      if (item.category.menu.status !== "draft")
+        throw new GraphQLError("Only draft items can be deleted");
       await assertBranchMember(ctx, item.category.menu.branchId);
       await prisma.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
       await prisma.menuItem.delete({ where: { id: args.itemId } });
@@ -480,7 +484,10 @@ builder.mutationFields((t) => ({
       deliveryRadiusM: t.arg.int({ required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      const slugBase = args.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const slugBase = args.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
       const slug = `${slugBase}-${Math.random().toString(36).slice(2, 6)}`;
       const taxProfile = await prisma.taxProfile.findFirstOrThrow();
       const restaurant = await prisma.restaurant.create({
