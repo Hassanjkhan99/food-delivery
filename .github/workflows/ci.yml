@@ -20,6 +20,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Codegen before build: @fd/web imports @/graphql/generated (gitignored),
+      # produced by web codegen, which needs api's schema.graphql, which needs the
+      # generated Prisma client. Same sequence the typecheck-lint job uses.
+      - run: pnpm --filter @fd/db build
+      - run: pnpm --filter @fd/api codegen && pnpm --filter @fd/web codegen
       - run: pnpm build
 
   typecheck-lint:

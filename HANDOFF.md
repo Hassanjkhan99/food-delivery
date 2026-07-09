@@ -27,6 +27,7 @@ restaurant console, rider PWA, admin.
 All 12 milestones (M0–M12) done, verified by scripted smoke tests, all green on
 build/typecheck/lint/format. 13 commits on `master`. Full detail in commit history and in
 `README.md`. GitHub has:
+
 - **12 closed "shipped" issues** (#1–#12) — one per milestone, each documents what was built
 - **22 open backlog issues** (#13–#34) — enriched with the full research context from the
   source reports (shared-rider spec, PSP adapter, PRA compliance checklist, observability,
@@ -53,12 +54,14 @@ every state → decisions → acceptance). **Workflow (#35 UX-00):** decision ga
 issues wait for a founder comment) → build gate (PR per issue, screenshots mandatory) → verify gate.
 
 **Status of the gates (already cleared — don't re-ask):**
+
 - #35 decisions ANSWERED (see `ux-parity-decisions` memory): keep "KhaanaDo" placeholder, Tailwind-
   only (no Figma), photo strategy = uploaded → Google Places → typography fallback.
 - Photo pipeline #50 is BUILT + merged (commit 87ff80f): `<RestaurantImage>`/`<ItemImage>` resolve
   the chain; home feed + restaurant page already consume them. This UNBLOCKS #36 and #38.
 
 **Recommended customer-UX build order for next session:**
+
 1. **#36 home/discovery feed** — cuisine rail, swimlanes, rich cards (photos now available), closed-
    state overlays, "order again", skeletons. The front door.
 2. **#38 restaurant page** — the showpiece: **floating cart bar** (highest-leverage conversion
@@ -67,7 +70,7 @@ issues wait for a founder comment) → build gate (PR per issue, screenshots man
 3. **#39→#42 order journey** — item sheet, cart (tip/cutlery/upsell), checkout (address book + map
    pin), tracking (staged tracker + live rider map).
 4. **#37 search**, then **#43–#44 auth/account** to round out the customer side.
-Vendor console #46, rider #47, and design-system/perf #48–#49 come after the customer journey.
+   Vendor console #46, rider #47, and design-system/perf #48–#49 come after the customer journey.
 
 Some customer issues still carry `needs-decision` sub-items (e.g. #40 tip/small-order/pickup, #41
 map tiles + scheduled, #43 social login). Surface those inline when you reach the issue — don't
@@ -102,7 +105,7 @@ Full issue list: `gh issue list --repo Hassanjkhan99/food-delivery --label ux`
   OTP shows directly on the page in dev mode (`NODE_ENV !== production`).
 - Mock cards: `4242 4242 4242 4242` (works), `4000 0000 0000 0002` (always declines).
 - After schema changes: `pnpm --filter @fd/db build` (prisma generate) → `pnpm --filter @fd/api
-  codegen` (writes `apps/api/schema.graphql`) → `pnpm --filter @fd/web codegen` (client types) —
+codegen` (writes `apps/api/schema.graphql`) → `pnpm --filter @fd/web codegen` (client types) —
   in that order, or client codegen reads a stale schema.
 - Verification scripts live in `apps/api/scripts/smoke-m*.ts` (run with `npx tsx` while api+db
   are up) and `packages/db/scripts/check-ledger.ts` / `check-seed.ts`.
