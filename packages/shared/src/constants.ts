@@ -25,3 +25,83 @@ export type ReviewTagValue = (typeof REVIEW_TAGS)[number]["value"];
 /** Map a stored tag value back to its display label (falls back to the raw value). */
 export const reviewTagLabel = (value: string): string =>
   REVIEW_TAGS.find((t) => t.value === value)?.label ?? value;
+
+/**
+ * Support playbooks from the kickoff research (issue #14). Each ticket category
+ * has a first-owner, a first-response target, and a resolution target — both in
+ * minutes — used by the agent queue to compute SLA breach state. `firstResponse`
+ * is measured from ticket creation → firstRespondedAt (or now if unanswered);
+ * `resolution` is creation → resolvedAt (or now if open). Categories not listed
+ * fall back to DEFAULT_TICKET_PLAYBOOK.
+ */
+export const TICKET_PLAYBOOKS = [
+  {
+    category: "restaurant_unresponsive",
+    label: "Restaurant not responding",
+    owner: "Ops",
+    firstResponseMin: 2,
+    resolutionMin: 10,
+    action: "Call branch, auto-reject if unresolved",
+  },
+  {
+    category: "rider_late",
+    label: "Rider late but moving",
+    owner: "Support",
+    firstResponseMin: 3,
+    resolutionMin: 10,
+    action: "Update ETA, monitor",
+  },
+  {
+    category: "wrong_item",
+    label: "Wrong item delivered",
+    owner: "Restaurant desk",
+    firstResponseMin: 5,
+    resolutionMin: 60 * 12,
+    action: "Re-deliver or refund via merchant",
+  },
+  {
+    category: "cash_mismatch",
+    label: "COD dispute",
+    owner: "Finance ops",
+    firstResponseMin: 10,
+    resolutionMin: 60 * 24,
+    action: "Compare declaration vs store records",
+  },
+  {
+    category: "rider_incident",
+    label: "Rider incident",
+    owner: "Dispatch ops",
+    firstResponseMin: 10,
+    resolutionMin: 60 * 24,
+    action: "Review evidence bundle",
+  },
+] as const;
+
+export type TicketPlaybook = (typeof TICKET_PLAYBOOKS)[number];
+
+/** Fallback playbook for any category without a specific entry. */
+export const DEFAULT_TICKET_PLAYBOOK = {
+  category: "other",
+  label: "General enquiry",
+  owner: "Support",
+  firstResponseMin: 5,
+  resolutionMin: 60 * 24,
+  action: "Triage and route",
+} as const;
+
+/** Resolve the playbook for a ticket category (never throws). */
+export const ticketPlaybook = (category: string): TicketPlaybook | typeof DEFAULT_TICKET_PLAYBOOK =>
+  TICKET_PLAYBOOKS.find((p) => p.category === category) ?? DEFAULT_TICKET_PLAYBOOK;
+
+/** Resolution codes an agent can close a ticket with (audited on the ticket). */
+export const TICKET_RESOLUTION_CODES = [
+  "resolved_customer",
+  "refunded",
+  "redelivered",
+  "auto_rejected",
+  "no_action_needed",
+  "escalated",
+  "duplicate",
+] as const;
+
+export type TicketResolutionCode = (typeof TICKET_RESOLUTION_CODES)[number];

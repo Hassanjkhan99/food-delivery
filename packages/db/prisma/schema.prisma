@@ -850,6 +850,13 @@ model SupportTicket {
   body           String
   status         TicketStatus @default(open)
   resolutionCode String?
+  // Agent queue ownership + SLA tracking (additive; agent stored by id + name
+  // snapshot to avoid a second User relation on this model).
+  assignedToUserId String?
+  assignedToName   String?
+  firstRespondedAt DateTime?  @db.Timestamptz()
+  resolvedAt       DateTime?  @db.Timestamptz()
+  resolutionNote   String?
   createdAt      DateTime     @default(now()) @db.Timestamptz()
   updatedAt      DateTime     @updatedAt @db.Timestamptz()
 
@@ -857,6 +864,7 @@ model SupportTicket {
   order    Order? @relation(fields: [orderId], references: [id])
 
   @@index([status])
+  @@index([status, createdAt])
   @@map("support_tickets")
 }
 
