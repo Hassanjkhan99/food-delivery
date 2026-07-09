@@ -9,7 +9,236 @@
 * 🟢 You can import this file directly.
 */
 
+export const Role = {
+  customer: 'customer',
+  restaurant_owner: 'restaurant_owner',
+  restaurant_staff: 'restaurant_staff',
+  rider: 'rider',
+  admin: 'admin'
+} as const
+
+export type Role = (typeof Role)[keyof typeof Role]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const RestaurantStatus = {
+  pending_approval: 'pending_approval',
+  approved: 'approved',
+  suspended: 'suspended'
+} as const
+
+export type RestaurantStatus = (typeof RestaurantStatus)[keyof typeof RestaurantStatus]
+
+
+export const RestaurantTier = {
+  small_business: 'small_business',
+  chain: 'chain'
+} as const
+
+export type RestaurantTier = (typeof RestaurantTier)[keyof typeof RestaurantTier]
+
+
+export const MenuStatus = {
+  draft: 'draft',
+  published: 'published',
+  archived: 'archived'
+} as const
+
+export type MenuStatus = (typeof MenuStatus)[keyof typeof MenuStatus]
+
+
+export const MenuSourceKind = {
+  photo: 'photo',
+  pdf: 'pdf',
+  csv: 'csv'
+} as const
+
+export type MenuSourceKind = (typeof MenuSourceKind)[keyof typeof MenuSourceKind]
+
+
+export const MenuSourceStatus = {
+  uploaded: 'uploaded',
+  transcribed: 'transcribed'
+} as const
+
+export type MenuSourceStatus = (typeof MenuSourceStatus)[keyof typeof MenuSourceStatus]
+
+
+export const CardStyle = {
+  flat: 'flat',
+  tilt3d: 'tilt3d',
+  glass: 'glass'
+} as const
+
+export type CardStyle = (typeof CardStyle)[keyof typeof CardStyle]
+
+
+export const HeroEffect = {
+  none: 'none',
+  parallax: 'parallax',
+  depth: 'depth'
+} as const
+
+export type HeroEffect = (typeof HeroEffect)[keyof typeof HeroEffect]
+
+
+export const RiderType = {
+  restaurant: 'restaurant',
+  shared: 'shared',
+  independent: 'independent'
+} as const
+
+export type RiderType = (typeof RiderType)[keyof typeof RiderType]
+
+
+export const RiderVerification = {
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected'
+} as const
+
+export type RiderVerification = (typeof RiderVerification)[keyof typeof RiderVerification]
+
+
+export const OrderStatus = {
+  pending_acceptance: 'pending_acceptance',
+  accepted: 'accepted',
+  rejected: 'rejected',
+  auto_expired: 'auto_expired',
+  preparing: 'preparing',
+  ready_for_pickup: 'ready_for_pickup',
+  rider_assigned: 'rider_assigned',
+  reassigning: 'reassigning',
+  picked_up: 'picked_up',
+  out_for_delivery: 'out_for_delivery',
+  delivered: 'delivered',
+  failed_delivery_attempt: 'failed_delivery_attempt',
+  cancelled: 'cancelled'
+} as const
+
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus]
+
+
+export const DeliveryTaskStatus = {
+  unassigned: 'unassigned',
+  assigned: 'assigned',
+  arrived_pickup: 'arrived_pickup',
+  picked_up: 'picked_up',
+  delivered: 'delivered',
+  failed: 'failed'
+} as const
+
+export type DeliveryTaskStatus = (typeof DeliveryTaskStatus)[keyof typeof DeliveryTaskStatus]
+
+
+export const DeliveryEventType = {
+  assigned: 'assigned',
+  arrived_pickup: 'arrived_pickup',
+  picked_up: 'picked_up',
+  delivered: 'delivered',
+  failed: 'failed',
+  incident: 'incident'
+} as const
+
+export type DeliveryEventType = (typeof DeliveryEventType)[keyof typeof DeliveryEventType]
+
+
+export const PaymentMode = {
+  cod: 'cod',
+  card: 'card'
+} as const
+
+export type PaymentMode = (typeof PaymentMode)[keyof typeof PaymentMode]
+
+
+export const PaymentStatus = {
+  pending: 'pending',
+  authorized: 'authorized',
+  captured: 'captured',
+  refunded: 'refunded',
+  partially_refunded: 'partially_refunded',
+  failed: 'failed'
+} as const
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+
+
+export const RefundStatus = {
+  refund_pending: 'refund_pending',
+  refunded: 'refunded',
+  refund_rejected: 'refund_rejected'
+} as const
+
+export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus]
+
+
+export const RefundDestination = {
+  card: 'card',
+  wallet: 'wallet'
+} as const
+
+export type RefundDestination = (typeof RefundDestination)[keyof typeof RefundDestination]
+
+
+export const PayoutStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  failed: 'failed'
+} as const
+
+export type PayoutStatus = (typeof PayoutStatus)[keyof typeof PayoutStatus]
+
+
+export const LedgerOwnerType = {
+  platform: 'platform',
+  restaurant: 'restaurant',
+  customer: 'customer',
+  rider: 'rider'
+} as const
+
+export type LedgerOwnerType = (typeof LedgerOwnerType)[keyof typeof LedgerOwnerType]
+
+
+export const TicketStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed'
+} as const
+
+export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus]
+
+
+export const ModerationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected'
+} as const
+
+export type ModerationStatus = (typeof ModerationStatus)[keyof typeof ModerationStatus]
+
+
+export const MediaAssetStatus = {
+  pending: 'pending',
+  finalized: 'finalized'
+} as const
+
+export type MediaAssetStatus = (typeof MediaAssetStatus)[keyof typeof MediaAssetStatus]
+
+
+export const CampaignType = {
+  featured_slot: 'featured_slot',
+  deal_badge: 'deal_badge'
+} as const
+
+export type CampaignType = (typeof CampaignType)[keyof typeof CampaignType]
+
+
+export const CampaignStatus = {
+  draft: 'draft',
+  pending_approval: 'pending_approval',
+  active: 'active',
+  ended: 'ended',
+  rejected: 'rejected'
+} as const
+
+export type CampaignStatus = (typeof CampaignStatus)[keyof typeof CampaignStatus]

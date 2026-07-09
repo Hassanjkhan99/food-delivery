@@ -1,6 +1,8 @@
-// Food Delivery — schema. M0 placeholder; the full domain model lands in M1.
-// Conventions: cuid() string PKs, timestamptz via @db.Timestamptz, money as Int minor units (paisa),
-// append-only tables (OrderEvent, LedgerEntry, AuditLog) have no update/delete paths in app code.
+// Food Delivery — full domain schema (M1).
+// Conventions: cuid() string PKs, timestamptz timestamps, money as Int minor units (paisa).
+// Append-only tables (OrderEvent, DeliveryEvent, LedgerEntry, AuditLog) have no
+// update/delete paths in app code. Menu publish clones the draft into a new immutable
+// version; OrderItem freezes a menuSnapshotJson so orders never depend on live menus.
 
 generator client {
   provider = "prisma-client"
@@ -11,6 +13,173 @@ datasource db {
   provider = "postgresql"
 }
 
+// ───────────────────────────── enums ─────────────────────────────
+
+enum Role {
+  customer
+  restaurant_owner
+  restaurant_staff
+  rider
+  admin
+}
+
+enum RestaurantStatus {
+  pending_approval
+  approved
+  suspended
+}
+
+enum RestaurantTier {
+  small_business
+  chain
+}
+
+enum MenuStatus {
+  draft
+  published
+  archived
+}
+
+enum MenuSourceKind {
+  photo
+  pdf
+  csv
+}
+
+enum MenuSourceStatus {
+  uploaded
+  transcribed
+}
+
+enum CardStyle {
+  flat
+  tilt3d
+  glass
+}
+
+enum HeroEffect {
+  none
+  parallax
+  depth
+}
+
+enum RiderType {
+  restaurant
+  shared
+  independent
+}
+
+enum RiderVerification {
+  pending
+  verified
+  rejected
+}
+
+enum OrderStatus {
+  pending_acceptance
+  accepted
+  rejected
+  auto_expired
+  preparing
+  ready_for_pickup
+  rider_assigned
+  reassigning
+  picked_up
+  out_for_delivery
+  delivered
+  failed_delivery_attempt
+  cancelled
+}
+
+enum DeliveryTaskStatus {
+  unassigned
+  assigned
+  arrived_pickup
+  picked_up
+  delivered
+  failed
+}
+
+enum DeliveryEventType {
+  assigned
+  arrived_pickup
+  picked_up
+  delivered
+  failed
+  incident
+}
+
+enum PaymentMode {
+  cod
+  card
+}
+
+enum PaymentStatus {
+  pending
+  authorized
+  captured
+  refunded
+  partially_refunded
+  failed
+}
+
+enum RefundStatus {
+  refund_pending
+  refunded
+  refund_rejected
+}
+
+enum RefundDestination {
+  card
+  wallet
+}
+
+enum PayoutStatus {
+  pending
+  paid
+  failed
+}
+
+enum LedgerOwnerType {
+  platform
+  restaurant
+  customer
+  rider
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum MediaAssetStatus {
+  pending
+  finalized
+}
+
+enum CampaignType {
+  featured_slot
+  deal_badge
+}
+
+enum CampaignStatus {
+  draft
+  pending_approval
+  active
+  ended
+  rejected
+}
+
+// ───────────────────────────── identity & auth ─────────────────────────────
+
 model User {
   id        String   @id @default(cuid())
   phone     String   @unique
@@ -19,5 +188,658 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz()
   updatedAt DateTime @updatedAt @db.Timestamptz()
 
+  roles            UserRole[]
+  sessions         Session[]
+  addresses        Address[]
+  ordersPlaced     Order[]             @relation("CustomerOrders")
+  paymentMethods   PaymentMethod[]
+  rider            Rider?
+  ownedRestaurants Restaurant[]        @relation("RestaurantOwner")
+  tickets          SupportTicket[]
+  pushSubs         PushSubscription[]
+
   @@map("users")
+}
+
+model UserRole {
+  id           String  @id @default(cuid())
+  userId       String
+  role         Role
+  restaurantId String?
+
+  user       User        @relation(fields: [userId], references: [id])
+  restaurant Restaurant? @relation(fields: [restaurantId], references: [id])
+
+  @@unique([userId, role, restaurantId])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  phone      String
+  codeHash   String
+  expiresAt  DateTime  @db.Timestamptz()
+  consumedAt DateTime? @db.Timestamptz()
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now()) @db.Timestamptz()
+
+  @@index([phone, createdAt])
+  @@map("otp_codes")
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  expiresAt DateTime  @db.Timestamptz()
+  revokedAt DateTime? @db.Timestamptz()
+  userAgent String?
+  createdAt DateTime  @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  text      String
+  lat       Decimal  @db.Decimal(9, 6)
+  lng       Decimal  @db.Decimal(9, 6)
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ───────────────────────────── restaurants & branches ─────────────────────────────
+
+model Restaurant {
+  id        String           @id @default(cuid())
+  name      String
+  slug      String           @unique
+  status    RestaurantStatus @default(pending_approval)
+  tier      RestaurantTier   @default(small_business)
+  ownerId   String
+  createdAt DateTime         @default(now()) @db.Timestamptz()
+  updatedAt DateTime         @updatedAt @db.Timestamptz()
+
+  owner     User             @relation("RestaurantOwner", fields: [ownerId], references: [id])
+  branches  Branch[]
+  theme     RestaurantTheme?
+  riders    Rider[]
+  staff     UserRole[]
+  payouts   Payout[]
+  campaigns Campaign[]
+  ratings   Rating[]
+
+  @@map("restaurants")
+}
+
+model TaxProfile {
+  id        String   @id @default(cuid())
+  name      String
+  rateBps   Int
+  inclusive Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  branches Branch[]
+
+  @@map("tax_profiles")
+}
+
+model Branch {
+  id                String   @id @default(cuid())
+  restaurantId      String
+  name              String
+  addressText       String
+  lat               Decimal  @db.Decimal(9, 6)
+  lng               Decimal  @db.Decimal(9, 6)
+  deliveryRadiusM   Int      @default(5000)
+  minOrderMinor     Int      @default(0)
+  deliveryFeeMinor  Int      @default(0)
+  hoursJson         Json?
+  taxProfileId      String
+  activeMenuId      String?
+  isAcceptingOrders Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.Timestamptz()
+  updatedAt         DateTime @updatedAt @db.Timestamptz()
+
+  restaurant Restaurant      @relation(fields: [restaurantId], references: [id])
+  taxProfile TaxProfile      @relation(fields: [taxProfileId], references: [id])
+  menus      Menu[]
+  orders     Order[]
+  sourceDocs MenuSourceDoc[]
+
+  @@index([restaurantId])
+  @@map("branches")
+}
+
+model RestaurantTheme {
+  id              String     @id @default(cuid())
+  restaurantId    String     @unique
+  logoAssetId     String?
+  heroAssetId     String?
+  primaryColor    String     @default("#e11d48")
+  accentColor     String     @default("#f59e0b")
+  backgroundColor String     @default("#ffffff")
+  textColor       String     @default("#171717")
+  fontKey         String     @default("sans")
+  cardStyle       CardStyle  @default(flat)
+  heroEffect      HeroEffect @default(none)
+  updatedAt       DateTime   @updatedAt @db.Timestamptz()
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  logoAsset  MediaAsset? @relation("ThemeLogo", fields: [logoAssetId], references: [id])
+  heroAsset  MediaAsset? @relation("ThemeHero", fields: [heroAssetId], references: [id])
+
+  @@map("restaurant_themes")
+}
+
+// ───────────────────────────── menus ─────────────────────────────
+
+model Menu {
+  id          String     @id @default(cuid())
+  branchId    String
+  version     Int
+  status      MenuStatus @default(draft)
+  layoutJson  Json?
+  publishedAt DateTime?  @db.Timestamptz()
+  createdAt   DateTime   @default(now()) @db.Timestamptz()
+
+  branch     Branch          @relation(fields: [branchId], references: [id])
+  categories MenuCategory[]
+  modGroups  ModifierGroup[]
+
+  @@unique([branchId, version])
+  @@map("menus")
+}
+
+model MenuCategory {
+  id                 String  @id @default(cuid())
+  menuId             String
+  name               String
+  description        String?
+  sortOrder          Int     @default(0)
+  headerImageAssetId String?
+
+  menu             Menu        @relation(fields: [menuId], references: [id])
+  headerImageAsset MediaAsset? @relation("CategoryHeader", fields: [headerImageAssetId], references: [id])
+  items            MenuItem[]
+
+  @@index([menuId])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  categoryId   String
+  name         String
+  description  String?
+  priceMinor   Int
+  isAvailable  Boolean  @default(true)
+  imageAssetId String?
+  badges       String[] @default([])
+  sortOrder    Int      @default(0)
+
+  category   MenuCategory            @relation(fields: [categoryId], references: [id])
+  imageAsset MediaAsset?             @relation("ItemImage", fields: [imageAssetId], references: [id])
+  modGroups  MenuItemModifierGroup[]
+
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+model ModifierGroup {
+  id        String @id @default(cuid())
+  menuId    String
+  name      String
+  minSelect Int    @default(0)
+  maxSelect Int    @default(1)
+
+  menu    Menu                    @relation(fields: [menuId], references: [id])
+  options ModifierOption[]
+  items   MenuItemModifierGroup[]
+
+  @@index([menuId])
+  @@map("modifier_groups")
+}
+
+model MenuItemModifierGroup {
+  itemId    String
+  groupId   String
+  sortOrder Int    @default(0)
+
+  item  MenuItem      @relation(fields: [itemId], references: [id])
+  group ModifierGroup @relation(fields: [groupId], references: [id])
+
+  @@id([itemId, groupId])
+  @@map("menu_item_modifier_groups")
+}
+
+model ModifierOption {
+  id              String  @id @default(cuid())
+  groupId         String
+  name            String
+  priceDeltaMinor Int     @default(0)
+  isAvailable     Boolean @default(true)
+  sortOrder       Int     @default(0)
+
+  group ModifierGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("modifier_options")
+}
+
+model MenuSourceDoc {
+  id        String           @id @default(cuid())
+  branchId  String
+  assetId   String
+  kind      MenuSourceKind
+  status    MenuSourceStatus @default(uploaded)
+  createdAt DateTime         @default(now()) @db.Timestamptz()
+
+  branch Branch     @relation(fields: [branchId], references: [id])
+  asset  MediaAsset @relation(fields: [assetId], references: [id])
+
+  @@index([branchId])
+  @@map("menu_source_docs")
+}
+
+// ───────────────────────────── riders ─────────────────────────────
+
+model Rider {
+  id                 String            @id @default(cuid())
+  userId             String            @unique
+  riderType          RiderType         @default(restaurant)
+  restaurantId       String?
+  vehicleType        String?
+  verificationStatus RiderVerification @default(pending)
+  cashLimitMinor     Int               @default(1000000)
+  createdAt          DateTime          @default(now()) @db.Timestamptz()
+
+  user         User               @relation(fields: [userId], references: [id])
+  restaurant   Restaurant?        @relation(fields: [restaurantId], references: [id])
+  availability RiderAvailability?
+  tasks        DeliveryTask[]
+
+  @@index([restaurantId])
+  @@map("riders")
+}
+
+model RiderAvailability {
+  id        String   @id @default(cuid())
+  riderId   String   @unique
+  isOnline  Boolean  @default(false)
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+  updatedAt DateTime @updatedAt @db.Timestamptz()
+
+  rider Rider @relation(fields: [riderId], references: [id])
+
+  @@map("rider_availability")
+}
+
+// ───────────────────────────── orders ─────────────────────────────
+
+model Order {
+  id                    String      @id @default(cuid())
+  code                  String      @unique
+  customerId            String
+  branchId              String
+  status                OrderStatus @default(pending_acceptance)
+  idempotencyKey        String      @unique
+  addressSnapshotJson   Json
+  contactPhone          String
+  customerNote          String?
+  subtotalMinor         Int
+  deliveryFeeMinor      Int
+  taxTotalMinor         Int
+  platformFeeMinor      Int
+  commissionMinor       Int
+  grandTotalMinor       Int
+  commissionBpsSnapshot Int
+  paymentMode           PaymentMode
+  acceptDeadlineAt      DateTime    @db.Timestamptz()
+  prepEtaMinutes        Int?
+  placedAt              DateTime    @default(now()) @db.Timestamptz()
+  acceptedAt            DateTime?   @db.Timestamptz()
+  readyAt               DateTime?   @db.Timestamptz()
+  pickedUpAt            DateTime?   @db.Timestamptz()
+  deliveredAt           DateTime?   @db.Timestamptz()
+  cancelledAt           DateTime?   @db.Timestamptz()
+
+  customer     User           @relation("CustomerOrders", fields: [customerId], references: [id])
+  branch       Branch         @relation(fields: [branchId], references: [id])
+  items        OrderItem[]
+  events       OrderEvent[]
+  deliveryTask DeliveryTask?
+  payment      Payment?
+  refunds      Refund[]
+  cancellation Cancellation?
+  rating       Rating?
+  tickets      SupportTicket[]
+
+  @@index([branchId, status])
+  @@index([customerId, placedAt])
+  @@index([status, acceptDeadlineAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String @id @default(cuid())
+  orderId          String
+  menuSnapshotJson Json
+  qty              Int
+  unitPriceMinor   Int
+  lineTotalMinor   Int
+  notes            String?
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+// Append-only: one row per status transition, written in the same tx as the transition.
+model OrderEvent {
+  id          String       @id @default(cuid())
+  orderId     String
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  actorUserId String?
+  actorRole   String?
+  reason      String?
+  metaJson    Json?
+  createdAt   DateTime     @default(now()) @db.Timestamptz()
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}
+
+model DeliveryTask {
+  id             String             @id @default(cuid())
+  orderId        String             @unique
+  riderId        String?
+  status         DeliveryTaskStatus @default(unassigned)
+  codAmountMinor Int                @default(0)
+  assignedAt     DateTime?          @db.Timestamptz()
+  createdAt      DateTime           @default(now()) @db.Timestamptz()
+
+  order  Order           @relation(fields: [orderId], references: [id])
+  rider  Rider?          @relation(fields: [riderId], references: [id])
+  events DeliveryEvent[]
+
+  @@index([riderId, status])
+  @@map("delivery_tasks")
+}
+
+model DeliveryEvent {
+  id          String            @id @default(cuid())
+  taskId      String
+  type        DeliveryEventType
+  actorUserId String?
+  lat         Decimal?          @db.Decimal(9, 6)
+  lng         Decimal?          @db.Decimal(9, 6)
+  note        String?
+  createdAt   DateTime          @default(now()) @db.Timestamptz()
+
+  task DeliveryTask @relation(fields: [taskId], references: [id])
+
+  @@index([taskId, createdAt])
+  @@map("delivery_events")
+}
+
+// ───────────────────────────── payments & money ─────────────────────────────
+
+// Gateway token only — a PAN never touches this database.
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  userId        String
+  providerToken String   @unique
+  brand         String
+  last4         String
+  expMonth      Int
+  expYear       Int
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now()) @db.Timestamptz()
+
+  user     User      @relation(fields: [userId], references: [id])
+  payments Payment[]
+
+  @@index([userId])
+  @@map("payment_methods")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId         String        @unique
+  mode            PaymentMode
+  status          PaymentStatus @default(pending)
+  providerRef     String?
+  paymentMethodId String?
+  amountMinor     Int
+  refundedMinor   Int           @default(0)
+  capturedAt      DateTime?     @db.Timestamptz()
+  createdAt       DateTime      @default(now()) @db.Timestamptz()
+
+  order         Order          @relation(fields: [orderId], references: [id])
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  @@map("payments")
+}
+
+model Refund {
+  id              String            @id @default(cuid())
+  orderId         String
+  status          RefundStatus      @default(refund_pending)
+  amountMinor     Int
+  destination     RefundDestination @default(card)
+  reason          String
+  decidedByUserId String?
+  decidedAt       DateTime?         @db.Timestamptz()
+  createdAt       DateTime          @default(now()) @db.Timestamptz()
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+model Cancellation {
+  id               String   @id @default(cuid())
+  orderId          String   @unique
+  cancelledBy      String
+  reasonCode       String
+  feeAssessedMinor Int      @default(0)
+  createdAt        DateTime @default(now()) @db.Timestamptz()
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("cancellations")
+}
+
+// Double-entry ledger. Legs of one txId must balance (SUM(debit) == SUM(credit)),
+// enforced by ledgerService — the only writer.
+model LedgerAccount {
+  id        String          @id @default(cuid())
+  ownerType LedgerOwnerType
+  ownerId   String?
+  code      String          @unique
+  createdAt DateTime        @default(now()) @db.Timestamptz()
+
+  entries LedgerEntry[]
+
+  @@index([ownerType, ownerId])
+  @@map("ledger_accounts")
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  txId        String
+  accountId   String
+  debitMinor  Int      @default(0)
+  creditMinor Int      @default(0)
+  orderId     String?
+  payoutId    String?
+  refundId    String?
+  memo        String
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  account LedgerAccount @relation(fields: [accountId], references: [id])
+
+  @@index([txId])
+  @@index([accountId, createdAt])
+  @@map("ledger_entries")
+}
+
+model Payout {
+  id           String       @id @default(cuid())
+  restaurantId String
+  periodStart  DateTime     @db.Timestamptz()
+  periodEnd    DateTime     @db.Timestamptz()
+  amountMinor  Int
+  status       PayoutStatus @default(pending)
+  ledgerTxId   String?
+  reference    String?
+  paidAt       DateTime?    @db.Timestamptz()
+  createdAt    DateTime     @default(now()) @db.Timestamptz()
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@map("payouts")
+}
+
+// Versioned fee configuration; the latest row wins, rates are snapshotted onto orders.
+model FeeConfig {
+  id                              String   @id @default(cuid())
+  smallBusinessCommissionBps      Int      @default(0)
+  smallBusinessPlatformFeeMinor   Int      @default(2000)
+  chainCommissionBps              Int      @default(800)
+  chainPlatformFeeMinor           Int      @default(3000)
+  featuredSlotDailyRateSmallMinor Int      @default(0)
+  featuredSlotDailyRateChainMinor Int      @default(50000)
+  createdByUserId                 String?
+  createdAt                       DateTime @default(now()) @db.Timestamptz()
+
+  @@map("fee_configs")
+}
+
+// ───────────────────────────── uploads & media ─────────────────────────────
+
+model MediaAsset {
+  id          String           @id @default(cuid())
+  ownerType   String
+  ownerId     String?
+  objectKey   String           @unique
+  contentType String
+  byteSize    Int
+  sha256      String?
+  status      MediaAssetStatus @default(pending)
+  createdAt   DateTime         @default(now()) @db.Timestamptz()
+
+  themeLogos      RestaurantTheme[] @relation("ThemeLogo")
+  themeHeros      RestaurantTheme[] @relation("ThemeHero")
+  categoryHeaders MenuCategory[]    @relation("CategoryHeader")
+  itemImages      MenuItem[]        @relation("ItemImage")
+  sourceDocs      MenuSourceDoc[]
+
+  @@map("media_assets")
+}
+
+// ───────────────────────────── support, audit, misc ─────────────────────────────
+
+model SupportTicket {
+  id             String       @id @default(cuid())
+  customerId     String
+  orderId        String?
+  category       String
+  subject        String
+  body           String
+  status         TicketStatus @default(open)
+  resolutionCode String?
+  createdAt      DateTime     @default(now()) @db.Timestamptz()
+  updatedAt      DateTime     @updatedAt @db.Timestamptz()
+
+  customer User   @relation(fields: [customerId], references: [id])
+  order    Order? @relation(fields: [orderId], references: [id])
+
+  @@index([status])
+  @@map("support_tickets")
+}
+
+model Rating {
+  id               String           @id @default(cuid())
+  orderId          String           @unique
+  customerId       String
+  restaurantId     String
+  stars            Int
+  tags             String[]         @default([])
+  comment          String?
+  moderationStatus ModerationStatus @default(approved)
+  createdAt        DateTime         @default(now()) @db.Timestamptz()
+
+  order      Order      @relation(fields: [orderId], references: [id])
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@map("ratings")
+}
+
+// Append-only audit trail for privileged actions.
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actorRole   String?
+  action      String
+  subjectType String
+  subjectId   String
+  beforeJson  Json?
+  afterJson   Json?
+  ip          String?
+  createdAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([subjectType, subjectId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keysJson  Json
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("push_subscriptions")
+}
+
+// Backlog: promoted deals. Schema only — no UI in MVP.
+model Campaign {
+  id               String         @id @default(cuid())
+  restaurantId     String
+  type             CampaignType
+  status           CampaignStatus @default(draft)
+  dailyRateMinor   Int
+  startsAt         DateTime?      @db.Timestamptz()
+  endsAt           DateTime?      @db.Timestamptz()
+  approvedByUserId String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz()
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@map("campaigns")
 }
