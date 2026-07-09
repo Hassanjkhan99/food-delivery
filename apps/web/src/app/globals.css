@@ -46,6 +46,23 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* KhaanaDo Design System brand tokens (--kd-*). Mirrored here so Tailwind emits
+     kd-* color utilities (bg-kd-primary, text-kd-fg-muted, …). Raw values live in
+     :root/.dark below. Source: claude.ai/design "KhaanaDo Design System". */
+  --color-kd-primary: var(--kd-primary);
+  --color-kd-primary-hover: var(--kd-primary-hover);
+  --color-kd-primary-soft: var(--kd-primary-soft);
+  --color-kd-accent: var(--kd-accent);
+  --color-kd-success: var(--kd-success);
+  --color-kd-success-soft: var(--kd-success-soft);
+  --color-kd-bg: var(--kd-bg);
+  --color-kd-surface: var(--kd-surface);
+  --color-kd-surface-muted: var(--kd-surface-muted);
+  --color-kd-fg: var(--kd-fg);
+  --color-kd-fg-muted: var(--kd-fg-muted);
+  --color-kd-fg-subtle: var(--kd-fg-subtle);
+  --color-kd-border: var(--kd-border);
 }
 
 :root {
@@ -81,6 +98,22 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* KhaanaDo brand — light (primary). Rose brand, amber accent, emerald success,
+     warm Stone neutrals. See the KhaanaDo Design System project. */
+  --kd-primary: #e11d48;
+  --kd-primary-hover: #be123c;
+  --kd-primary-soft: #ffe4e6;
+  --kd-accent: #f59e0b;
+  --kd-success: #059669;
+  --kd-success-soft: #d1fae5;
+  --kd-bg: #fafaf9;
+  --kd-surface: #ffffff;
+  --kd-surface-muted: #f5f5f4;
+  --kd-fg: #1c1917;
+  --kd-fg-muted: #78716c;
+  --kd-fg-subtle: #a8a29e;
+  --kd-border: #e7e5e4;
 }
 
 .dark {
@@ -115,6 +148,21 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* KhaanaDo brand — dark. */
+  --kd-primary: #fb7185;
+  --kd-primary-hover: #f43f5e;
+  --kd-primary-soft: #4c0519;
+  --kd-accent: #fbbf24;
+  --kd-success: #34d399;
+  --kd-success-soft: #052e2b;
+  --kd-bg: #1c1917;
+  --kd-surface: #292524;
+  --kd-surface-muted: #292524;
+  --kd-fg: #fafaf9;
+  --kd-fg-muted: #a8a29e;
+  --kd-fg-subtle: #78716c;
+  --kd-border: #44403c;
 }
 
 @layer base {
