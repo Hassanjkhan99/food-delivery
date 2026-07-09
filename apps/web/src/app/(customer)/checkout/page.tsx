@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
-import { formatRs } from "@fd/shared";
+import {
+  formatRs,
+  VOUCHER_REJECTION_MESSAGE,
+  type VoucherRejectionCode,
+} from "@fd/shared";
 import { useCart } from "@/lib/cart";
 import { useCartExtras } from "../cart/page";
 import { useDeliveryLocation } from "@/lib/location";
@@ -25,6 +29,9 @@ const QuoteMutation = graphql(`
       deliveryFeeMinor
       taxTotalMinor
       platformFeeMinor
+      discountMinor
+      voucherCode
+      voucherError
       grandTotalMinor
       minOrderMinor
       meetsMinimum
@@ -69,6 +76,11 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+
+  // Promo code (#52). `voucherInput` is the field text; `voucherCode` is the applied
+  // code sent to the server (only set on "Apply" so typing doesn't re-quote every keystroke).
+  const [voucherInput, setVoucherInput] = useState("");
+  const [voucherCode, setVoucherCode] = useState<string | null>(null);
 
   // Saved-address book state. selectedAddressId is null while entering a new
   // address; saveNewAddress persists a fresh manual entry back to the book.
@@ -116,10 +128,17 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
-      input: { branchId, lines: cartLines, deliveryLat: loc.lat, deliveryLng: loc.lng, tipAmount },
+      input: {
+        branchId,
+        lines: cartLines,
+        deliveryLat: loc.lat,
+        deliveryLng: loc.lng,
+        tipAmount,
+        voucherCode: voucherCode ?? undefined,
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount]);
+  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount, voucherCode]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -168,6 +187,7 @@ export default function CheckoutPage() {
         paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
         tipAmount,
         cutleryRequested,
+        voucherCode: voucherCode ?? undefined,
       },
     });
     const order = result.data?.placeOrder;
@@ -307,6 +327,51 @@ export default function CheckoutPage() {
           )}
         </div>
 
+        <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
+          <p className="mb-2 text-sm font-semibold">Promo code</p>
+          {voucherCode && !quote?.voucherError ? (
+            <div className="flex items-center justify-between rounded-lg border border-kd-primary bg-kd-primary-soft px-3 py-2 text-sm">
+              <span className="font-medium text-kd-fg">
+                {quote?.voucherCode ?? voucherCode} applied
+                {quote && quote.discountMinor > 0 ? ` · −${formatRs(quote.discountMinor)}` : ""}
+              </span>
+              <button
+                type="button"
+                className="text-xs font-semibold text-kd-primary underline"
+                onClick={() => {
+                  setVoucherCode(null);
+                  setVoucherInput("");
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. WELCOME50"
+                value={voucherInput}
+                onChange={(e) => setVoucherInput(e.target.value.toUpperCase())}
+                className="uppercase"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!voucherInput.trim() || quoteState.fetching}
+                onClick={() => setVoucherCode(voucherInput.trim())}
+              >
+                Apply
+              </Button>
+            </div>
+          )}
+          {quote?.voucherError && (
+            <p className="mt-2 text-xs font-medium text-kd-danger">
+              {VOUCHER_REJECTION_MESSAGE[quote.voucherError as VoucherRejectionCode] ??
+                "That code isn't valid."}
+            </p>
+          )}
+        </div>
+
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
           {quoteState.fetching && <p className="text-kd-fg-subtle">Calculating…</p>}
           {quoteError && <p className="text-kd-danger">{quoteError}</p>}
@@ -332,6 +397,12 @@ export default function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-kd-fg-muted">Rider tip</span>
                   <span>{formatRs(tipAmount)}</span>
+                </div>
+              )}
+              {quote.discountMinor > 0 && (
+                <div className="flex justify-between font-medium text-kd-primary">
+                  <span>Discount{quote.voucherCode ? ` (${quote.voucherCode})` : ""}</span>
+                  <span>−{formatRs(quote.discountMinor)}</span>
                 </div>
               )}
               <Separator className="my-2" />

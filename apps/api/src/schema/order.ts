@@ -24,6 +24,7 @@ const QuoteCartInput = builder.inputType("QuoteCartInput", {
     deliveryLat: t.float({ required: true }),
     deliveryLng: t.float({ required: true }),
     tipAmount: t.int({ required: false }),
+    voucherCode: t.string({ required: false }),
   }),
 });
 
@@ -41,6 +42,7 @@ const PlaceOrderInputType = builder.inputType("PlaceOrderInput", {
     paymentMethodId: t.string({ required: false }),
     tipAmount: t.int({ required: false }),
     cutleryRequested: t.boolean({ required: false }),
+    voucherCode: t.string({ required: false }),
   }),
 });
 
@@ -105,6 +107,11 @@ QuoteType.implement({
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
+    discountMinor: t.exposeInt("discountMinor"),
+    // The code that was actually applied (normalized), null if none/invalid.
+    voucherCode: t.exposeString("voucherCode", { nullable: true }),
+    // Stable rejection code (e.g. "expired") when a supplied code failed; null on success.
+    voucherError: t.exposeString("voucherError", { nullable: true }),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     minOrderMinor: t.exposeInt("minOrderMinor"),
     meetsMinimum: t.exposeBoolean("meetsMinimum"),
@@ -126,6 +133,7 @@ export const OrderType = builder.prismaObject("Order", {
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
     cutleryRequested: t.exposeBoolean("cutleryRequested"),
+    discountMinor: t.exposeInt("discountMinor"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     contactPhone: t.exposeString("contactPhone"),
     customerNote: t.exposeString("customerNote", { nullable: true }),
@@ -227,13 +235,15 @@ builder.mutationFields((t) => ({
   quoteCart: t.field({
     type: QuoteType,
     args: { input: t.arg({ type: QuoteCartInput, required: true }) },
-    resolve: (_root, args) =>
+    resolve: (_root, args, ctx) =>
       quoteCart(
         quoteInputSchema.parse({
           ...args.input,
           tipAmount: args.input.tipAmount ?? undefined,
+          voucherCode: args.input.voucherCode ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
+        ctx.userId,
       ),
   }),
 
@@ -252,6 +262,7 @@ builder.mutationFields((t) => ({
         paymentMethodId: args.input.paymentMethodId ?? undefined,
         tipAmount: args.input.tipAmount ?? undefined,
         cutleryRequested: args.input.cutleryRequested ?? undefined,
+        voucherCode: args.input.voucherCode ?? undefined,
         lines: normalizeLines(args.input.lines),
       });
       return placeOrder(ctx.userId!, input, args.idempotencyKey);

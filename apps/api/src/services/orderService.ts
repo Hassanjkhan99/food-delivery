@@ -16,6 +16,12 @@ import { logger } from "../logger.js";
 import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import {
+  postDiscountLedger,
+  recordRedemption,
+  reverseRedemptionForOrder,
+  validateVoucher,
+} from "./voucherService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
@@ -41,9 +47,16 @@ export async function placeOrder(
     return existing;
   }
 
-  const quote = await quoteCart(input);
+  const quote = await quoteCart(input, customerId);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
+  // A supplied voucher must validate for real at placement — never silently dropped.
+  // quoteCart swallows voucher errors for the preview; here we re-throw so checkout fails
+  // loudly rather than charging the customer the undiscounted total.
+  if (input.voucherCode && quote.voucherError) {
+    const { VoucherError } = await import("./voucherService.js");
+    throw new VoucherError(quote.voucherError as never);
+  }
 
   // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
   // rejects when isAcceptingOrders is false; here we also honour the opening hours so an
@@ -99,6 +112,8 @@ export async function placeOrder(
           commissionBpsSnapshot: quote.commissionBps,
           tipAmount: quote.tipAmount,
           cutleryRequested: input.cutleryRequested,
+          discountMinor: quote.discountMinor,
+          voucherId: quote.appliedVoucher?.voucher.id ?? null,
           grandTotalMinor: quote.grandTotalMinor,
           paymentMode: input.paymentMode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
@@ -138,6 +153,28 @@ export async function placeOrder(
           actorRole: "customer",
         },
       });
+
+      // Voucher redemption (#52): re-validate inside the tx so concurrent redemptions
+      // can't blow past the per-user or budget caps, then write the unique redemption
+      // row + bump the counters. The unique(voucherId, orderId) index also guards against
+      // a double-apply on the same order.
+      if (input.voucherCode) {
+        const applied = await validateVoucher(
+          input.voucherCode,
+          {
+            userId: customerId,
+            restaurantId: branch.restaurantId,
+            subtotalMinor: quote.subtotalMinor,
+            deliveryFeeMinor: quote.deliveryFeeMinor,
+          },
+          tx,
+        );
+        // Guard against a race between the preview discount and the committed one.
+        if (applied.discountMinor !== quote.discountMinor) {
+          throw new GraphQLError("Voucher value changed — please review your order");
+        }
+        await recordRedemption(tx, applied, created.id, customerId);
+      }
 
       return created;
     });
@@ -268,8 +305,12 @@ export async function transition(
     // Money side-effects live in the same transaction as the status change.
     if (to === "delivered") {
       await onOrderDelivered(tx, order);
+      // Post the voucher discount as a distinct ledger entry against the funder (#52).
+      await postDiscountLedger(tx, order);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
       await onOrderMoneyReversal(tx, order, to);
+      // Free the redemption so it stops counting against the user's limit + budget.
+      await reverseRedemptionForOrder(tx, order.id);
     }
 
     return tx.order.findUniqueOrThrow({ where: { id: orderId } });

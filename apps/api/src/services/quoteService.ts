@@ -3,6 +3,7 @@
 import { prisma } from "@fd/db";
 import { applyBps, haversineMeters, type QuoteInput } from "@fd/shared";
 import { GraphQLError } from "graphql";
+import { validateVoucher, VoucherError, type AppliedVoucher } from "./voucherService.js";
 
 export type ResolvedLine = {
   menuItemId: string;
@@ -28,6 +29,13 @@ export type QuoteResult = {
   commissionMinor: number;
   commissionBps: number;
   tipAmount: number;
+  // Voucher discount (#52). discountMinor is subtracted from the grand total; the
+  // remaining fields describe the applied voucher (or an error) for the UI. When a code
+  // is supplied but invalid, voucherError carries a stable code and discountMinor is 0.
+  discountMinor: number;
+  voucherCode: string | null;
+  voucherError: string | null;
+  appliedVoucher: AppliedVoucher | null;
   grandTotalMinor: number;
   minOrderMinor: number;
   meetsMinimum: boolean;
@@ -36,7 +44,14 @@ export type QuoteResult = {
   lines: ResolvedLine[];
 };
 
-export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
+/**
+ * Server-authoritative quote. When `userId` is provided and the input carries a
+ * voucherCode, the voucher is validated + priced against this cart. In the quote
+ * (preview) path an invalid code is reported via voucherError rather than thrown, so a
+ * bad code doesn't blow up the whole price preview; placeOrder re-validates and DOES
+ * throw so an order can never be placed with a silently-dropped discount.
+ */
+export async function quoteCart(input: QuoteInput, userId?: string | null): Promise<QuoteResult> {
   const branch = await prisma.branch.findUnique({
     where: { id: input.branchId },
     include: { restaurant: true, taxProfile: true },
@@ -128,6 +143,34 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   // Rider tip is added on top of the bill; it isn't taxed or commissioned.
   const tipAmount = input.tipAmount ?? 0;
 
+  // Voucher (#52): validate + price the code when one is supplied and we know the user.
+  // In the preview path an invalid code surfaces as voucherError; the discount is 0.
+  let discountMinor = 0;
+  let voucherError: string | null = null;
+  let appliedVoucher: AppliedVoucher | null = null;
+  if (input.voucherCode && userId) {
+    try {
+      appliedVoucher = await validateVoucher(input.voucherCode, {
+        userId,
+        restaurantId: branch.restaurantId,
+        subtotalMinor: subtotal,
+        deliveryFeeMinor: branch.deliveryFeeMinor,
+      });
+      discountMinor = appliedVoucher.discountMinor;
+    } catch (e) {
+      if (e instanceof VoucherError) {
+        voucherError = e.code;
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  const grandTotalMinor = Math.max(
+    0,
+    subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount - discountMinor,
+  );
+
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
@@ -137,7 +180,11 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
     commissionMinor: commission,
     commissionBps,
     tipAmount,
-    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount,
+    discountMinor,
+    voucherCode: appliedVoucher ? appliedVoucher.voucher.code : null,
+    voucherError,
+    appliedVoucher,
+    grandTotalMinor,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,

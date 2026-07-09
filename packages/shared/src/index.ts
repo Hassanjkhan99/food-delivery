@@ -5,4 +5,5 @@ export * from "./money";
 export * from "./geo";
 export * from "./roles";
 export * from "./orderStateMachine";
+export * from "./voucher";
 export * from "./schemas/cart";

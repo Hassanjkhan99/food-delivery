@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeDollarSign, FileClock, Gauge, HandCoins, Store, Undo2 } from "lucide-react";
+import { BadgeDollarSign, FileClock, Gauge, HandCoins, Store, Tag, Undo2 } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: Gauge },
   { href: "/admin/restaurants", label: "Restaurants", icon: Store },
+  { href: "/admin/vouchers", label: "Vouchers", icon: Tag },
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },
