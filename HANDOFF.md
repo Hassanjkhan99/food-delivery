@@ -31,30 +31,47 @@ build/typecheck/lint/format. 13 commits on `master`. Full detail in commit histo
 - **22 open backlog issues** (#13–#34) — enriched with the full research context from the
   source reports (shared-rider spec, PSP adapter, PRA compliance checklist, observability,
   RLS hardening, etc.) so nothing from the research goes to waste
-- **15 open UX Parity issues** (#35–#49, milestone "UX Parity v1 (Foodpanda benchmark)") —
-  see "What's next" below
+- **15 open UX Parity issues** (#35–#50, milestone "UX Parity v1 (Foodpanda benchmark)") —
+  polish of existing surfaces; **this is the next-session focus** (see "What's next")
+- **11 open Functional Parity issues** (#51–#61, milestone "Functional Parity v1") — net-new
+  capabilities from the Foodpanda functional cross-reference (filters/sort #51, voucher engine
+  #52, combos #53, pickup/scheduled #54, wallet #55, notification inbox #56; growth layer
+  loyalty/referrals/subscription/gift-cards #57–#60 decision-gated; vendor reviews+analytics #61).
+  **Comes AFTER the customer UX pass** per the founder.
 
-## What's next: UX Parity v1 program
+## What's next: FINISH UX PARITY (customer UX first) — this is THE priority
 
-The user's framing: *"it's the shadow of the app I'm thinking of"* — the machinery works but
-it won't survive being compared to Foodpanda. We're running a Shift-Ledger-style human-in-the-loop
-program: one issue per surface, each with Foodpanda's benchmark pattern → our current gap →
-target spec (every state: loading/empty/error/success) → decisions needed → acceptance criteria.
+Founder's latest instruction (end of last session): **"finish the UX work first — the app must
+tackle Foodpanda, and customer UX is the focus."** So: build out the UX Parity v1 milestone,
+customer-facing surfaces before vendor/rider. The Functional Parity milestone (#51–#61, vouchers/
+wallet/filters/etc.) is REAL and important but comes AFTER the customer UX pass — do not start it
+next session unless the founder redirects.
 
-**Workflow (issue #35 UX-00):** decision gate (issues labeled `needs-decision` wait for the
-founder's comment before build starts) → build gate (PR per issue, screenshots mandatory) →
-verify gate (acceptance criteria checked off before close).
+Program framing: the machinery works but won't survive a side-by-side with Foodpanda. Shift-Ledger-
+style human-in-the-loop: one issue per surface (Foodpanda benchmark → our gap → target spec with
+every state → decisions → acceptance). **Workflow (#35 UX-00):** decision gate (`needs-decision`
+issues wait for a founder comment) → build gate (PR per issue, screenshots mandatory) → verify gate.
 
-**9 issues are blocked on founder decisions right now** — check
-`gh issue list --repo Hassanjkhan99/food-delivery --label needs-decision` or just open #35 first.
-Key blocking decisions: real brand name + color (currently placeholder "KhaanaDo" + rose-600),
-photo strategy (restaurant-uploaded vs stock vs photo-less launch), design source of truth,
-Urdu-at-launch, map tiles (OSM/Leaflet vs Google Maps).
+**Status of the gates (already cleared — don't re-ask):**
+- #35 decisions ANSWERED (see `ux-parity-decisions` memory): keep "KhaanaDo" placeholder, Tailwind-
+  only (no Figma), photo strategy = uploaded → Google Places → typography fallback.
+- Photo pipeline #50 is BUILT + merged (commit 87ff80f): `<RestaurantImage>`/`<ItemImage>` resolve
+  the chain; home feed + restaurant page already consume them. This UNBLOCKS #36 and #38.
 
-**Recommended build order once #35 is answered:** #36 (home/discovery feed) and #38 (restaurant
-page: floating cart bar, scroll-synced menu, reviews, item photos) first — they decide whether a
-user ever reaches checkout. Then the order lifecycle chain (#39→#42), then account/help
-(#43–#45), then vendor/rider polish (#46–#47), then cross-cutting design system + perf (#48–#49).
+**Recommended customer-UX build order for next session:**
+1. **#36 home/discovery feed** — cuisine rail, swimlanes, rich cards (photos now available), closed-
+   state overlays, "order again", skeletons. The front door.
+2. **#38 restaurant page** — the showpiece: **floating cart bar** (highest-leverage conversion
+   pattern), scroll-synced category rail, item photos, reviews page, quick-add. Keep our per-
+   restaurant 3D theming — it's the one thing Foodpanda can't copy back.
+3. **#39→#42 order journey** — item sheet, cart (tip/cutlery/upsell), checkout (address book + map
+   pin), tracking (staged tracker + live rider map).
+4. **#37 search**, then **#43–#44 auth/account** to round out the customer side.
+Vendor console #46, rider #47, and design-system/perf #48–#49 come after the customer journey.
+
+Some customer issues still carry `needs-decision` sub-items (e.g. #40 tip/small-order/pickup, #41
+map tiles + scheduled, #43 social login). Surface those inline when you reach the issue — don't
+block the whole pass on them; build the non-blocked parts first.
 
 Full issue list: `gh issue list --repo Hassanjkhan99/food-delivery --label ux`
 
@@ -109,9 +126,10 @@ explicitly overrode from the source research.
 
 ## Immediate next action for a new session
 
-1. Read this file + `business-model-decisions` memory + skim `README.md`.
-2. Check `gh issue list --repo Hassanjkhan99/food-delivery --label needs-decision` for any
-   decisions the user has since answered (read issue comments).
-3. If #35's decisions are answered, start building #36 or #38 per the user's direction that
-   turn; otherwise nudge the user toward answering #35 first.
-4. Restart `pnpm db` (see gotchas) before touching the database.
+1. Read this file + the memory files (`business-model-decisions`, `ux-parity-decisions`,
+   `product-scope-decisions`) + skim `README.md`.
+2. Confirm `pnpm db` is up on :5455 (see gotchas); it may already be running from a prior session.
+3. **Start building customer UX, #36 (home) first, then #38 (restaurant page).** The #35 gate is
+   cleared and the photo pipeline (#50) is merged, so these are unblocked. Follow the build-gate
+   workflow: implement → screenshots via the preview tools → founder eyeballs before merge.
+4. Do NOT start Functional Parity (#51–#61) unless the founder redirects — UX first.
