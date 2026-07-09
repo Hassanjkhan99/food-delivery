@@ -7,5 +7,6 @@ import "./payment.js";
 import "./restaurant.js";
 import "./media.js";
 import "./rider.js";
+import "./admin.js";
 
 export const schema = builder.toSchema();

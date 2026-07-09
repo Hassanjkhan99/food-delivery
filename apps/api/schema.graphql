@@ -1,3 +1,14 @@
+type AuditLog {
+  action: String!
+  actorRole: String
+  afterJson: JSON
+  beforeJson: JSON
+  createdAt: DateTime!
+  id: ID!
+  subjectId: String!
+  subjectType: String!
+}
+
 type Branch {
   activeMenu: Menu
   addressText: String!
@@ -48,6 +59,17 @@ type CsvPreviewRow {
   priceMinor: Int!
 }
 
+type DashboardStats {
+  acceptanceSlaPct: Float!
+  activeOrders: Int!
+  cancellationRatePct: Float!
+  gmvTodayMinor: Int!
+  openTickets: Int!
+  ordersToday: Int!
+  pendingApprovals: Int!
+  pendingRefunds: Int!
+}
+
 scalar DateTime
 
 type DeliveryTask {
@@ -56,6 +78,15 @@ type DeliveryTask {
   id: ID!
   order: Order!
   status: String!
+}
+
+type FeeConfig {
+  chainCommissionBps: Int!
+  chainPlatformFeeMinor: Int!
+  createdAt: DateTime!
+  id: ID!
+  smallBusinessCommissionBps: Int!
+  smallBusinessPlatformFeeMinor: Int!
 }
 
 scalar JSON
@@ -128,14 +159,17 @@ type ModifierOption {
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   addPaymentMethod(card: CardInput!): PaymentMethod!
+  approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
+  decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   deleteMenuItem(itemId: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   logout: Boolean!
   markReady(id: String!): Order!
+  overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
   presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
   previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
@@ -150,11 +184,15 @@ type Mutation {
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
+  runPayoutBatch(restaurantId: String): [Payout!]!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  suspendRestaurant(id: String!, reason: String!): Restaurant!
+  updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
@@ -226,6 +264,12 @@ type Payout {
   status: String!
 }
 
+type PayoutCandidate {
+  balanceMinor: Int!
+  name: String!
+  restaurantId: String!
+}
+
 input PlaceOrderInput {
   addressLabel: String
   addressText: String!
@@ -245,10 +289,14 @@ type PresignResult {
 }
 
 type Query {
+  allRestaurants: [Restaurant!]!
+  auditLogs(take: Int): [AuditLog!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  currentFeeConfig: FeeConfig
+  dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myEarnings: RiderEarnings!
@@ -258,7 +306,10 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderProfile: RiderProfile
   order(id: String!): Order
+  payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
+  refundQueue: [Refund!]!
+  restaurantApprovalQueue: [Restaurant!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -298,6 +349,16 @@ type Rating {
   id: ID!
   stars: Int!
   tags: [String!]!
+}
+
+type Refund {
+  amountMinor: Int!
+  createdAt: DateTime!
+  destination: String!
+  id: ID!
+  order: Order!
+  reason: String!
+  status: String!
 }
 
 type Restaurant {
