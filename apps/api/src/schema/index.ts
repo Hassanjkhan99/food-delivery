@@ -4,5 +4,6 @@ import "./auth.js";
 import "./marketplace.js";
 import "./order.js";
 import "./payment.js";
+import "./restaurant.js";
 
 export const schema = builder.toSchema();

@@ -38,6 +38,15 @@ scalar DateTime
 
 scalar JSON
 
+type LedgerEntry {
+  createdAt: DateTime!
+  creditMinor: Int!
+  debitMinor: Int!
+  id: ID!
+  memo: String!
+  txId: String!
+}
+
 type Menu {
   categories: [MenuCategory!]!
   id: ID!
@@ -80,13 +89,27 @@ type ModifierOption {
 }
 
 type Mutation {
+  acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   addPaymentMethod(card: CardInput!): PaymentMethod!
+  assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
+  deleteMenuItem(itemId: String!): Boolean!
+  inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   logout: Boolean!
+  markReady(id: String!): Order!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
+  publishMenu(branchId: String!): Menu!
   quoteCart(input: QuoteCartInput!): Quote!
+  rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
+  setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  startPreparing(id: String!): Order!
+  submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
+  upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
+  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   verifyOtp(code: String!, phone: String!): Viewer!
 }
 
@@ -143,6 +166,16 @@ type PaymentMethod {
   last4: String!
 }
 
+type Payout {
+  amountMinor: Int!
+  id: ID!
+  paidAt: DateTime
+  periodEnd: DateTime!
+  periodStart: DateTime!
+  reference: String
+  status: String!
+}
+
 input PlaceOrderInput {
   addressLabel: String
   addressText: String!
@@ -157,12 +190,19 @@ input PlaceOrderInput {
 }
 
 type Query {
+  boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
+  branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  draftMenu(branchId: String!): Menu!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
+  myRestaurants: [Restaurant!]!
   order(id: String!): Order
+  payoutHistory(restaurantId: String!): [Payout!]!
   viewer: Viewer
+  walletBalance(restaurantId: String!): Int!
+  walletStatement(restaurantId: String!): [LedgerEntry!]!
 }
 
 type Quote {
@@ -215,6 +255,14 @@ type RestaurantTheme {
   id: ID!
   primaryColor: String!
   textColor: String!
+}
+
+type Rider {
+  id: ID!
+  isOnline: Boolean!
+  riderType: String!
+  user: User!
+  verificationStatus: String!
 }
 
 type RoleBinding {
