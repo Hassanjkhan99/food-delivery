@@ -3,6 +3,7 @@ import { prisma } from "@fd/db";
 import { placeOrderInputSchema, quoteInputSchema } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { placeOrder, transition } from "../services/orderService.js";
+import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { quoteCart, type QuoteResult } from "../services/quoteService.js";
 import { builder } from "./builder.js";
 
@@ -270,19 +271,26 @@ builder.mutationFields((t) => ({
       if (!order || order.customerId !== ctx.userId) {
         throw new GraphQLError("Order not found");
       }
+      // #30: evaluate the cancellation policy against the *current* order state
+      // (before the transition) so timing/grace-window is assessed correctly, then
+      // persist only after the transition succeeds (avoids orphan rows on illegal moves).
+      const decision = evaluateOrderCancellation(order, "customer");
       const updated = await transition(
         args.id,
         "cancelled",
         { userId: ctx.userId, role: "customer" },
-        { reason: args.reason ?? "Customer cancelled" },
-      );
-      await prisma.cancellation.create({
-        data: {
-          orderId: args.id,
-          cancelledBy: "customer",
-          reasonCode: args.reason ?? "customer_cancelled",
+        {
+          reason: args.reason ?? "Customer cancelled",
+          meta: {
+            policyScenario: decision.scenario,
+            policyOutcome: decision.outcome,
+            feeAssessedMinor: decision.feeMinor,
+            refundMinor: decision.refundMinor,
+            faultParty: decision.faultParty,
+          },
         },
-      });
+      );
+      await recordCancellation(order, "customer");
       return updated;
     },
   }),

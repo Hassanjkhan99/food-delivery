@@ -2,7 +2,8 @@
 // workbench (executes money), payout batches, versioned fee config, audit explorer.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import type { OrderStatus } from "@fd/shared";
+import type { OrderStatus, PolicyMatrixRow, CancellationPolicyConfig } from "@fd/shared";
+import { CANCELLATION_POLICY_MATRIX, CANCELLATION_POLICY_CONFIG } from "@fd/shared";
 import { transition } from "../services/orderService.js";
 import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
@@ -101,7 +102,52 @@ PayoutCandidate.implement({
   }),
 });
 
+// #30 admin-visible cancellation & refund policy matrix. Static rows from the
+// kickoff table + the live tunable config, so ops can see exactly what the engine does.
+const CancellationPolicyRow = builder.objectRef<PolicyMatrixRow>("CancellationPolicyRow");
+CancellationPolicyRow.implement({
+  fields: (t) => ({
+    scenario: t.exposeString("scenario"),
+    label: t.exposeString("label"),
+    customerPays: t.exposeString("customerPays"),
+    outcome: t.exposeString("outcome"),
+  }),
+});
+
+const CancellationPolicyConfigView = builder.objectRef<CancellationPolicyConfig>(
+  "CancellationPolicyConfig",
+);
+CancellationPolicyConfigView.implement({
+  fields: (t) => ({
+    gracePeriodSeconds: t.exposeInt("gracePeriodSeconds"),
+    postAcceptFeeMinor: t.exposeInt("postAcceptFeeMinor"),
+    afterPreparedSubtotalBps: t.exposeInt("afterPreparedSubtotalBps"),
+    unreachableChargesDeliveryFee: t.exposeBoolean("unreachableChargesDeliveryFee"),
+    unreachableWaitSeconds: t.exposeInt("unreachableWaitSeconds"),
+  }),
+});
+
+const CancellationPolicy = builder.objectRef<{
+  rows: PolicyMatrixRow[];
+  config: CancellationPolicyConfig;
+}>("CancellationPolicy");
+CancellationPolicy.implement({
+  fields: (t) => ({
+    rows: t.field({ type: [CancellationPolicyRow], resolve: (p) => p.rows }),
+    config: t.field({ type: CancellationPolicyConfigView, resolve: (p) => p.config }),
+  }),
+});
+
 builder.queryFields((t) => ({
+  cancellationPolicyMatrix: t.field({
+    type: CancellationPolicy,
+    authScopes: { admin: true },
+    resolve: () => ({
+      rows: CANCELLATION_POLICY_MATRIX,
+      config: CANCELLATION_POLICY_CONFIG,
+    }),
+  }),
+
   dashboardStats: t.field({
     type: DashboardStats,
     authScopes: { admin: true },

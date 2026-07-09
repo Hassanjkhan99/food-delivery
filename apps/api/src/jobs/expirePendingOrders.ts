@@ -6,19 +6,21 @@ import { prisma } from "@fd/db";
 import { EXPIRY_SWEEP_INTERVAL_MS } from "@fd/shared";
 import { logger } from "../logger.js";
 import { SYSTEM_ACTOR, transition } from "../services/orderService.js";
+import { recordCancellation } from "../services/policyService.js";
 
 export function startExpirySweeper(): NodeJS.Timeout {
   const timer = setInterval(async () => {
     try {
       const stale = await prisma.order.findMany({
         where: { status: "pending_acceptance", acceptDeadlineAt: { lt: new Date() } },
-        select: { id: true },
       });
-      for (const { id } of stale) {
+      for (const order of stale) {
         try {
-          await transition(id, "auto_expired", SYSTEM_ACTOR, {
+          await transition(order.id, "auto_expired", SYSTEM_ACTOR, {
             reason: "Acceptance SLA (120s) exceeded",
           });
+          // #30: full refund + restaurant ranking penalty for the SLA breach.
+          await recordCancellation(order, "system");
         } catch {
           // Lost the race to an accept/reject — that's the desired outcome.
         }
