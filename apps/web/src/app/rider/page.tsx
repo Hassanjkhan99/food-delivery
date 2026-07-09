@@ -3,7 +3,7 @@
 // Rider home: availability toggle + job queue. Polls 5s (SSE in M10).
 import { useEffect } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "urql";
+import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,15 @@ const SetAvailabilityMutation = graphql(`
   }
 `);
 
+const RiderFeedSubscription = graphql(`
+  subscription RiderFeed {
+    riderJobFeed {
+      orderId
+      status
+    }
+  }
+`);
+
 const ACTIVE = ["assigned", "arrived_pickup", "picked_up"];
 
 export default function RiderHomePage() {
@@ -53,8 +62,16 @@ export default function RiderHomePage() {
   });
   const [, setAvailability] = useMutation(SetAvailabilityMutation);
 
+  // Live job feed via SSE; slow poll as a reconnect safety net.
+  useSubscription(
+    { query: RiderFeedSubscription, pause: !data?.myRiderProfile },
+    (_prev, event) => {
+      refetch({ requestPolicy: "network-only" });
+      return event;
+    },
+  );
   useEffect(() => {
-    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 5_000);
+    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 30_000);
     return () => clearInterval(t);
   }, [refetch]);
 

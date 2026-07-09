@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useMutation, useQuery } from "urql";
+import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,15 @@ const CancelMutation = graphql(`
   mutation CancelOrder($id: String!) {
     cancelOrder(id: $id) {
       id
+      status
+    }
+  }
+`);
+
+const OrderStatusSubscription = graphql(`
+  subscription OrderStatusFeed($orderId: String!) {
+    orderStatus(orderId: $orderId) {
+      orderId
       status
     }
   }
@@ -116,10 +125,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [rated, setRated] = useState(false);
   const order = data?.order;
 
-  // Poll while the order is in-flight (replaced by SSE subscription in M10).
+  // Live status via SSE; a slow poll remains as a reconnect safety net.
+  useSubscription(
+    {
+      query: OrderStatusSubscription,
+      variables: { orderId: id },
+      pause: !order || !ACTIVE_STATUSES.includes(order.status),
+    },
+    (_prev, event) => {
+      refetch({ requestPolicy: "network-only" });
+      return event;
+    },
+  );
   useEffect(() => {
     if (!order || !ACTIVE_STATUSES.includes(order.status)) return;
-    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 5_000);
+    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 30_000);
     return () => clearInterval(t);
   }, [order, refetch]);
 

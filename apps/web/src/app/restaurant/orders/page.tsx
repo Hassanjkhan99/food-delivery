@@ -3,7 +3,7 @@
 // Live order board: New (120s countdown) / Preparing / Ready / Out / Recent.
 // Polls every 5s until M10 replaces polling with SSE subscriptions.
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "urql";
+import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { useConsole } from "../useConsole";
@@ -82,6 +82,15 @@ const AssignRiderMutation = graphql(`
   }
 `);
 
+const BranchFeedSubscription = graphql(`
+  subscription BranchFeed($branchId: String!) {
+    branchOrderFeed(branchId: $branchId) {
+      orderId
+      status
+    }
+  }
+`);
+
 function Countdown({ deadline }: { deadline: string }) {
   const [left, setLeft] = useState(() => Math.max(0, new Date(deadline).getTime() - Date.now()));
   useEffect(() => {
@@ -155,9 +164,17 @@ export default function OrdersBoardPage() {
   const [, markReady] = useMutation(MarkReadyMutation);
   const [, assignRider] = useMutation(AssignRiderMutation);
 
+  // Live updates via SSE; a slow poll remains as a reconnect safety net.
+  useSubscription(
+    { query: BranchFeedSubscription, variables: { branchId: branch?.id ?? "" }, pause: !branch },
+    (_prev, event) => {
+      refetch({ requestPolicy: "network-only" });
+      return event;
+    },
+  );
   useEffect(() => {
     if (!branch) return;
-    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 5_000);
+    const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 30_000);
     return () => clearInterval(t);
   }, [branch, refetch]);
 

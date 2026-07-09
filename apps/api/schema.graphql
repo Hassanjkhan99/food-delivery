@@ -223,6 +223,12 @@ type Order {
   taxTotalMinor: Int!
 }
 
+type OrderChanged {
+  branchId: String!
+  orderId: String!
+  status: String!
+}
+
 type OrderEvent {
   actorRole: String
   createdAt: DateTime!
@@ -408,6 +414,12 @@ type RiderProfile {
 type RoleBinding {
   restaurantId: String
   role: String!
+}
+
+type Subscription {
+  branchOrderFeed(branchId: String!): OrderChanged!
+  orderStatus(orderId: String!): OrderChanged!
+  riderJobFeed: OrderChanged!
 }
 
 type User {
