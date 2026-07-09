@@ -381,16 +381,65 @@ async function main() {
     ]},
   ], { spiceOn: ["Jalapeño Heat"], addonsOn: ["Classic Smash", "Cheese Overload"] });
 
-  // Draft menu with pending edits on KBH (exercises draft/publish)
-  await prisma.menu.create({
-    data: {
-      branchId: kbh.b.id, version: 2, status: "draft",
-      layoutJson: { categoryOrder: ["Biryani", "Karahi", "Sides & Drinks", "Desserts"] },
-      categories: { create: [{ name: "Desserts", sortOrder: 3, items: { create: [
-        { name: "Gulab Jamun (2pc)", priceMinor: 15_000, sortOrder: 0 },
-      ]}}]},
-    },
-  });
+  // Draft menu with pending edits on KBH (exercises draft/publish).
+  // IMPORTANT: drafts must be FULL clones of the live menu — publishing replaces the
+  // active menu wholesale, so a sparse draft would wipe the live catalog.
+  {
+    const source = await prisma.menu.findUniqueOrThrow({
+      where: { id: kbhMenu.menu.id },
+      include: {
+        categories: { include: { items: { include: { modGroups: true } } } },
+        modGroups: { include: { options: true } },
+      },
+    });
+    const draft = await prisma.menu.create({
+      data: {
+        branchId: kbh.b.id, version: 2, status: "draft",
+        layoutJson: { categoryOrder: ["Biryani", "Karahi", "Sides & Drinks", "Desserts"] },
+      },
+    });
+    const groupMap = new Map<string, string>();
+    for (const g of source.modGroups) {
+      const ng = await prisma.modifierGroup.create({
+        data: {
+          menuId: draft.id, name: g.name, minSelect: g.minSelect, maxSelect: g.maxSelect,
+          options: { create: g.options.map((o) => ({
+            name: o.name, priceDeltaMinor: o.priceDeltaMinor, isAvailable: o.isAvailable, sortOrder: o.sortOrder,
+          }))},
+        },
+      });
+      groupMap.set(g.id, ng.id);
+    }
+    for (const cat of source.categories) {
+      const nc = await prisma.menuCategory.create({
+        data: { menuId: draft.id, name: cat.name, description: cat.description, sortOrder: cat.sortOrder },
+      });
+      for (const item of cat.items) {
+        const ni = await prisma.menuItem.create({
+          data: {
+            categoryId: nc.id, name: item.name, description: item.description,
+            priceMinor: item.priceMinor, isAvailable: item.isAvailable,
+            badges: item.badges, sortOrder: item.sortOrder,
+          },
+        });
+        for (const join of item.modGroups) {
+          const mapped = groupMap.get(join.groupId);
+          if (mapped) {
+            await prisma.menuItemModifierGroup.create({
+              data: { itemId: ni.id, groupId: mapped, sortOrder: join.sortOrder },
+            });
+          }
+        }
+      }
+    }
+    // ...and the pending edit: a new Desserts category only in the draft.
+    await prisma.menuCategory.create({
+      data: {
+        menuId: draft.id, name: "Desserts", sortOrder: 3,
+        items: { create: [{ name: "Gulab Jamun (2pc)", priceMinor: 15_000, sortOrder: 0 }] },
+      },
+    });
+  }
 
   // ── Ledger accounts ────────────────────────────────────────────────────
   await account("platform", "platform:cash");
@@ -556,10 +605,17 @@ async function main() {
       }
     }
     if (spec.status === "rejected" && spec.mode === "card") {
+      const refund = await prisma.refund.create({
+        data: {
+          orderId: order.id, status: "refunded", amountMinor: grand,
+          destination: "card", reason: "Automatic refund — order rejected",
+          decidedAt: new Date(placedAt.getTime() + 10 * 60_000),
+        },
+      });
       await postTx(`Refund ${code} (rejected)`, [
         { account: custPrepaid, debit: grand },
         { account: "platform:cash", credit: grand },
-      ], { orderId: order.id }, new Date(placedAt.getTime() + 10 * 60_000));
+      ], { orderId: order.id, refundId: refund.id }, new Date(placedAt.getTime() + 10 * 60_000));
     }
     return order;
   }
