@@ -3,20 +3,34 @@
 // Branded restaurant experience: the RestaurantTheme drives CSS variables, font,
 // parallax/depth hero, and card style (flat / glass / pointer-tracked tilt3d).
 // Menu.layoutJson controls per-category display modes so the digital menu mirrors
-// the restaurant's physical menu structure.
+// the restaurant's physical menu structure. On top of that we layer the Foodpanda
+// conversion patterns (UX-03): a "Popular" auto-section, in-menu search, a scroll-
+// synced category rail, a collapsing hero, one-tap quick-add, and a floating cart bar.
 import { use, useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "urql";
 import { motion, useReducedMotion } from "framer-motion";
 import { Star, Timer } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParallaxHero } from "@/components/theme/ParallaxHero";
-import { TiltCard } from "@/components/theme/TiltCard";
-import { DEFAULT_THEME, cardClasses, themeVars, type ThemeShape } from "@/components/theme/theme";
-import { ItemImage } from "@/components/media/ItemImage";
+import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
+import { useCart } from "@/lib/cart";
 import { ItemModal, type MenuItemForModal } from "./item-modal";
+import { ItemCard, type ItemForCard } from "./item-card";
+import { MenuNav, type NavSection } from "./menu-nav";
+import { FloatingCartBar } from "./floating-cart-bar";
+import { useHeroCollapsed, useScrollSpy } from "./use-menu-scroll";
 
 const BranchQuery = graphql(`
   query BranchDetail($slug: String!) {
@@ -43,6 +57,27 @@ const BranchQuery = graphql(`
           heroEffect
           logoUrl
           heroUrl
+        }
+      }
+      popularItems {
+        id
+        name
+        description
+        priceMinor
+        isAvailable
+        badges
+        imageUrl
+        modifierGroups {
+          id
+          name
+          minSelect
+          maxSelect
+          options {
+            id
+            name
+            priceDeltaMinor
+            isAvailable
+          }
         }
       }
       activeMenu {
@@ -80,28 +115,66 @@ const BranchQuery = graphql(`
 `);
 
 type LayoutJson = { categoryOrder?: string[]; displayModes?: Record<string, string> };
+type Section = { domId: string; name: string; description?: string | null; items: ItemForCard[] };
 
 export default function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const [{ data, fetching }] = useQuery({ query: BranchQuery, variables: { slug } });
-  const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
   const reduced = useReducedMotion();
-  const branch = data?.branchBySlug;
+  const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
+  const [conflict, setConflict] = useState<ItemForCard | null>(null);
+  const [search, setSearch] = useState("");
 
+  const addLine = useCart((s) => s.addLine);
+  const clearCart = useCart((s) => s.clear);
+  const { ref: heroSentinel, collapsed } = useHeroCollapsed<HTMLDivElement>();
+
+  const branch = data?.branchBySlug;
   const theme: ThemeShape = useMemo(
     () => ({ ...DEFAULT_THEME, ...(branch?.restaurant.theme ?? {}) }) as ThemeShape,
     [branch],
   );
-
   const layout = (branch?.activeMenu?.layoutJson ?? {}) as LayoutJson;
-  const categories = useMemo(() => {
-    const cats = [...(branch?.activeMenu?.categories ?? [])];
+
+  // Ordered category list (honors layoutJson.categoryOrder), then the full section
+  // list with the computed "Popular" pseudo-section pinned first.
+  const sections = useMemo<Section[]>(() => {
+    if (!branch) return [];
+    const cats = [...(branch.activeMenu?.categories ?? [])];
     if (layout.categoryOrder) {
       const rank = new Map(layout.categoryOrder.map((n, i) => [n, i]));
       cats.sort((a, b) => (rank.get(a.name) ?? 99) - (rank.get(b.name) ?? 99));
     }
-    return cats;
+    const real: Section[] = cats.map((c) => ({
+      domId: `cat-${c.id}`,
+      name: c.name,
+      description: c.description,
+      items: c.items as ItemForCard[],
+    }));
+    const popular = branch.popularItems as ItemForCard[];
+    return popular.length > 0
+      ? [{ domId: "cat-popular", name: "Popular", items: popular }, ...real]
+      : real;
   }, [branch, layout.categoryOrder]);
+
+  // Client-side in-menu search. Popular is hidden while searching so items don't
+  // appear twice (once under Popular, once under their real category).
+  const q = search.trim().toLowerCase();
+  const visibleSections = useMemo<Section[]>(() => {
+    if (!q) return sections;
+    return sections
+      .filter((s) => s.domId !== "cat-popular")
+      .map((s) => ({
+        ...s,
+        items: s.items.filter(
+          (i) =>
+            i.name.toLowerCase().includes(q) || (i.description ?? "").toLowerCase().includes(q),
+        ),
+      }))
+      .filter((s) => s.items.length > 0);
+  }, [sections, q]);
+
+  const activeId = useScrollSpy(visibleSections.map((s) => s.domId));
 
   if (fetching) {
     return (
@@ -114,7 +187,32 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   if (!branch) return <p className="text-neutral-500">Restaurant not found.</p>;
 
   const r = branch.restaurant;
-  const tilt = theme.cardStyle === "tilt3d";
+  const reviewsHref = `/r/${r.slug}/reviews`;
+  const navSections: NavSection[] = visibleSections.map((s) => ({ domId: s.domId, name: s.name }));
+
+  function quickAdd(item: ItemForCard, clearFirst = false) {
+    if (!branch) return;
+    if (clearFirst) clearCart();
+    const result = addLine(
+      { id: branch.id, slug: r.slug, name: r.name },
+      {
+        menuItemId: item.id,
+        name: item.name,
+        qty: 1,
+        unitPriceMinor: item.priceMinor,
+        modifierOptionIds: [],
+        modifierNames: [],
+      },
+    );
+    if (result === "branch_conflict") setConflict(item);
+    else setConflict(null);
+  }
+
+  function onJump(domId: string) {
+    document
+      .getElementById(domId)
+      ?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  }
 
   return (
     <main className="-mx-4 -my-6 min-h-screen px-4 py-6" style={themeVars(theme)}>
@@ -143,10 +241,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
             style={{ color: theme.heroUrl ? "#ffffffcc" : "var(--brand-text)" }}
           >
             {r.avgRating != null && (
-              <span className="flex items-center gap-1">
+              <Link href={reviewsHref} className="flex items-center gap-1 hover:underline">
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                {r.avgRating.toFixed(1)} ({r.ratingCount})
-              </span>
+                {r.avgRating.toFixed(1)} ({r.ratingCount}) reviews
+              </Link>
             )}
             <span className="flex items-center gap-1">
               <Timer className="h-4 w-4" /> Min {formatRs(branch.minOrderMinor)}
@@ -157,123 +255,75 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         </div>
       </ParallaxHero>
 
-      {/* Category rail */}
-      <nav
-        className="sticky top-14 z-30 -mx-4 mb-6 overflow-x-auto px-4 py-2 backdrop-blur"
-        style={{ backgroundColor: "color-mix(in srgb, var(--brand-bg) 85%, transparent)" }}
-      >
-        <div className="flex gap-2">
-          {categories.map((c) => (
-            <a
-              key={c.id}
-              href={`#cat-${c.id}`}
-              className="whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition hover:scale-105"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--brand-primary) 12%, transparent)",
-                color: "var(--brand-primary)",
-              }}
+      {/* Sentinel: once this scrolls out of view the nav shows a compact title. */}
+      <div ref={heroSentinel} aria-hidden className="h-px" />
+
+      <MenuNav
+        sections={navSections}
+        activeId={activeId}
+        collapsed={collapsed}
+        title={r.name}
+        avgRating={r.avgRating}
+        ratingCount={r.ratingCount}
+        reviewsHref={reviewsHref}
+        search={search}
+        onSearch={setSearch}
+        onJump={onJump}
+      />
+
+      {visibleSections.length === 0 ? (
+        <p className="py-12 text-center text-sm opacity-60">
+          No items match &ldquo;{search}&rdquo;.
+        </p>
+      ) : (
+        visibleSections.map((section, ci) => {
+          const mode =
+            section.domId === "cat-popular"
+              ? "list"
+              : (layout.displayModes?.[section.name] ?? "list");
+          return (
+            <motion.section
+              key={section.domId}
+              id={section.domId}
+              className="mb-10 scroll-mt-36"
+              initial={reduced ? false : { opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.45, delay: Math.min(ci * 0.05, 0.2) }}
             >
-              {c.name}
-            </a>
-          ))}
-        </div>
-      </nav>
+              <h2 className="mb-1 text-2xl font-semibold" style={{ color: "var(--brand-primary)" }}>
+                {section.name}
+              </h2>
+              {section.description && (
+                <p className="mb-3 text-sm opacity-60">{section.description}</p>
+              )}
+              <div
+                className={
+                  mode === "grid"
+                    ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                    : mode === "compact"
+                      ? "divide-y divide-black/5 rounded-xl border border-black/5 bg-white/50"
+                      : "grid gap-3 sm:grid-cols-2"
+                }
+              >
+                {section.items.map((item) => (
+                  <ItemCard
+                    key={`${section.domId}-${item.id}`}
+                    item={item}
+                    mode={mode}
+                    cardStyle={theme.cardStyle}
+                    accepting={branch.isAcceptingOrders}
+                    onOpen={(it) => setOpenItem(it)}
+                    onQuickAdd={(it) => quickAdd(it)}
+                  />
+                ))}
+              </div>
+            </motion.section>
+          );
+        })
+      )}
 
-      {categories.map((cat, ci) => {
-        const mode = layout.displayModes?.[cat.name] ?? "list";
-        return (
-          <motion.section
-            key={cat.id}
-            id={`cat-${cat.id}`}
-            className="mb-10 scroll-mt-28"
-            initial={reduced ? false : { opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.45, delay: Math.min(ci * 0.05, 0.2) }}
-          >
-            <h2 className="mb-1 text-2xl font-semibold" style={{ color: "var(--brand-primary)" }}>
-              {cat.name}
-            </h2>
-            {cat.description && <p className="mb-3 text-sm opacity-60">{cat.description}</p>}
-
-            <div
-              className={
-                mode === "grid"
-                  ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                  : mode === "compact"
-                    ? "divide-y divide-black/5 rounded-xl border border-black/5 bg-white/50"
-                    : "grid gap-3 sm:grid-cols-2"
-              }
-            >
-              {cat.items.map((item) => {
-                const inner = (
-                  <>
-                    {mode !== "compact" && (
-                      <ItemImage
-                        url={item.imageUrl}
-                        name={item.name}
-                        className="h-20 w-20 rounded-xl"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1 text-left">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{item.name}</span>
-                        {item.badges.map((b) => (
-                          <span
-                            key={b}
-                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                            style={{
-                              backgroundColor:
-                                "color-mix(in srgb, var(--brand-accent) 25%, transparent)",
-                            }}
-                          >
-                            {b}
-                          </span>
-                        ))}
-                      </div>
-                      {mode !== "compact" && item.description && (
-                        <p className="mt-1 line-clamp-2 text-sm opacity-60">{item.description}</p>
-                      )}
-                      {!item.isAvailable && (
-                        <p className="mt-1 text-xs font-medium text-red-500">Unavailable</p>
-                      )}
-                    </div>
-                    <span
-                      className="shrink-0 font-semibold"
-                      style={{ color: "var(--brand-primary)" }}
-                    >
-                      {formatRs(item.priceMinor)}
-                    </span>
-                  </>
-                );
-                const shared = `flex w-full items-start justify-between gap-3 p-4 text-sm disabled:opacity-50 ${
-                  mode === "compact" ? "" : `rounded-2xl ${cardClasses(theme.cardStyle)}`
-                }`;
-                const disabled = !item.isAvailable || !branch.isAcceptingOrders;
-                const onClick = () => setOpenItem(item as MenuItemForModal);
-
-                return tilt && mode !== "compact" ? (
-                  <TiltCard key={item.id} className={shared} onClick={onClick} disabled={disabled}>
-                    {inner}
-                  </TiltCard>
-                ) : (
-                  <motion.button
-                    key={item.id}
-                    type="button"
-                    className={shared}
-                    disabled={disabled}
-                    onClick={onClick}
-                    whileHover={reduced ? undefined : { scale: mode === "compact" ? 1 : 1.01 }}
-                    whileTap={reduced ? undefined : { scale: 0.99 }}
-                  >
-                    {inner}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </motion.section>
-        );
-      })}
+      <FloatingCartBar branchId={branch.id} />
 
       {openItem && (
         <ItemModal
@@ -281,6 +331,27 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
           branch={{ id: branch.id, slug: r.slug, name: r.name }}
           onClose={() => setOpenItem(null)}
         />
+      )}
+
+      {conflict && (
+        <Dialog open onOpenChange={(open) => !open && setConflict(null)}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Start a new cart?</DialogTitle>
+              <DialogDescription>
+                Your cart has items from another restaurant. Adding {conflict.name} will clear it.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex gap-2">
+              <Button variant="destructive" onClick={() => quickAdd(conflict, true)}>
+                Clear cart & add
+              </Button>
+              <Button variant="outline" onClick={() => setConflict(null)}>
+                Keep cart
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </main>
   );
