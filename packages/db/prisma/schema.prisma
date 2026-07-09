@@ -528,15 +528,59 @@ model Rider {
   vehicleType        String?
   verificationStatus RiderVerification @default(pending)
   cashLimitMinor     Int               @default(1000000)
+  // Trust score (0–100). Recomputed from delivery outcomes (see riderTrustService).
+  // Gates COD cash handling and shared-offer eligibility. Seeded neutral at 70.
+  trustScore         Int               @default(70)
+  // Onboarding requirements (differ by riderType — see riderVerificationService):
+  //   restaurant rider: phone required, CNIC recommended.
+  //   shared/independent: CNIC + photo + vehicle + plate REQUIRED.
+  vehiclePlate       String?
+  trainingCompleted  Boolean           @default(false)
+  agreementAccepted  Boolean           @default(false)
+  // When true the rider may receive shared/independent dispatch offers. Auto-disabled
+  // when trustScore drops below the shared-eligibility threshold (breach risk).
+  sharedModeEnabled  Boolean           @default(false)
+  verifiedAt         DateTime?         @db.Timestamptz()
+  rejectionReason    String?
+  // Device binding (kickoff auth table, partial): the device id captured at OTP login.
+  // A SIM/device change (new deviceId) should force re-verification — enforcement is a
+  // TODO in the auth flow; this column stores the last-seen binding.
+  boundDeviceId      String?
   createdAt          DateTime          @default(now()) @db.Timestamptz()
 
-  user         User               @relation(fields: [userId], references: [id])
-  restaurant   Restaurant?        @relation(fields: [restaurantId], references: [id])
-  availability RiderAvailability?
-  tasks        DeliveryTask[]
+  user          User                 @relation(fields: [userId], references: [id])
+  restaurant    Restaurant?          @relation(fields: [restaurantId], references: [id])
+  availability  RiderAvailability?
+  tasks         DeliveryTask[]
+  verificationDocs RiderVerificationDoc[]
 
   @@index([restaurantId])
+  @@index([verificationStatus])
   @@map("riders")
+}
+
+enum RiderDocKind {
+  cnic_front
+  cnic_back
+  photo
+  vehicle_registration
+  license
+}
+
+// An uploaded verification document for a rider. Points at a finalized MediaAsset via
+// assetId (same media pipeline as menu/theme/POD images). Reviewed in the admin queue.
+model RiderVerificationDoc {
+  id        String       @id @default(cuid())
+  riderId   String
+  kind      RiderDocKind
+  assetId   String
+  createdAt DateTime     @default(now()) @db.Timestamptz()
+
+  rider Rider      @relation(fields: [riderId], references: [id])
+  asset MediaAsset @relation("RiderDocAsset", fields: [assetId], references: [id])
+
+  @@index([riderId])
+  @@map("rider_verification_docs")
 }
 
 model RiderAvailability {
@@ -835,6 +879,7 @@ model MediaAsset {
   itemImages      MenuItem[]        @relation("ItemImage")
   sourceDocs      MenuSourceDoc[]
   podTasks        DeliveryTask[]    @relation("PodMedia")
+  riderDocs       RiderVerificationDoc[] @relation("RiderDocAsset")
 
   @@map("media_assets")
 }

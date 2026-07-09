@@ -46,12 +46,30 @@ const BranchHoursInput = builder.inputType("BranchHoursInput", {
   }),
 });
 
+builder.prismaObject("RiderVerificationDoc", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    kind: t.exposeString("kind"),
+    createdAt: t.field({ type: "DateTime", resolve: (d) => d.createdAt }),
+    asset: t.relation("asset"),
+  }),
+});
+
 builder.prismaObject("Rider", {
   fields: (t) => ({
     id: t.exposeID("id"),
     riderType: t.exposeString("riderType"),
     verificationStatus: t.exposeString("verificationStatus"),
+    trustScore: t.exposeInt("trustScore"),
+    vehicleType: t.exposeString("vehicleType", { nullable: true }),
+    vehiclePlate: t.exposeString("vehiclePlate", { nullable: true }),
+    trainingCompleted: t.exposeBoolean("trainingCompleted"),
+    agreementAccepted: t.exposeBoolean("agreementAccepted"),
+    sharedModeEnabled: t.exposeBoolean("sharedModeEnabled"),
+    verifiedAt: t.field({ type: "DateTime", nullable: true, resolve: (r) => r.verifiedAt }),
+    rejectionReason: t.exposeString("rejectionReason", { nullable: true }),
     user: t.relation("user"),
+    verificationDocs: t.relation("verificationDocs"),
     isOnline: t.boolean({
       resolve: async (rider) => {
         const a = await prisma.riderAvailability.findUnique({ where: { riderId: rider.id } });

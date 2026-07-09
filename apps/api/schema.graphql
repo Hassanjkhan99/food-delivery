@@ -216,6 +216,7 @@ type Mutation {
   acceptTask(taskId: String!): DeliveryTask!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
+  approveRider(id: String!): Rider!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
@@ -238,8 +239,10 @@ type Mutation {
   publishMenu(branchId: String!): Menu!
   quoteCart(input: QuoteCartInput!): Quote!
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
+  recomputeRiderTrust(id: String!): Rider!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
+  rejectRider(id: String!, reason: String!): Rider!
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
@@ -256,11 +259,13 @@ type Mutation {
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  submitRiderDoc(assetId: String!, kind: String!): RiderVerificationDoc!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
+  updateRiderOnboarding(agreementAccepted: Boolean, trainingCompleted: Boolean, vehiclePlate: String, vehicleType: String): Rider!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
@@ -368,6 +373,7 @@ type PresignResult {
 
 type Query {
   allRestaurants: [Restaurant!]!
+  allRiders: [Rider!]!
   auditLogs(take: Int): [AuditLog!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
@@ -393,6 +399,8 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  riderMissingRequirements(riderId: String!): [String!]!
+  riderVerificationQueue: [Rider!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -485,11 +493,20 @@ type RestaurantTheme {
 }
 
 type Rider {
+  agreementAccepted: Boolean!
   id: ID!
   isOnline: Boolean!
+  rejectionReason: String
   riderType: String!
+  sharedModeEnabled: Boolean!
+  trainingCompleted: Boolean!
+  trustScore: Int!
   user: User!
+  vehiclePlate: String
+  vehicleType: String
+  verificationDocs: [RiderVerificationDoc!]!
   verificationStatus: String!
+  verifiedAt: DateTime
 }
 
 type RiderEarnings {
@@ -527,9 +544,23 @@ type RiderPayoutRow {
 }
 
 type RiderProfile {
+  agreementAccepted: Boolean!
   isOnline: Boolean!
+  missingRequirements: [String!]!
+  rejectionReason: String
   riderId: String!
   riderType: String!
+  sharedModeEnabled: Boolean!
+  trainingCompleted: Boolean!
+  trustScore: Int!
+  verificationStatus: String!
+}
+
+type RiderVerificationDoc {
+  asset: MediaAsset!
+  createdAt: DateTime!
+  id: ID!
+  kind: String!
 }
 
 type RoleBinding {

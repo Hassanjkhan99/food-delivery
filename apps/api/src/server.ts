@@ -6,6 +6,7 @@ import { env } from "./env.js";
 import { buildContext } from "./context.js";
 import { schema } from "./schema/index.js";
 import { startExpirySweeper } from "./jobs/expirePendingOrders.js";
+import { startRiderTrustJob } from "./jobs/recomputeRiderTrust.js";
 
 const yoga = createYoga({
   schema,
@@ -64,3 +65,4 @@ server.listen(env.apiPort, () => {
 });
 
 startExpirySweeper();
+startRiderTrustJob();

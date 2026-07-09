@@ -15,6 +15,7 @@ const RidersQuery = graphql(`
       id
       riderType
       verificationStatus
+      trustScore
       isOnline
       user {
         name
@@ -23,6 +24,12 @@ const RidersQuery = graphql(`
     }
   }
 `);
+
+function verificationVariant(status: string): "default" | "secondary" | "destructive" {
+  if (status === "verified") return "default";
+  if (status === "rejected") return "destructive";
+  return "secondary";
+}
 
 const InviteRiderMutation = graphql(`
   mutation InviteRider($branchId: String!, $phone: String!, $name: String!) {
@@ -61,11 +68,15 @@ export default function RidersPage() {
               <p className="font-medium">{r.user.name ?? "Unnamed rider"}</p>
               <p className="text-xs text-kd-fg-muted">{r.user.phone}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Badge variant={r.isOnline ? "default" : "secondary"}>
                 {r.isOnline ? "Online" : "Offline"}
               </Badge>
               <Badge variant="outline">{r.riderType}</Badge>
+              <Badge variant={verificationVariant(r.verificationStatus)}>
+                {r.verificationStatus}
+              </Badge>
+              <span className="text-xs text-kd-fg-muted">trust {r.trustScore}</span>
             </div>
           </div>
         ))}
