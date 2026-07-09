@@ -19,7 +19,7 @@ export function HomeSkeleton() {
       {/* feed */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="space-y-2 rounded-2xl border border-neutral-200 p-0">
+          <div key={i} className="space-y-2 rounded-2xl border border-kd-border p-0">
             <Skeleton className="h-36 w-full rounded-t-2xl" />
             <div className="space-y-2 p-4">
               <Skeleton className="h-4 w-2/3" />

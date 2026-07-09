@@ -28,11 +28,11 @@ export function AddressChip() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="flex max-w-full items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700 transition-colors hover:bg-neutral-200">
-        <MapPin className="h-4 w-4 shrink-0 text-rose-600" />
-        <span className="text-neutral-500">Deliver to</span>
-        <span className="truncate font-semibold text-neutral-900">{label}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-neutral-400" />
+      <SheetTrigger className="flex max-w-full items-center gap-1.5 rounded-full bg-kd-surface-muted px-3 py-1.5 text-sm text-kd-fg-muted transition-colors hover:bg-kd-border">
+        <MapPin className="h-4 w-4 shrink-0 text-kd-primary" />
+        <span className="text-kd-fg-muted">Deliver to</span>
+        <span className="truncate font-semibold text-kd-fg">{label}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-kd-fg-subtle" />
       </SheetTrigger>
       <SheetContent side="bottom" className="rounded-t-2xl pb-4">
         <SheetHeader>
@@ -47,13 +47,13 @@ export function AddressChip() {
               requestGps();
               setOpen(false);
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-neutral-100"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-kd-surface-muted"
           >
-            <Crosshair className="h-5 w-5 text-rose-600" />
-            <span className="font-medium text-neutral-900">Use my current location</span>
+            <Crosshair className="h-5 w-5 text-kd-primary" />
+            <span className="font-medium text-kd-fg">Use my current location</span>
           </button>
 
-          <div className="pt-1 text-xs font-medium uppercase tracking-wide text-neutral-400">
+          <div className="pt-1 text-xs font-medium uppercase tracking-wide text-kd-fg-subtle">
             Pilot areas
           </div>
           {LOCATION_PRESETS.map((p) => {
@@ -66,17 +66,15 @@ export function AddressChip() {
                   setPreset(p);
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-neutral-100"
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left hover:bg-kd-surface-muted"
               >
                 <span className="flex items-center gap-3">
-                  <MapPin className="h-5 w-5 text-neutral-400" />
-                  <span
-                    className={cn("text-neutral-800", active && "font-semibold text-neutral-900")}
-                  >
+                  <MapPin className="h-5 w-5 text-kd-fg-subtle" />
+                  <span className={cn("text-kd-fg-muted", active && "font-semibold text-kd-fg")}>
                     {p.label}
                   </span>
                 </span>
-                {active && <Check className="h-4 w-4 text-rose-600" />}
+                {active && <Check className="h-4 w-4 text-kd-primary" />}
               </button>
             );
           })}

@@ -64,8 +64,8 @@ function CuisineButton({
         className={cn(
           "flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all",
           selected
-            ? "bg-rose-600 ring-2 ring-rose-600 ring-offset-2"
-            : "bg-neutral-100 hover:bg-neutral-200",
+            ? "bg-kd-primary-soft ring-2 ring-kd-primary ring-offset-2"
+            : "bg-kd-surface-muted hover:bg-kd-border",
         )}
       >
         {emoji}
@@ -73,7 +73,7 @@ function CuisineButton({
       <span
         className={cn(
           "line-clamp-1 text-[11px] leading-tight",
-          selected ? "font-semibold text-rose-600" : "text-neutral-600",
+          selected ? "font-semibold text-kd-primary" : "text-kd-fg-muted",
         )}
       >
         {label}

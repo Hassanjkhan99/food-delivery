@@ -63,6 +63,10 @@
   --color-kd-fg-muted: var(--kd-fg-muted);
   --color-kd-fg-subtle: var(--kd-fg-subtle);
   --color-kd-border: var(--kd-border);
+  --color-kd-warning: var(--kd-warning);
+  --color-kd-warning-soft: var(--kd-warning-soft);
+  --color-kd-danger: var(--kd-danger);
+  --color-kd-danger-soft: var(--kd-danger-soft);
 }
 
 :root {
@@ -114,6 +118,10 @@
   --kd-fg-muted: #78716c;
   --kd-fg-subtle: #a8a29e;
   --kd-border: #e7e5e4;
+  --kd-warning: #d97706;
+  --kd-warning-soft: #fef3c7;
+  --kd-danger: #dc2626;
+  --kd-danger-soft: #fee2e2;
 }
 
 .dark {
@@ -163,6 +171,10 @@
   --kd-fg-muted: #a8a29e;
   --kd-fg-subtle: #78716c;
   --kd-border: #44403c;
+  --kd-warning: #fbbf24;
+  --kd-warning-soft: #451a03;
+  --kd-danger: #f87171;
+  --kd-danger-soft: #450a0a;
 }
 
 @layer base {

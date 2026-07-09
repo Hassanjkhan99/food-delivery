@@ -9,7 +9,7 @@ export function Swimlane({ title, hits }: { title: string; hits: FeedHit[] }) {
   if (hits.length < 2) return null;
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
+      <h2 className="text-lg font-bold text-kd-fg">{title}</h2>
       <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-4">
           {hits.map((hit) => (

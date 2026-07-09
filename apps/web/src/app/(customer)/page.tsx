@@ -197,19 +197,19 @@ export default function HomePage() {
       <div className="space-y-3">
         <AddressChip />
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kd-fg-subtle" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search for restaurants or cuisines…"
-            className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-9 pr-9 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+            className="w-full rounded-xl border border-kd-border bg-kd-surface py-2.5 pl-9 pr-9 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-neutral-400 hover:bg-neutral-100"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
             >
               <X className="h-4 w-4" />
             </button>
@@ -218,7 +218,7 @@ export default function HomePage() {
       </div>
 
       {!online && (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-xl bg-kd-warning-soft px-3 py-2 text-sm text-kd-warning">
           <WifiOff className="h-4 w-4" />
           You&apos;re offline — showing the last loaded restaurants.
         </div>
@@ -229,8 +229,8 @@ export default function HomePage() {
 
       {/* Error */}
       {error && !data && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-sm text-red-700">Couldn&apos;t load restaurants.</p>
+        <div className="rounded-2xl border border-kd-danger-soft bg-kd-danger-soft p-6 text-center">
+          <p className="text-sm text-kd-danger">Couldn&apos;t load restaurants.</p>
           <Button
             variant="outline"
             className="mt-3"
@@ -265,13 +265,13 @@ export default function HomePage() {
             <EmptyState label={loc.label} />
           ) : (
             <section className="space-y-3">
-              <h2 className="text-lg font-bold text-neutral-900">
+              <h2 className="text-lg font-bold text-kd-fg">
                 {filtering
                   ? `${feed.length} result${feed.length === 1 ? "" : "s"}`
                   : "All restaurants"}
               </h2>
               {feed.length === 0 ? (
-                <p className="rounded-xl bg-neutral-100 px-4 py-6 text-center text-sm text-neutral-500">
+                <p className="rounded-xl bg-kd-surface-muted px-4 py-6 text-center text-sm text-kd-fg-muted">
                   Nothing matches that filter. Try another cuisine or search term.
                 </p>
               ) : (
@@ -293,16 +293,14 @@ function EmptyState({ label }: { label: string }) {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center">
+    <div className="rounded-2xl border border-kd-border bg-kd-surface p-8 text-center">
       <div className="text-4xl">🛵</div>
-      <h2 className="mt-3 text-lg font-bold text-neutral-900">
-        No restaurants deliver to {label} yet
-      </h2>
-      <p className="mt-1 text-sm text-neutral-500">
+      <h2 className="mt-3 text-lg font-bold text-kd-fg">No restaurants deliver to {label} yet</h2>
+      <p className="mt-1 text-sm text-kd-fg-muted">
         We&apos;re expanding fast. Leave your email and we&apos;ll tell you when we reach you.
       </p>
       {done ? (
-        <p className="mt-4 text-sm font-medium text-emerald-600">
+        <p className="mt-4 text-sm font-medium text-kd-success">
           Thanks — we&apos;ll be in touch! 🎉
         </p>
       ) : (
@@ -319,7 +317,7 @@ function EmptyState({ label }: { label: string }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@email.com"
-            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+            className="min-w-0 flex-1 rounded-xl border border-kd-border bg-kd-surface px-3 py-2 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
           />
           <Button type="submit">Notify me</Button>
         </form>

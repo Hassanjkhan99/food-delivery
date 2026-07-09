@@ -18,8 +18,8 @@ export function OrderAgainRow({ targets }: { targets: ReorderTarget[] }) {
   if (targets.length === 0) return null;
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-lg font-bold text-neutral-900">
-        <RotateCcw className="h-4 w-4 text-rose-600" />
+      <h2 className="flex items-center gap-2 text-lg font-bold text-kd-fg">
+        <RotateCcw className="h-4 w-4 text-kd-primary" />
         Order it again
       </h2>
       <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -34,11 +34,11 @@ export function OrderAgainRow({ targets }: { targets: ReorderTarget[] }) {
                   className="h-24 w-40 rounded-xl"
                   sizes="160px"
                 />
-                <span className="absolute inset-x-2 bottom-2 rounded-lg bg-white/95 py-1 text-center text-xs font-semibold text-neutral-900 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="absolute inset-x-2 bottom-2 rounded-lg bg-white/95 py-1 text-center text-xs font-semibold text-kd-fg opacity-0 transition-opacity group-hover:opacity-100">
                   Order again
                 </span>
               </div>
-              <p className="mt-1.5 truncate text-sm font-medium text-neutral-900">{t.name}</p>
+              <p className="mt-1.5 truncate text-sm font-medium text-kd-fg">{t.name}</p>
             </Link>
           ))}
         </div>
