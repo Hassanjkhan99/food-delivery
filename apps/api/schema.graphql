@@ -227,6 +227,7 @@ type Mutation {
   finalizeUpload(assetId: String!): MediaAsset!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
+  issueGoodwillCredit(amountMinor: Int!, customerId: String!, reason: String!): Int!
   joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
   logout: Boolean!
   markReady(id: String!): Order!
@@ -257,6 +258,7 @@ type Mutation {
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
+  topUpWallet(amountMinor: Int!, paymentMethodId: String!): Wallet!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
@@ -387,6 +389,7 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
+  myWallet: Wallet!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
@@ -581,4 +584,16 @@ type Waitlist {
   createdAt: DateTime!
   email: String!
   id: ID!
+}
+
+type Wallet {
+  balanceMinor: Int!
+  transactions: [WalletTxn!]!
+}
+
+type WalletTxn {
+  amountMinor: Int!
+  createdAt: DateTime!
+  id: ID!
+  memo: String!
 }

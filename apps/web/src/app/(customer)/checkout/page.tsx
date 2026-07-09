@@ -51,6 +51,9 @@ const CheckoutMethodsQuery = graphql(`
       last4
       isDefault
     }
+    myWallet {
+      balanceMinor
+    }
   }
 `);
 
@@ -67,7 +70,7 @@ export default function CheckoutPage() {
   const [contactPhone, setContactPhone] = useState("+92");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
+  const [paymentMode, setPaymentMode] = useState<"cod" | "card" | "wallet">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
 
   // Saved-address book state. selectedAddressId is null while entering a new
@@ -92,6 +95,7 @@ export default function CheckoutPage() {
 
   const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
+  const walletBalanceMinor = methodsData?.myWallet?.balanceMinor ?? 0;
   // Derived default (no effect needed): explicit selection wins, else default card.
   const paymentMethodId =
     selectedMethodId ?? methods.find((m) => m.isDefault)?.id ?? methods[0]?.id ?? null;
@@ -134,6 +138,9 @@ export default function CheckoutPage() {
 
   const quote = quoteState.data?.quoteCart;
   const quoteError = quoteState.error?.graphQLErrors[0]?.message;
+  // Wallet can't cover this order → block placement and nudge to top up.
+  const walletShort =
+    paymentMode === "wallet" && !!quote && walletBalanceMinor < quote.grandTotalMinor;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -254,7 +261,7 @@ export default function CheckoutPage() {
           <p className="mb-3 text-sm font-semibold">Payment</p>
           <RadioGroup
             value={paymentMode}
-            onValueChange={(v) => setPaymentMode(v as "cod" | "card")}
+            onValueChange={(v) => setPaymentMode(v as "cod" | "card" | "wallet")}
           >
             <Label
               htmlFor="pay-cod"
@@ -264,6 +271,16 @@ export default function CheckoutPage() {
               <span className="text-sm font-medium text-kd-fg">Cash on delivery</span>
             </Label>
             <Label
+              htmlFor="pay-wallet"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
+            >
+              <span className="flex items-center gap-3">
+                <RadioGroupItem id="pay-wallet" value="wallet" />
+                <span className="text-sm font-medium text-kd-fg">Wallet</span>
+              </span>
+              <span className="text-xs text-kd-fg-muted">{formatRs(walletBalanceMinor)}</span>
+            </Label>
+            <Label
               htmlFor="pay-card"
               className="flex cursor-pointer items-center gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
             >
@@ -271,6 +288,15 @@ export default function CheckoutPage() {
               <span className="text-sm font-medium text-kd-fg">Pay now by card</span>
             </Label>
           </RadioGroup>
+          {paymentMode === "wallet" && walletShort && (
+            <p className="mt-3 border-t border-kd-border pt-3 text-xs text-kd-danger">
+              Not enough balance.{" "}
+              <Link href="/wallet" className="underline">
+                Top up your wallet
+              </Link>{" "}
+              or pick another method.
+            </p>
+          )}
           {paymentMode === "card" && (
             <div className="mt-3 space-y-2 border-t border-kd-border pt-3">
               {methods.length === 0 ? (
@@ -362,7 +388,9 @@ export default function CheckoutPage() {
           type="submit"
           size="lg"
           className="w-full"
-          disabled={placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius}
+          disabled={
+            placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius || walletShort
+          }
         >
           {placeState.fetching
             ? "Placing order…"

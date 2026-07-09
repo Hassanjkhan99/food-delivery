@@ -10,6 +10,15 @@ type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 type OrderWithMoney = Order & { payment: Payment | null; branch: { restaurantId: string } };
 
+// Holding account for wallet-paid orders: prepaid balance moves here at placement and
+// only leaves on settlement (to restaurant/platform) or reversal (back to prepaid).
+export const WALLET_HOLDING = "platform:wallet_holding";
+
+/** The customer's spendable wallet balance in minor units (prepaid ledger account). */
+export async function walletBalance(tx: Tx, customerId: string): Promise<number> {
+  return accountBalance(tx, `customer:${customerId}:prepaid`);
+}
+
 export type Leg = {
   code: string;
   ownerType: LedgerOwnerType;
@@ -89,6 +98,25 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
       ],
       { orderId: order.id },
     );
+  } else if (order.paymentMode === "wallet") {
+    // The grand total is sitting in platform:wallet_holding (moved out of the customer's
+    // prepaid balance at placement). Release restaurant share + keep fees — identical to
+    // the card economics, only the source leg differs.
+    await postLedgerTx(
+      tx,
+      `Settlement ${order.code} (wallet)`,
+      [
+        { code: WALLET_HOLDING, ownerType: "platform", debit: order.grandTotalMinor },
+        {
+          code: `restaurant:${restaurantId}:payable`,
+          ownerType: "restaurant",
+          ownerId: restaurantId,
+          credit: restaurantShare,
+        },
+        { code: "platform:revenue", ownerType: "platform", credit: fees },
+      ],
+      { orderId: order.id },
+    );
   } else {
     // COD: cash went to the restaurant; platform books its cut as a receivable.
     await postLedgerTx(
@@ -133,6 +161,41 @@ export async function onOrderMoneyReversal(
       where: { orderId: order.id, status: "pending" },
       data: { status: "failed" },
     });
+    return;
+  }
+
+  if (order.paymentMode === "wallet") {
+    // The grand total is parked in wallet_holding; return it to the customer's prepaid
+    // balance. No provider call — the money never left the platform.
+    if (!order.payment || order.payment.status !== "captured") return;
+    await tx.payment.update({
+      where: { id: order.payment.id },
+      data: { status: "refunded", refundedMinor: order.payment.amountMinor },
+    });
+    const refund = await tx.refund.create({
+      data: {
+        orderId: order.id,
+        status: "refunded",
+        amountMinor: order.payment.amountMinor,
+        destination: "wallet",
+        reason: `Automatic refund — order ${to}`,
+        decidedAt: new Date(),
+      },
+    });
+    await postLedgerTx(
+      tx,
+      `Refund ${order.code} (${to}, wallet)`,
+      [
+        { code: WALLET_HOLDING, ownerType: "platform", debit: order.payment.amountMinor },
+        {
+          code: `customer:${order.customerId}:prepaid`,
+          ownerType: "customer",
+          ownerId: order.customerId,
+          credit: order.payment.amountMinor,
+        },
+      ],
+      { orderId: order.id, refundId: refund.id },
+    );
     return;
   }
 
@@ -194,4 +257,67 @@ export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void
     ],
     { orderId: order.id },
   );
+}
+
+/**
+ * Credit the customer's wallet after a successful card top-up charge. Mirrors an
+ * order charge: real cash enters the platform, the customer's prepaid balance grows.
+ */
+export async function onWalletToppedUp(
+  tx: Tx,
+  customerId: string,
+  amountMinor: number,
+): Promise<void> {
+  await postLedgerTx(tx, `Wallet top-up`, [
+    { code: "platform:cash", ownerType: "platform", debit: amountMinor },
+    {
+      code: `customer:${customerId}:prepaid`,
+      ownerType: "customer",
+      ownerId: customerId,
+      credit: amountMinor,
+    },
+  ]);
+}
+
+/**
+ * Move a wallet-paid order's grand total out of the customer's prepaid balance into
+ * the holding account at placement — settlement/reversal draw from there. Called
+ * inside the placeOrder transaction after the balance check passes.
+ */
+export async function onWalletCharged(tx: Tx, order: OrderWithMoney): Promise<void> {
+  await postLedgerTx(
+    tx,
+    `Wallet charge ${order.code}`,
+    [
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        debit: order.grandTotalMinor,
+      },
+      { code: WALLET_HOLDING, ownerType: "platform", credit: order.grandTotalMinor },
+    ],
+    { orderId: order.id },
+  );
+}
+
+/**
+ * Admin goodwill credit: the platform funds a bounded credit to the customer's wallet
+ * (platform:revenue bears it). Refs left empty — not tied to an order/refund row.
+ */
+export async function onGoodwillCredit(
+  tx: Tx,
+  customerId: string,
+  amountMinor: number,
+  memo: string,
+): Promise<void> {
+  await postLedgerTx(tx, memo, [
+    { code: "platform:revenue", ownerType: "platform", debit: amountMinor },
+    {
+      code: `customer:${customerId}:prepaid`,
+      ownerType: "customer",
+      ownerId: customerId,
+      credit: amountMinor,
+    },
+  ]);
 }

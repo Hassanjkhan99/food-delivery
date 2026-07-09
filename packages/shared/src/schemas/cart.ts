@@ -24,7 +24,7 @@ export const placeOrderInputSchema = quoteInputSchema.extend({
   addressLabel: z.string().max(50).default("Home"),
   contactPhone: z.string().regex(/^\+92\d{10}$/, "Phone must be in +92XXXXXXXXXX format"),
   customerNote: z.string().max(500).optional(),
-  paymentMode: z.enum(["cod", "card"]),
+  paymentMode: z.enum(["cod", "card", "wallet"]),
   paymentMethodId: z.string().optional(),
   // Include cutlery/napkins with the order; defaults to true (opt-out).
   cutleryRequested: z.boolean().default(true),

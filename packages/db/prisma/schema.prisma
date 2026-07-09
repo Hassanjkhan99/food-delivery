@@ -126,6 +126,7 @@ enum DeliveryEventType {
 enum PaymentMode {
   cod
   card
+  wallet
 }
 
 enum PaymentStatus {

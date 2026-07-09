@@ -4,7 +4,7 @@ import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { OrderStatus } from "@fd/shared";
 import { transition } from "../services/orderService.js";
-import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
+import { accountBalance, onGoodwillCredit, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
 import { builder } from "./builder.js";
 
@@ -481,6 +481,41 @@ builder.mutationFields((t) => ({
         }
       }
       return payouts;
+    },
+  }),
+
+  // Bounded, audited goodwill credit to a customer's wallet (platform:revenue funds it).
+  // Returns the customer's new prepaid balance in minor units.
+  issueGoodwillCredit: t.field({
+    type: "Int",
+    authScopes: { admin: true },
+    args: {
+      customerId: t.arg.string({ required: true }),
+      amountMinor: t.arg.int({ required: true }),
+      reason: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      // Bound the credit so a mis-click can't mint an unlimited balance (Rs 1 – Rs 50,000).
+      if (args.amountMinor < 100 || args.amountMinor > 5_000_000) {
+        throw new GraphQLError("Goodwill credit must be between Rs 1 and Rs 50,000");
+      }
+      const customer = await prisma.user.findUnique({ where: { id: args.customerId } });
+      if (!customer) throw new GraphQLError("Customer not found");
+
+      const balance = await prisma.$transaction(async (tx) => {
+        await onGoodwillCredit(
+          tx,
+          args.customerId,
+          args.amountMinor,
+          `Goodwill credit — ${args.reason}`,
+        );
+        return accountBalance(tx, `customer:${args.customerId}:prepaid`);
+      });
+      await audit(ctx.userId, "wallet.goodwill_credit", "User", args.customerId, null, {
+        amountMinor: args.amountMinor,
+        reason: args.reason,
+      });
+      return balance;
     },
   }),
 }));

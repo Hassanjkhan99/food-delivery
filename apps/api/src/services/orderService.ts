@@ -15,7 +15,13 @@ import { publishOrderChanged } from "../pubsub.js";
 import { logger } from "../logger.js";
 import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
-import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import {
+  onCardCharged,
+  onOrderDelivered,
+  onOrderMoneyReversal,
+  onWalletCharged,
+  walletBalance,
+} from "./ledgerService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
@@ -68,6 +74,18 @@ export async function placeOrder(
     });
     if (!method || method.userId !== customerId) throw new GraphQLError("Card not found");
     cardToken = method.providerToken;
+  }
+
+  // Wallet orders debit the prepaid balance at placement. Guard here for a friendly
+  // error before creating anything; the authoritative check is re-run inside the
+  // placement transaction (balance read + debit) so it can't overspend under a race.
+  if (input.paymentMode === "wallet") {
+    const balance = await walletBalance(prisma, customerId);
+    if (balance < quote.grandTotalMinor) {
+      throw new GraphQLError("Insufficient wallet balance", {
+        extensions: { code: "insufficient_wallet_balance" },
+      });
+    }
   }
 
   const code = `FD-${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 36)
@@ -138,6 +156,27 @@ export async function placeOrder(
           actorRole: "customer",
         },
       });
+
+      // Wallet: debit prepaid → holding inside the same transaction as the order create.
+      // Re-read the balance here so two concurrent orders can't both drain a wallet that
+      // only covers one (the serialized ledger writes make the check authoritative).
+      if (input.paymentMode === "wallet") {
+        const balance = await walletBalance(tx, customerId);
+        if (balance < created.grandTotalMinor) {
+          throw new GraphQLError("Insufficient wallet balance", {
+            extensions: { code: "insufficient_wallet_balance" },
+          });
+        }
+        await tx.payment.updateMany({
+          where: { orderId: created.id },
+          data: { status: "captured", capturedAt: new Date() },
+        });
+        const withMoney = await tx.order.findUniqueOrThrow({
+          where: { id: created.id },
+          include: { payment: true, branch: true },
+        });
+        await onWalletCharged(tx, withMoney);
+      }
 
       return created;
     });
