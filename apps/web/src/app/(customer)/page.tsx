@@ -148,12 +148,22 @@ export default function HomePage() {
     return CUISINE_TAGS.filter((c) => present.has(c));
   }, [hits]);
 
-  const filtering = activeCuisine !== null || search.trim().length > 0;
+  // If the selected cuisine is no longer offered nearby (e.g. after a location
+  // change), fall back to "All" by deriving it — never filter on a stale value
+  // that would strand the feed empty and hide the tag from the rail.
+  const effectiveCuisine =
+    activeCuisine && (availableCuisines as readonly string[]).includes(activeCuisine)
+      ? activeCuisine
+      : null;
+
+  const filtering = effectiveCuisine !== null || search.trim().length > 0;
 
   const feed = useMemo(() => {
     const q = search.trim().toLowerCase();
     return hits
-      .filter((h) => (activeCuisine ? h.restaurant.cuisineTags.includes(activeCuisine) : true))
+      .filter((h) =>
+        effectiveCuisine ? h.restaurant.cuisineTags.includes(effectiveCuisine) : true,
+      )
       .filter((h) =>
         q
           ? h.restaurant.name.toLowerCase().includes(q) ||
@@ -161,7 +171,7 @@ export default function HomePage() {
           : true,
       )
       .sort(rank);
-  }, [hits, activeCuisine, search]);
+  }, [hits, effectiveCuisine, search]);
 
   const topRated = useMemo(
     () =>
@@ -173,12 +183,16 @@ export default function HomePage() {
   );
   const freeDelivery = useMemo(() => hits.filter((h) => h.deliveryFeeMinor === 0), [hits]);
 
+  // Only surface reorder targets that actually deliver to the current location —
+  // otherwise the row links to restaurants the server will later reject as
+  // out-of-radius at checkout.
   const reorderTargets: ReorderTarget[] = useMemo(() => {
+    const deliverable = new Set(hits.map((h) => h.restaurant.slug));
     const seen = new Set<string>();
     const out: ReorderTarget[] = [];
     for (const o of reorderData?.myOrders ?? []) {
       const r = o.branch.restaurant;
-      if (seen.has(r.slug)) continue;
+      if (!deliverable.has(r.slug) || seen.has(r.slug)) continue;
       seen.add(r.slug);
       out.push({
         slug: r.slug,
@@ -189,7 +203,7 @@ export default function HomePage() {
       if (out.length >= 5) break;
     }
     return out;
-  }, [reorderData]);
+  }, [reorderData, hits]);
 
   return (
     <main className="space-y-6">
@@ -246,12 +260,13 @@ export default function HomePage() {
           {/* Cuisine rail */}
           <CuisineRail
             cuisines={availableCuisines}
-            active={activeCuisine}
+            active={effectiveCuisine}
             onSelect={setActiveCuisine}
           />
 
-          {/* Rich extras only when not actively filtering/searching */}
-          {!filtering && (
+          {/* Rich extras only when not filtering/searching AND something delivers here —
+              promos/reorder link into restaurants, so they'd dead-end in an empty area. */}
+          {!filtering && hits.length > 0 && (
             <>
               {data.homeBanners.length > 0 && <PromoCarousel banners={data.homeBanners} />}
               <OrderAgainRow targets={reorderTargets} />

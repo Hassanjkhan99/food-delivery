@@ -45,9 +45,14 @@ export function branchOpenState(hours: BranchHours, nowMs: number): OpenState {
   const spansMidnight = closeM <= openM;
   let isOpen = false;
   if (days.includes(day)) {
-    isOpen = spansMidnight ? mins >= openM || mins < closeM : mins >= openM && mins < closeM;
+    // For an overnight window the current day owns ONLY the evening segment
+    // (>= openM). The early-morning segment (< closeM) belongs to the PREVIOUS
+    // day's window and is handled by the spill-over check below — otherwise a
+    // window like {open:22:00, close:02:00, days:[Tue]} would wrongly report open
+    // at 01:00 Tue, before Tuesday's 22:00 opening.
+    isOpen = spansMidnight ? mins >= openM : mins >= openM && mins < closeM;
   }
-  // Early-morning spill-over from the previous day's overnight window.
+  // Early-morning spill-over: the previous day's overnight window is still running.
   if (!isOpen && spansMidnight && days.includes((day + 6) % 7) && mins < closeM) {
     isOpen = true;
   }
