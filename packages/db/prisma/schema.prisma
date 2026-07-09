@@ -331,6 +331,10 @@ model Branch {
   taxProfileId      String
   activeMenuId      String?
   isAcceptingOrders Boolean  @default(true)
+  // Busy mode (#46): extra minutes added to every prep ETA quote/accept default while
+  // the kitchen is slammed, instead of pausing entirely. 0 = normal. Shown to customers
+  // as an adjusted ETA on the quote side and pre-fills the vendor accept sheet.
+  prepBufferMinutes Int      @default(0)
   // Google Places id for this physical location. Enables the venue-photo fallback
   // (tier 2 of the image pipeline, #50) when the restaurant has no uploaded hero.
   // Photo bytes are never stored — see services/placesPhoto.ts (Google ToS).
@@ -450,6 +454,10 @@ model MenuItem {
   description  String?
   priceMinor   Int
   isAvailable  Boolean  @default(true)
+  // Timed 86 (#46): when a vendor marks an item unavailable "until end of day" from the
+  // order board, this records when it should come back so the UI can surface it (and a
+  // future sweep can auto-restock). null = 86'd until manually re-enabled, or available.
+  unavailableUntil DateTime? @db.Timestamptz()
   imageAssetId String?
   badges       String[] @default([])
   sortOrder    Int      @default(0)

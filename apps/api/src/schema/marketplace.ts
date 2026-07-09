@@ -122,6 +122,7 @@ builder.prismaObject("Branch", {
     minOrderMinor: t.exposeInt("minOrderMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     isAcceptingOrders: t.exposeBoolean("isAcceptingOrders"),
+    prepBufferMinutes: t.exposeInt("prepBufferMinutes"),
     hoursJson: t.field({ type: "JSON", nullable: true, resolve: (b) => b.hoursJson }),
     // Structured opening hours (#19), day-sorted then by start time. Empty when the
     // branch still relies on the legacy hoursJson blob (or has no hours at all).
@@ -269,6 +270,13 @@ builder.prismaObject("MenuItem", {
     description: t.exposeString("description", { nullable: true }),
     priceMinor: t.exposeInt("priceMinor"),
     isAvailable: t.exposeBoolean("isAvailable"),
+    // Timed 86 (#46): when this item is scheduled to come back. null when available or
+    // 86'd indefinitely. Informational for the vendor board; not enforced server-side yet.
+    unavailableUntil: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (i) => i.unavailableUntil,
+    }),
     badges: t.exposeStringList("badges"),
     // Image pipeline (#50): uploaded dish photo only. Google Places has no
     // per-dish imagery, so items skip tier 2 — null -> client typography fallback.

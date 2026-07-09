@@ -44,6 +44,7 @@ type Branch {
   opensAtLabel: String
   photo: BranchPhoto
   popularItems(limit: Int): [MenuItem!]!
+  prepBufferMinutes: Int!
   restaurant: Restaurant!
 }
 
@@ -185,6 +186,7 @@ type MenuItem {
   modifierGroups: [ModifierGroup!]!
   name: String!
   priceMinor: Int!
+  unavailableUntil: DateTime
 }
 
 type MenuSourceDoc {
@@ -251,7 +253,8 @@ type Mutation {
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
-  setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  setBusyMode(branchId: String!, bufferMinutes: Int!): Branch!
+  setItemAvailability(available: Boolean!, itemId: String!, until: String): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
@@ -393,6 +396,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  todaySummary(branchId: String!): TodaySummary!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -551,6 +555,13 @@ type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
+}
+
+type TodaySummary {
+  acceptanceSlaPct: Int!
+  orders: Int!
+  revenueMinor: Int!
+  topItems: [AnalyticsTopItem!]!
 }
 
 input UpdateAddressInput {
