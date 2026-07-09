@@ -274,6 +274,11 @@ model Restaurant {
   status    RestaurantStatus @default(pending_approval)
   tier      RestaurantTier   @default(small_business)
   ownerId   String
+  // Curated platform cuisine list (fixed taxonomy, not free-tagging — see
+  // ux-parity-decisions). Drives the home cuisine rail + filtering. Values are
+  // constrained in app code (CUISINE_TAGS in @fd/shared), not by an enum, so the
+  // list can grow without a migration.
+  cuisineTags String[]       @default([])
   createdAt DateTime         @default(now()) @db.Timestamptz()
   updatedAt DateTime         @updatedAt @db.Timestamptz()
 
@@ -351,6 +356,24 @@ model RestaurantTheme {
   heroAsset  MediaAsset? @relation("ThemeHero", fields: [heroAssetId], references: [id])
 
   @@map("restaurant_themes")
+}
+
+// Lightweight admin-managed promo banner for the home carousel (ux-parity #36).
+// Deliberately simple: an image + optional deep link + an active window. Full
+// targeting/segmentation/campaign spend lives in the Campaigns engine (#22).
+model HomeBanner {
+  id        String    @id @default(cuid())
+  title     String
+  imageUrl  String
+  linkHref  String?
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  startsAt  DateTime? @db.Timestamptz()
+  endsAt    DateTime? @db.Timestamptz()
+  createdAt DateTime  @default(now()) @db.Timestamptz()
+  updatedAt DateTime  @updatedAt @db.Timestamptz()
+
+  @@map("home_banners")
 }
 
 // ───────────────────────────── menus ─────────────────────────────

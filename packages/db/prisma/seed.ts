@@ -21,6 +21,7 @@ async function wipe() {
   const tables = [
     "ratings",
     "support_tickets",
+    "home_banners",
     "refunds",
     "cancellations",
     "payments",
@@ -148,6 +149,9 @@ async function main() {
     status?: "approved" | "pending_approval";
     lat: number;
     lng: number;
+    cuisineTags?: string[];
+    deliveryFeeMinor?: number;
+    hoursJson?: Prisma.InputJsonValue;
   }) {
     const r = await prisma.restaurant.create({
       data: {
@@ -156,6 +160,7 @@ async function main() {
         tier: opts.tier,
         ownerId: opts.ownerId,
         status: opts.status ?? "approved",
+        cuisineTags: opts.cuisineTags ?? [],
       },
     });
     const b = await prisma.branch.create({
@@ -167,9 +172,9 @@ async function main() {
         lng: new Prisma.Decimal(opts.lng),
         deliveryRadiusM: 5_000,
         minOrderMinor: 50_000,
-        deliveryFeeMinor: 8_000,
+        deliveryFeeMinor: opts.deliveryFeeMinor ?? 8_000,
         taxProfileId: tax.id,
-        hoursJson: { open: "11:00", close: "23:30", days: [0, 1, 2, 3, 4, 5, 6] },
+        hoursJson: opts.hoursJson ?? { open: "11:00", close: "23:30", days: [0, 1, 2, 3, 4, 5, 6] },
       },
     });
     return { r, b };
@@ -182,6 +187,7 @@ async function main() {
     ownerId: owner1.id,
     lat: 33.5205,
     lng: 73.1005,
+    cuisineTags: ["Biryani", "Desi", "BBQ/Karahi"],
   });
   const gb = await mkRestaurant({
     name: "Green Bowl",
@@ -190,6 +196,8 @@ async function main() {
     ownerId: owner1.id,
     lat: 33.5312,
     lng: 73.0871,
+    cuisineTags: ["Healthy", "Drinks"],
+    deliveryFeeMinor: 0, // free delivery — exercises the free-delivery emphasis + swimlane
   });
   const bt = await mkRestaurant({
     name: "Burger Theory",
@@ -198,6 +206,9 @@ async function main() {
     ownerId: owner2.id,
     lat: 33.5104,
     lng: 73.1152,
+    cuisineTags: ["Burgers", "Pizza", "Desserts"],
+    // Late-night-only hours → closed during daytime, exercises the "Closed — opens" overlay.
+    hoursJson: { open: "02:00", close: "05:00", days: [0, 1, 2, 3, 4, 5, 6] },
   });
   const pending = await mkRestaurant({
     name: "Lajawab Bites",
@@ -207,6 +218,33 @@ async function main() {
     status: "pending_approval",
     lat: 33.5411,
     lng: 73.0968,
+    cuisineTags: ["Desi", "BBQ/Karahi"],
+  });
+
+  // Home promo banners (ux-parity #36) — lightweight demo set. Images are static
+  // SVGs in apps/web/public/banners (no external/Google imagery). Real campaigns
+  // land with #22.
+  await prisma.homeBanner.createMany({
+    data: [
+      {
+        title: "50% off your first order",
+        imageUrl: "/banners/welcome50.svg",
+        linkHref: "/r/karachi-biryani-house",
+        sortOrder: 0,
+      },
+      {
+        title: "Free delivery weekend",
+        imageUrl: "/banners/free-delivery.svg",
+        linkHref: "/r/green-bowl",
+        sortOrder: 1,
+      },
+      {
+        title: "Biryani cravings sorted",
+        imageUrl: "/banners/biryani.svg",
+        linkHref: "/r/karachi-biryani-house",
+        sortOrder: 2,
+      },
+    ],
   });
 
   // Roles
