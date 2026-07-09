@@ -1,6 +1,8 @@
 "use client";
 
 // Active job lifecycle: arrived at pickup -> picked up -> delivered (with COD capture).
+// v2 (#47): navigation handoff per leg, live location pings while active, a bottom-anchored
+// single action per state, and slide-to-confirm on the money step (Delivered).
 import { use, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClient, useMutation, useQuery } from "urql";
@@ -11,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NavButton } from "@/components/rider/nav-buttons";
+import { SlideToConfirm } from "@/components/rider/slide-to-confirm";
+import { useLocationPing } from "@/components/rider/use-location-ping";
 
 const JobQuery = graphql(`
   query RiderJob {
@@ -26,6 +31,8 @@ const JobQuery = graphql(`
         addressSnapshotJson
         branch {
           addressText
+          lat
+          lng
           restaurant {
             name
           }
@@ -70,6 +77,8 @@ const IncidentMutation = graphql(`
   }
 `);
 
+const ACTIVE = ["assigned", "arrived_pickup", "picked_up"];
+
 export default function RiderJobPage({ params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = use(params);
   const router = useRouter();
@@ -91,6 +100,10 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
   const [podPreviewUrl, setPodPreviewUrl] = useState<string | null>(null);
   const [podUploading, setPodUploading] = useState(false);
 
+  const job = data?.myJobs.find((j) => j.id === taskId);
+  // Ping the customer's live map while this job is active (assigned..picked_up).
+  const pingStatus = useLocationPing(!!job && ACTIVE.includes(job.status));
+
   async function handlePodUpload(file: File) {
     setError(null);
     setPodUploading(true);
@@ -105,14 +118,16 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
     }
   }
 
-  const job = data?.myJobs.find((j) => j.id === taskId);
   if (!job) return fetching ? <Skeleton className="h-64 rounded-2xl" /> : <p>Job not found.</p>;
 
-  const addr = job.order.addressSnapshotJson as { text?: string };
+  const addr = job.order.addressSnapshotJson as { text?: string; lat?: number; lng?: number };
+  const branch = job.order.branch;
   const refresh = () => refetch({ requestPolicy: "network-only" });
+  const canDeliver = job.codAmountMinor === 0 || !!codInput;
 
   return (
-    <main className="space-y-4">
+    // pb-28 leaves room for the bottom-anchored action bar so it never covers content.
+    <main className="space-y-4 pb-28">
       <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold">{job.order.code}</h1>
@@ -120,8 +135,8 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         </div>
         <div className="mt-3 space-y-2 text-sm">
           <p>
-            <span className="font-medium">Pickup:</span> {job.order.branch.restaurant.name},{" "}
-            {job.order.branch.addressText}
+            <span className="font-medium">Pickup:</span> {branch.restaurant.name},{" "}
+            {branch.addressText}
           </p>
           <p>
             <span className="font-medium">Drop:</span> {addr?.text ?? "—"}
@@ -136,6 +151,13 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
             <p className="italic text-kd-fg-muted">“{job.order.customerNote}”</p>
           )}
         </div>
+
+        {/* Navigation handoff (#47): one tap opens the platform maps app per leg. */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <NavButton lat={branch.lat} lng={branch.lng} label="Navigate to pickup" />
+          <NavButton lat={addr?.lat} lng={addr?.lng} label="Navigate to drop" />
+        </div>
+
         <ul className="mt-3 rounded-lg bg-kd-surface-muted p-3 text-sm">
           {job.order.items.map((i) => {
             const snap = i.menuSnapshotJson as { name?: string };
@@ -153,34 +175,19 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         )}
       </div>
 
+      {/* Location-ping status: battery note + permission-denied fallback. */}
+      {ACTIVE.includes(job.status) && (
+        <p className="text-xs text-kd-fg-subtle">
+          {pingStatus === "denied"
+            ? "Location permission denied — the customer can’t see you move. Enable location for this site to share your position."
+            : pingStatus === "unavailable"
+              ? "Live location unavailable on this device."
+              : "Sharing your location with the customer every 20s while active (uses a little battery)."}
+        </p>
+      )}
+
       {error && <p className="text-sm text-kd-danger">{error}</p>}
 
-      {job.status === "assigned" && (
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={async () => {
-            await arrived({ taskId });
-            refresh();
-          }}
-        >
-          Arrived at pickup
-        </Button>
-      )}
-      {["assigned", "arrived_pickup"].includes(job.status) && (
-        <Button
-          className="w-full"
-          size="lg"
-          variant={job.status === "assigned" ? "outline" : "default"}
-          onClick={async () => {
-            const r = await pickedUp({ taskId });
-            if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Failed");
-            refresh();
-          }}
-        >
-          Picked up — heading out
-        </Button>
-      )}
       {job.status === "picked_up" && (
         <div className="space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4">
           {job.codAmountMinor > 0 && (
@@ -257,27 +264,6 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
               </Button>
             )}
           </div>
-
-          <Button
-            className="w-full"
-            size="lg"
-            disabled={
-              deliveredState.fetching ||
-              podUploading ||
-              (job.codAmountMinor > 0 && !codInput)
-            }
-            onClick={async () => {
-              const cod = job.codAmountMinor > 0 ? Math.round(Number(codInput) * 100) : 0;
-              const r = await delivered({ taskId, cod, podMediaId: podAssetId });
-              if (r.error) {
-                setError(r.error.graphQLErrors[0]?.message ?? "Failed");
-                return;
-              }
-              router.push("/rider");
-            }}
-          >
-            Mark delivered
-          </Button>
         </div>
       )}
 
@@ -294,6 +280,55 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
       >
         Report a problem
       </Button>
+
+      {/* Bottom-anchored single action per state (#47) — one huge button, never a menu. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-kd-border bg-kd-surface p-4">
+        {job.status === "assigned" && (
+          <Button
+            className="h-14 w-full text-base"
+            onClick={async () => {
+              await arrived({ taskId });
+              refresh();
+            }}
+          >
+            Arrived at pickup
+          </Button>
+        )}
+        {job.status === "arrived_pickup" && (
+          <Button
+            className="h-14 w-full text-base"
+            onClick={async () => {
+              const r = await pickedUp({ taskId });
+              if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Failed");
+              refresh();
+            }}
+          >
+            Picked up — heading out
+          </Button>
+        )}
+        {job.status === "picked_up" && (
+          <SlideToConfirm
+            label={
+              !canDeliver
+                ? "Enter cash collected first"
+                : podUploading
+                  ? "Photo uploading…"
+                  : "Slide to mark delivered"
+            }
+            confirmingLabel="Marking delivered…"
+            disabled={!canDeliver || podUploading || deliveredState.fetching}
+            onConfirm={async () => {
+              const cod = job.codAmountMinor > 0 ? Math.round(Number(codInput) * 100) : 0;
+              const r = await delivered({ taskId, cod, podMediaId: podAssetId });
+              if (r.error) {
+                setError(r.error.graphQLErrors[0]?.message ?? "Failed");
+                return;
+              }
+              router.push("/rider");
+            }}
+          />
+        )}
+      </div>
     </main>
   );
 }

@@ -246,6 +246,7 @@ type Mutation {
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
+  riderPing(lat: Float!, lng: Float!): Boolean!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
@@ -379,6 +380,7 @@ type Query {
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
+  myCashSummary: RiderCashSummary!
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
@@ -492,6 +494,12 @@ type Rider {
   verificationStatus: String!
 }
 
+type RiderCashSummary {
+  cashLimitMinor: Int!
+  deliveriesToday: Int!
+  todayCodCollectedMinor: Int!
+}
+
 type RiderEarnings {
   codCollectedMinor: Int!
   deliveredCount: Int!
@@ -527,6 +535,7 @@ type RiderPayoutRow {
 }
 
 type RiderProfile {
+  cashLimitMinor: Int!
   isOnline: Boolean!
   riderId: String!
   riderType: String!
