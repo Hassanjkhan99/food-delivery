@@ -42,8 +42,19 @@ export async function placeOrder(
   }
 
   const quote = await quoteCart(input);
+  // Pickup skips the radius check entirely (quoteCart already forces inRadius=true).
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
+
+  const isPickup = input.fulfillmentMode === "pickup";
+  // Scheduled orders (#54): validate the slot is in the future. Groundwork only — the
+  // acceptance SLA still starts at placement (see acceptDeadlineAt below); shifting the
+  // 120s window to `scheduledFor − leadTime` and holding the order out of the board's
+  // "New" lane until then is the follow-up that makes scheduling fully functional.
+  const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null;
+  if (scheduledFor && scheduledFor.getTime() <= Date.now()) {
+    throw new GraphQLError("Scheduled time must be in the future");
+  }
 
   // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
   // rejects when isAcceptingOrders is false; here we also honour the opening hours so an
@@ -74,6 +85,11 @@ export async function placeOrder(
     .toString(36)
     .toUpperCase()}`;
 
+  // Short 4-digit code the customer quotes at the counter to collect a pickup order.
+  const pickupCode = isPickup
+    ? String(Math.floor(1000 + Math.random() * 9000))
+    : null;
+
   try {
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -101,6 +117,9 @@ export async function placeOrder(
           cutleryRequested: input.cutleryRequested,
           grandTotalMinor: quote.grandTotalMinor,
           paymentMode: input.paymentMode,
+          fulfillmentMode: input.fulfillmentMode,
+          scheduledFor,
+          pickupCode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
           items: {
             create: quote.lines.map((l) => ({

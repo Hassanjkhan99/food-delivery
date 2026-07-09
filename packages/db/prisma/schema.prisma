@@ -128,6 +128,14 @@ enum PaymentMode {
   card
 }
 
+// How the customer receives the order. `delivery` is the default (rider brings it);
+// `pickup` means the customer collects at the branch — no rider, no delivery fee, a
+// pickup code instead of tracking. See Order.fulfillmentMode (#54).
+enum FulfillmentMode {
+  delivery
+  pickup
+}
+
 enum PaymentStatus {
   pending
   authorized
@@ -578,6 +586,13 @@ model Order {
   grandTotalMinor       Int
   commissionBpsSnapshot Int
   paymentMode           PaymentMode
+  // Fulfillment (#54). `pickup` skips the radius check + delivery fee + rider assignment
+  // and issues `pickupCode` for the customer to quote at the counter. `scheduledFor` is
+  // set when the customer books a future slot (scheduled orders — groundwork; the
+  // acceptance-SLA-from-scheduledFor sweeper change is a follow-up, see orderService).
+  fulfillmentMode       FulfillmentMode @default(delivery)
+  scheduledFor          DateTime?   @db.Timestamptz()
+  pickupCode            String?
   acceptDeadlineAt      DateTime    @db.Timestamptz()
   prepEtaMinutes        Int?
   placedAt              DateTime    @default(now()) @db.Timestamptz()

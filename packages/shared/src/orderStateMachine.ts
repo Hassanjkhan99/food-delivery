@@ -43,6 +43,10 @@ export const TRANSITIONS: Record<OrderStatus, Transition[]> = {
   ready_for_pickup: [
     { to: "rider_assigned", allowedRoles: RESTAURANT },
     { to: "picked_up", allowedRoles: [...RESTAURANT, ...RIDER] },
+    // Pickup orders (#54): the customer collects at the counter, so the branch marks
+    // the order delivered directly — no rider, no delivery leg. Only reachable for
+    // pickup orders (the resolver gates this on fulfillmentMode).
+    { to: "delivered", allowedRoles: RESTAURANT },
   ],
   rider_assigned: [
     { to: "picked_up", allowedRoles: RIDER },

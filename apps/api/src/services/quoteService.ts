@@ -57,7 +57,10 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
     input.deliveryLat,
     input.deliveryLng,
   );
-  const inRadius = distanceM <= branch.deliveryRadiusM;
+  // Pickup (#54): the customer collects at the branch, so the delivery radius never
+  // applies (any distance is fine — they travel to the branch, not the reverse).
+  const isPickup = input.fulfillmentMode === "pickup";
+  const inRadius = isPickup || distanceM <= branch.deliveryRadiusM;
 
   // Resolve items against the ACTIVE menu only (stale carts re-priced or rejected).
   const items = await prisma.menuItem.findMany({
@@ -127,17 +130,20 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   const commission = applyBps(subtotal, commissionBps);
   // Rider tip is added on top of the bill; it isn't taxed or commissioned.
   const tipAmount = input.tipAmount ?? 0;
+  // Pickup has no rider leg, so there's no delivery fee to charge (#54). Founder call:
+  // no separate pickup discount in v1 — the waived delivery fee is the customer win.
+  const deliveryFeeMinor = isPickup ? 0 : branch.deliveryFeeMinor;
 
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
-    deliveryFeeMinor: branch.deliveryFeeMinor,
+    deliveryFeeMinor,
     taxTotalMinor: tax,
     platformFeeMinor: platformFee,
     commissionMinor: commission,
     commissionBps,
     tipAmount,
-    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount,
+    grandTotalMinor: subtotal + tax + deliveryFeeMinor + platformFee + tipAmount,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,

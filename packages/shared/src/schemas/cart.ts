@@ -17,6 +17,9 @@ export const quoteInputSchema = z.object({
   // Optional rider tip in minor units; folded into the grand total. Capped to a sane
   // ceiling so a fat-fingered client can't book an absurd total.
   tipAmount: z.number().int().min(0).max(1_000_000).default(0),
+  // Fulfillment mode (#54). `pickup` zeroes the delivery fee and skips the radius
+  // check; the coordinates are still required (they're used for the distance readout).
+  fulfillmentMode: z.enum(["delivery", "pickup"]).default("delivery"),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({
@@ -28,6 +31,9 @@ export const placeOrderInputSchema = quoteInputSchema.extend({
   paymentMethodId: z.string().optional(),
   // Include cutlery/napkins with the order; defaults to true (opt-out).
   cutleryRequested: z.boolean().default(true),
+  // Optional future slot for scheduled orders (#54). ISO datetime; must be in the
+  // future when provided. Groundwork — the acceptance-SLA rescheduling is a follow-up.
+  scheduledFor: z.string().datetime().optional(),
 });
 
 export type CartLineInput = z.infer<typeof cartLineSchema>;

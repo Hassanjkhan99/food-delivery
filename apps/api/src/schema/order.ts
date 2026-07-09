@@ -24,6 +24,8 @@ const QuoteCartInput = builder.inputType("QuoteCartInput", {
     deliveryLat: t.float({ required: true }),
     deliveryLng: t.float({ required: true }),
     tipAmount: t.int({ required: false }),
+    // "delivery" (default) | "pickup" — pickup zeroes the delivery fee (#54).
+    fulfillmentMode: t.string({ required: false }),
   }),
 });
 
@@ -41,6 +43,9 @@ const PlaceOrderInputType = builder.inputType("PlaceOrderInput", {
     paymentMethodId: t.string({ required: false }),
     tipAmount: t.int({ required: false }),
     cutleryRequested: t.boolean({ required: false }),
+    // Fulfillment (#54): "delivery" (default) | "pickup"; optional future slot ISO string.
+    fulfillmentMode: t.string({ required: false }),
+    scheduledFor: t.string({ required: false }),
   }),
 });
 
@@ -120,6 +125,13 @@ export const OrderType = builder.prismaObject("Order", {
     code: t.exposeString("code"),
     status: t.exposeString("status"),
     paymentMode: t.exposeString("paymentMode"),
+    fulfillmentMode: t.exposeString("fulfillmentMode"),
+    pickupCode: t.exposeString("pickupCode", { nullable: true }),
+    scheduledFor: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (o) => o.scheduledFor,
+    }),
     subtotalMinor: t.exposeInt("subtotalMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
@@ -232,6 +244,7 @@ builder.mutationFields((t) => ({
         quoteInputSchema.parse({
           ...args.input,
           tipAmount: args.input.tipAmount ?? undefined,
+          fulfillmentMode: args.input.fulfillmentMode ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
       ),
@@ -252,6 +265,8 @@ builder.mutationFields((t) => ({
         paymentMethodId: args.input.paymentMethodId ?? undefined,
         tipAmount: args.input.tipAmount ?? undefined,
         cutleryRequested: args.input.cutleryRequested ?? undefined,
+        fulfillmentMode: args.input.fulfillmentMode ?? undefined,
+        scheduledFor: args.input.scheduledFor ?? undefined,
         lines: normalizeLines(args.input.lines),
       });
       return placeOrder(ctx.userId!, input, args.idempotencyKey);

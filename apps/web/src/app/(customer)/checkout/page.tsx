@@ -29,6 +29,7 @@ const QuoteMutation = graphql(`
       minOrderMinor
       meetsMinimum
       inRadius
+      distanceM
     }
   }
 `);
@@ -67,6 +68,10 @@ export default function CheckoutPage() {
   const [contactPhone, setContactPhone] = useState("+92");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fulfillmentMode, setFulfillmentMode] = useState<"delivery" | "pickup">("delivery");
+  // Optional scheduled slot as a datetime-local value ("" = ASAP). Sent to the API as
+  // an ISO string; scheduling is groundwork (see PR notes) but the picker is wired.
+  const [scheduledLocal, setScheduledLocal] = useState("");
   const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
 
@@ -116,10 +121,17 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
-      input: { branchId, lines: cartLines, deliveryLat: loc.lat, deliveryLng: loc.lng, tipAmount },
+      input: {
+        branchId,
+        lines: cartLines,
+        deliveryLat: loc.lat,
+        deliveryLng: loc.lng,
+        tipAmount,
+        fulfillmentMode,
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount]);
+  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount, fulfillmentMode]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -135,13 +147,19 @@ export default function CheckoutPage() {
   const quote = quoteState.data?.quoteCart;
   const quoteError = quoteState.error?.graphQLErrors[0]?.message;
 
+  const isPickup = fulfillmentMode === "pickup";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    // Pickup has no delivery address; the API still requires addressText (min 5), so we
+    // send a clear pickup marker naming the branch instead of a customer address.
+    const submitAddressText = isPickup ? `Pickup at ${branchName ?? "restaurant"}` : addressText;
+
     // Persist a fresh manual entry to the address book before placing the order,
     // if the customer opted in. Best-effort: a save failure shouldn't block checkout.
-    if (!selectedAddressId && saveNewAddress) {
+    if (!isPickup && !selectedAddressId && saveNewAddress) {
       await runSaveAddress({
         input: {
           label: addressText.slice(0, 40) || "Address",
@@ -161,13 +179,15 @@ export default function CheckoutPage() {
         lines: cartLines,
         deliveryLat: loc.lat,
         deliveryLng: loc.lng,
-        addressText,
+        addressText: submitAddressText,
         contactPhone,
         customerNote: note.trim() || undefined,
         paymentMode,
         paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
         tipAmount,
         cutleryRequested,
+        fulfillmentMode,
+        scheduledFor: scheduledLocal ? new Date(scheduledLocal).toISOString() : undefined,
       },
     });
     const order = result.data?.placeOrder;
@@ -191,52 +211,101 @@ export default function CheckoutPage() {
       <p className="mb-6 text-sm text-kd-fg-muted">Ordering from {branchName}</p>
 
       <form onSubmit={submit} className="space-y-4">
-        <AddressSelector
-          selectedId={selectedAddressId}
-          onSelect={selectSavedAddress}
-          onNew={startNewAddress}
-        />
+        {/* Delivery | Pickup toggle (#54). Pickup waives the delivery fee and skips the
+            delivery-address form; the customer collects at the branch with a pickup code. */}
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-kd-border bg-kd-surface p-1">
+          {(["delivery", "pickup"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setFulfillmentMode(mode)}
+              aria-pressed={fulfillmentMode === mode}
+              className={`rounded-lg px-3 py-2 text-sm font-medium capitalize transition ${
+                fulfillmentMode === mode
+                  ? "bg-kd-primary text-kd-primary-fg"
+                  : "text-kd-fg-muted hover:text-kd-fg"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
 
-        {selectedAddressId === null && (
+        {!isPickup ? (
           <>
-            <div>
-              <Label htmlFor="address">Delivery address</Label>
-              <Textarea
-                id="address"
-                required
-                minLength={5}
-                placeholder="House, street, sector, landmark…"
-                value={addressText}
-                onChange={(e) => setAddressText(e.target.value)}
-                rows={2}
-                className="mt-1"
-              />
-              <p className="mt-1 text-xs text-kd-fg-subtle">Delivering near {loc.label}</p>
-            </div>
+            <AddressSelector
+              selectedId={selectedAddressId}
+              onSelect={selectSavedAddress}
+              onNew={startNewAddress}
+            />
 
-            <div>
-              <Label htmlFor="phone">Contact phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                required
-                placeholder="+923001234567"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                className="mt-1"
-              />
-            </div>
+            {selectedAddressId === null && (
+              <>
+                <div>
+                  <Label htmlFor="address">Delivery address</Label>
+                  <Textarea
+                    id="address"
+                    required
+                    minLength={5}
+                    placeholder="House, street, sector, landmark…"
+                    value={addressText}
+                    onChange={(e) => setAddressText(e.target.value)}
+                    rows={2}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-xs text-kd-fg-subtle">Delivering near {loc.label}</p>
+                </div>
 
-            <label className="flex items-center gap-2 text-sm text-kd-fg">
-              <input
-                type="checkbox"
-                checked={saveNewAddress}
-                onChange={(e) => setSaveNewAddress(e.target.checked)}
-              />
-              Save this address for next time
-            </label>
+                <label className="flex items-center gap-2 text-sm text-kd-fg">
+                  <input
+                    type="checkbox"
+                    checked={saveNewAddress}
+                    onChange={(e) => setSaveNewAddress(e.target.checked)}
+                  />
+                  Save this address for next time
+                </label>
+              </>
+            )}
           </>
+        ) : (
+          <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
+            <p className="font-medium text-kd-fg">Pickup at {branchName}</p>
+            <p className="mt-1 text-xs text-kd-fg-muted">
+              No delivery fee. Collect at the counter and quote the pickup code you&apos;ll get
+              after ordering.
+              {quote && quote.distanceM > 0
+                ? ` About ${(quote.distanceM / 1000).toFixed(1)} km away.`
+                : ""}
+            </p>
+          </div>
         )}
+
+        {/* Contact phone is needed for both modes. */}
+        <div>
+          <Label htmlFor="phone">Contact phone</Label>
+          <Input
+            id="phone"
+            type="tel"
+            required
+            placeholder="+923001234567"
+            value={contactPhone}
+            onChange={(e) => setContactPhone(e.target.value)}
+            className="mt-1"
+          />
+        </div>
+
+        {/* Optional scheduled slot (#54, groundwork). Empty = order now (ASAP). */}
+        <div>
+          <Label htmlFor="schedule">Schedule for later (optional)</Label>
+          <Input
+            id="schedule"
+            type="datetime-local"
+            value={scheduledLocal}
+            onChange={(e) => setScheduledLocal(e.target.value)}
+            className="mt-1"
+          />
+          <p className="mt-1 text-xs text-kd-fg-subtle">Leave blank to order now.</p>
+        </div>
 
         <div>
           <Label htmlFor="note">Delivery instructions (optional)</Label>
@@ -322,7 +391,7 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-kd-fg-muted">Delivery fee</span>
-                <span>{formatRs(quote.deliveryFeeMinor)}</span>
+                <span>{isPickup ? "Free (pickup)" : formatRs(quote.deliveryFeeMinor)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-kd-fg-muted">Platform fee</span>
