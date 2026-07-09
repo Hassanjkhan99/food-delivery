@@ -55,24 +55,33 @@ export default function OrdersPage() {
       {data?.myOrders.length === 0 && <p className="text-kd-fg-muted">No orders yet.</p>}
       <div className="space-y-3">
         {data?.myOrders.map((o) => (
-          <Link
+          <div
             key={o.id}
-            href={`/orders/${o.id}`}
-            className="flex items-center justify-between rounded-xl border border-kd-border bg-kd-surface p-4 hover:border-kd-fg-subtle"
+            className="rounded-xl border border-kd-border bg-kd-surface hover:border-kd-fg-subtle"
           >
-            <div>
-              <p className="font-medium text-kd-fg">{o.branch.restaurant.name}</p>
-              <p className="text-xs text-kd-fg-muted">
-                {o.code} · {new Date(o.placedAt as unknown as string).toLocaleString()}
-              </p>
+            <Link href={`/orders/${o.id}`} className="flex items-center justify-between p-4">
+              <div>
+                <p className="font-medium text-kd-fg">{o.branch.restaurant.name}</p>
+                <p className="text-xs text-kd-fg-muted">
+                  {o.code} · {new Date(o.placedAt as unknown as string).toLocaleString()}
+                </p>
+              </div>
+              <div className="text-right">
+                <Badge variant={o.status === "delivered" ? "default" : "secondary"}>
+                  {STATUS_LABEL[o.status] ?? o.status}
+                </Badge>
+                <p className="mt-1 text-sm font-semibold">{formatRs(o.grandTotalMinor)}</p>
+              </div>
+            </Link>
+            <div className="border-t border-kd-border px-4 py-2 text-right">
+              <Link
+                href={`/help/${o.id}`}
+                className="text-xs font-medium text-kd-fg-muted hover:text-kd-fg"
+              >
+                Get help with this order →
+              </Link>
             </div>
-            <div className="text-right">
-              <Badge variant={o.status === "delivered" ? "default" : "secondary"}>
-                {STATUS_LABEL[o.status] ?? o.status}
-              </Badge>
-              <p className="mt-1 text-sm font-semibold">{formatRs(o.grandTotalMinor)}</p>
-            </div>
-          </Link>
+          </div>
         ))}
       </div>
     </main>

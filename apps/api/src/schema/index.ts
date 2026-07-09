@@ -8,6 +8,7 @@ import "./restaurant.js";
 import "./media.js";
 import "./rider.js";
 import "./admin.js";
+import "./help.js";
 import "./subscription.js";
 
 export const schema = builder.toSchema();

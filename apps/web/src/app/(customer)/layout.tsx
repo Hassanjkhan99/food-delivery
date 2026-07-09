@@ -35,6 +35,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             <Link href="/orders" className="text-kd-fg-muted hover:text-kd-fg">
               Orders
             </Link>
+            <Link href="/help" className="hidden text-kd-fg-muted hover:text-kd-fg sm:inline">
+              Help
+            </Link>
             <Link
               href="/cart"
               className="relative flex items-center gap-1 text-kd-fg-muted hover:text-kd-fg"

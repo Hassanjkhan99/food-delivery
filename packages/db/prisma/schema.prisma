@@ -730,7 +730,8 @@ model Refund {
   decidedAt       DateTime?         @db.Timestamptz()
   createdAt       DateTime          @default(now()) @db.Timestamptz()
 
-  order Order @relation(fields: [orderId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id])
+  tickets SupportTicket[]
 
   @@index([orderId])
   @@map("refunds")
@@ -850,11 +851,23 @@ model SupportTicket {
   body           String
   status         TicketStatus @default(open)
   resolutionCode String?
+  // Customer-visible resolution note surfaced on the ticket thread, e.g.
+  // "Refund of Rs 350 approved to your wallet". Written by admin/support on
+  // resolve; null until then. Additive.
+  resolutionNote String?
+  // Structured intake payload for the category (e.g. the ids/names of the order
+  // items a missing/wrong-items complaint is about) so support/admin sees
+  // actionable data and the refund workbench can prefill amounts. Additive.
+  contextJson    Json?
+  // Refund opened by this ticket (missing/wrong items), if any. Lets the customer
+  // see the resolution and the workbench trace it back. Additive.
+  refundId       String?
   createdAt      DateTime     @default(now()) @db.Timestamptz()
   updatedAt      DateTime     @updatedAt @db.Timestamptz()
 
-  customer User   @relation(fields: [customerId], references: [id])
-  order    Order? @relation(fields: [orderId], references: [id])
+  customer User    @relation(fields: [customerId], references: [id])
+  order    Order?  @relation(fields: [orderId], references: [id])
+  refund   Refund? @relation(fields: [refundId], references: [id])
 
   @@index([status])
   @@map("support_tickets")

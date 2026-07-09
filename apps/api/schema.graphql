@@ -135,6 +135,10 @@ type FeeConfig {
   smallBusinessPlatformFeeMinor: Int!
 }
 
+input HelpItemSelectionInput {
+  orderItemId: String!
+}
+
 type HomeBanner {
   id: ID!
   imageUrl: String!
@@ -218,6 +222,7 @@ type Mutation {
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
+  createHelpTicket(category: String!, items: [HelpItemSelectionInput!], note: String, orderId: String!): SupportTicket!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
@@ -393,6 +398,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  ticketsForOrder(orderId: String!): [SupportTicket!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -445,6 +451,7 @@ type Refund {
   order: Order!
   reason: String!
   status: String!
+  tickets: [SupportTicket!]!
 }
 
 type Restaurant {
@@ -551,6 +558,20 @@ type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
+}
+
+type SupportTicket {
+  body: String!
+  category: String!
+  contextJson: JSON
+  createdAt: DateTime!
+  id: ID!
+  order: Order
+  refund: Refund
+  resolutionNote: String
+  status: String!
+  subject: String!
+  updatedAt: DateTime!
 }
 
 input UpdateAddressInput {
