@@ -22,6 +22,7 @@ const DraftQuery = graphql(`
       id
       version
       status
+      layoutJson
       categories {
         id
         name
@@ -74,6 +75,15 @@ const PublishMutation = graphql(`
     }
   }
 `);
+const UpdateLayoutMutation = graphql(`
+  mutation UpdateLayout($branchId: String!, $layoutJson: JSON!) {
+    updateMenuLayout(branchId: $branchId, layoutJson: $layoutJson) {
+      id
+    }
+  }
+`);
+
+const DISPLAY_MODES = ["list", "grid", "compact"] as const;
 
 type ItemDraft = {
   id?: string;
@@ -96,6 +106,7 @@ export default function MenuManagerPage() {
   const [, setAvailability] = useMutation(SetAvailabilityMutation);
   const [, deleteItem] = useMutation(DeleteItemMutation);
   const [publishState, publish] = useMutation(PublishMutation);
+  const [, updateLayout] = useMutation(UpdateLayoutMutation);
 
   const [editing, setEditing] = useState<ItemDraft | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -135,7 +146,10 @@ export default function MenuManagerPage() {
           <h1 className="text-xl font-bold">Menu manager</h1>
           {menu && (
             <p className="text-sm text-neutral-500">
-              Editing draft v{menu.version} — customers see the last published version.
+              Editing draft v{menu.version} — customers see the last published version.{" "}
+              <a href="/restaurant/menu/import" className="underline">
+                Upload your physical menu →
+              </a>
             </p>
           )}
         </div>
@@ -163,15 +177,46 @@ export default function MenuManagerPage() {
         <section key={cat.id} className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">{cat.name}</h2>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() =>
-                setEditing({ categoryId: cat.id, name: "", description: "", priceRs: "" })
-              }
-            >
-              + Add item
-            </Button>
+            <div className="flex items-center gap-2">
+              <select
+                title="How customers see this section"
+                className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
+                value={
+                  ((menu?.layoutJson as { displayModes?: Record<string, string> })?.displayModes?.[
+                    cat.name
+                  ] as string) ?? "list"
+                }
+                onChange={async (e) => {
+                  const current = (menu?.layoutJson ?? {}) as {
+                    categoryOrder?: string[];
+                    displayModes?: Record<string, string>;
+                  };
+                  await updateLayout({
+                    branchId: branch.id,
+                    layoutJson: {
+                      ...current,
+                      displayModes: { ...(current.displayModes ?? {}), [cat.name]: e.target.value },
+                    },
+                  });
+                  refresh();
+                }}
+              >
+                {DISPLAY_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m} view
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() =>
+                  setEditing({ categoryId: cat.id, name: "", description: "", priceRs: "" })
+                }
+              >
+                + Add item
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             {cat.items.map((item) => (

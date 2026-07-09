@@ -34,6 +34,20 @@ input CartLineInput {
   qty: Int!
 }
 
+type CsvImportResult {
+  created: Int!
+  updated: Int!
+}
+
+type CsvPreviewRow {
+  category: String!
+  description: String!
+  error: String
+  line: Int!
+  name: String!
+  priceMinor: Int!
+}
+
 scalar DateTime
 
 scalar JSON
@@ -45,6 +59,13 @@ type LedgerEntry {
   id: ID!
   memo: String!
   txId: String!
+}
+
+type MediaAsset {
+  contentType: String!
+  id: ID!
+  status: String!
+  url: String!
 }
 
 type Menu {
@@ -73,6 +94,14 @@ type MenuItem {
   priceMinor: Int!
 }
 
+type MenuSourceDoc {
+  asset: MediaAsset!
+  createdAt: DateTime!
+  id: ID!
+  kind: String!
+  status: String!
+}
+
 type ModifierGroup {
   id: ID!
   maxSelect: Int!
@@ -94,12 +123,18 @@ type Mutation {
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
   deleteMenuItem(itemId: String!): Boolean!
+  finalizeUpload(assetId: String!): MediaAsset!
+  importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   logout: Boolean!
   markReady(id: String!): Order!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
+  presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
+  previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
   publishMenu(branchId: String!): Menu!
   quoteCart(input: QuoteCartInput!): Quote!
+  rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
+  registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
@@ -107,7 +142,9 @@ type Mutation {
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
+  updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   verifyOtp(code: String!, phone: String!): Viewer!
@@ -189,12 +226,18 @@ input PlaceOrderInput {
   paymentMode: String!
 }
 
+type PresignResult {
+  assetId: String!
+  uploadUrl: String!
+}
+
 type Query {
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
   draftMenu(branchId: String!): Menu!
+  menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
@@ -234,6 +277,13 @@ type QuoteLine {
   unitPriceMinor: Int!
 }
 
+type Rating {
+  comment: String
+  id: ID!
+  stars: Int!
+  tags: [String!]!
+}
+
 type Restaurant {
   avgRating: Float
   branches: [Branch!]!
@@ -252,7 +302,9 @@ type RestaurantTheme {
   cardStyle: String!
   fontKey: String!
   heroEffect: String!
+  heroUrl: String
   id: ID!
+  logoUrl: String
   primaryColor: String!
   textColor: String!
 }

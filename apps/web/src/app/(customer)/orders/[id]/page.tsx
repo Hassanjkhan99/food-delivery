@@ -56,6 +56,15 @@ const CancelMutation = graphql(`
   }
 `);
 
+const RateMutation = graphql(`
+  mutation RateOrder($orderId: String!, $stars: Int!, $comment: String) {
+    rateOrder(orderId: $orderId, stars: $stars, comment: $comment) {
+      id
+      stars
+    }
+  }
+`);
+
 const TIMELINE_LABEL: Record<string, string> = {
   pending_acceptance: "Order placed",
   accepted: "Restaurant accepted",
@@ -102,6 +111,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     requestPolicy: "cache-and-network",
   });
   const [, cancel] = useMutation(CancelMutation);
+  const [rateState, rate] = useMutation(RateMutation);
+  const [stars, setStars] = useState(0);
+  const [rated, setRated] = useState(false);
   const order = data?.order;
 
   // Poll while the order is in-flight (replaced by SSE subscription in M10).
@@ -179,6 +191,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       {address?.text && (
         <p className="mt-4 text-sm text-neutral-500">Delivering to: {address.text}</p>
       )}
+
+      {order.status === "delivered" && !rated && (
+        <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 text-center">
+          <p className="mb-2 text-sm font-medium">How was it?</p>
+          <div className="mb-3 flex justify-center gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} onClick={() => setStars(n)} className="text-2xl" aria-label={`${n} stars`}>
+                {n <= stars ? "★" : "☆"}
+              </button>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            disabled={stars === 0 || rateState.fetching}
+            onClick={async () => {
+              const r = await rate({ orderId: order.id, stars });
+              if (!r.error) setRated(true);
+            }}
+          >
+            Submit rating
+          </Button>
+        </div>
+      )}
+      {rated && <p className="mt-6 text-center text-sm text-neutral-500">Thanks for the feedback! ⭐</p>}
 
       {["pending_acceptance", "accepted"].includes(order.status) && (
         <Button

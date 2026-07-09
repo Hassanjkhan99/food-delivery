@@ -13,6 +13,22 @@ builder.prismaObject("RestaurantTheme", {
     fontKey: t.exposeString("fontKey"),
     cardStyle: t.exposeString("cardStyle"),
     heroEffect: t.exposeString("heroEffect"),
+    logoUrl: t.string({
+      nullable: true,
+      resolve: async (theme) => {
+        if (!theme.logoAssetId) return null;
+        const a = await prisma.mediaAsset.findUnique({ where: { id: theme.logoAssetId } });
+        return a ? (await import("../services/uploads.js")).assetUrl(a.objectKey) : null;
+      },
+    }),
+    heroUrl: t.string({
+      nullable: true,
+      resolve: async (theme) => {
+        if (!theme.heroAssetId) return null;
+        const a = await prisma.mediaAsset.findUnique({ where: { id: theme.heroAssetId } });
+        return a ? (await import("../services/uploads.js")).assetUrl(a.objectKey) : null;
+      },
+    }),
   }),
 });
 
