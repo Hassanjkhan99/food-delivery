@@ -1,0 +1,4 @@
+{
+  "extends": "@fd/config/tsconfig.base.json",
+  "include": ["src", "prisma"]
+}

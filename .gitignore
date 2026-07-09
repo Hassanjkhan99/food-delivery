@@ -1,0 +1,13 @@
+node_modules/
+.next/
+dist/
+.turbo/
+.pgdata/
+.storage/
+.env
+.env.local
+*.tsbuildinfo
+src/generated/
+apps/web/src/graphql/generated/
+coverage/
+.DS_Store

@@ -1,0 +1,27 @@
+{
+  "name": "food-delivery",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "codegen": "turbo codegen",
+    "db": "node scripts/db-dev.mjs",
+    "db:migrate": "pnpm --filter @fd/db migrate",
+    "db:seed": "pnpm --filter @fd/db seed",
+    "db:studio": "pnpm --filter @fd/db studio",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17",
+    "pg": "^8.16.0",
+    "prettier": "^3.6.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.9.0"
+  }
+}

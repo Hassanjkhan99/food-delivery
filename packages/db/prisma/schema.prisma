@@ -1,0 +1,23 @@
+// Food Delivery — schema. M0 placeholder; the full domain model lands in M1.
+// Conventions: cuid() string PKs, timestamptz via @db.Timestamptz, money as Int minor units (paisa),
+// append-only tables (OrderEvent, LedgerEntry, AuditLog) have no update/delete paths in app code.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  email     String?
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  updatedAt DateTime @updatedAt @db.Timestamptz()
+
+  @@map("users")
+}

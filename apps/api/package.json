@@ -1,0 +1,33 @@
+{
+  "name": "@fd/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "codegen": "tsx scripts/print-schema.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@fd/db": "workspace:*",
+    "@fd/shared": "workspace:*",
+    "@pothos/core": "^4.10.0",
+    "@pothos/plugin-prisma": "^4.13.0",
+    "@pothos/plugin-scope-auth": "^4.1.0",
+    "dotenv": "^17.0.0",
+    "graphql": "^16.11.0",
+    "graphql-yoga": "^5.16.0",
+    "jose": "^6.0.0",
+    "pino": "^9.13.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@fd/config": "workspace:*",
+    "@types/node": "^22",
+    "eslint": "^9",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
