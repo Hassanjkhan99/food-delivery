@@ -22,6 +22,7 @@ const JobQuery = graphql(`
         id
         code
         contactPhone
+        customerName
         customerNote
         addressSnapshotJson
         branch {
@@ -128,6 +129,7 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
           </p>
           <p>
             <span className="font-medium">Customer:</span>{" "}
+            {job.order.customerName ? `${job.order.customerName} · ` : ""}
             <a href={`tel:${job.order.contactPhone}`} className="underline">
               {job.order.contactPhone}
             </a>

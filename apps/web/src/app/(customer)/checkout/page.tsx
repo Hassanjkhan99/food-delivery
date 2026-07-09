@@ -54,6 +54,27 @@ const CheckoutMethodsQuery = graphql(`
   }
 `);
 
+// Viewer's saved name drives the lazy "who should the rider ask for?" capture.
+const CheckoutViewerQuery = graphql(`
+  query CheckoutViewer {
+    viewer {
+      user {
+        id
+        name
+      }
+    }
+  }
+`);
+
+const UpdateProfileMutation = graphql(`
+  mutation CheckoutUpdateProfile($name: String!) {
+    updateProfile(name: $name) {
+      id
+      name
+    }
+  }
+`);
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { branchId, branchName, lines, clear } = useCart();
@@ -92,6 +113,13 @@ export default function CheckoutPage() {
 
   const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
+
+  // Lazy name capture: prompt only when the signed-in user has no saved name.
+  const [{ data: viewerData }] = useQuery({ query: CheckoutViewerQuery });
+  const savedName = viewerData?.viewer?.user?.name ?? null;
+  const needsName = viewerData?.viewer != null && !savedName;
+  const [customerName, setCustomerName] = useState("");
+  const [, runUpdateProfile] = useMutation(UpdateProfileMutation);
   // Derived default (no effect needed): explicit selection wins, else default card.
   const paymentMethodId =
     selectedMethodId ?? methods.find((m) => m.isDefault)?.id ?? methods[0]?.id ?? null;
@@ -138,6 +166,12 @@ export default function CheckoutPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Lazily persist the customer's name (kills the "Unnamed" problem on the
+    // vendor board + rider card). Best-effort: don't block checkout on failure.
+    if (needsName && customerName.trim()) {
+      await runUpdateProfile({ name: customerName.trim() });
+    }
 
     // Persist a fresh manual entry to the address book before placing the order,
     // if the customer opted in. Best-effort: a save failure shouldn't block checkout.
@@ -191,6 +225,23 @@ export default function CheckoutPage() {
       <p className="mb-6 text-sm text-kd-fg-muted">Ordering from {branchName}</p>
 
       <form onSubmit={submit} className="space-y-4">
+        {needsName && (
+          <div>
+            <Label htmlFor="customer-name">Who should the rider ask for?</Label>
+            <Input
+              id="customer-name"
+              required
+              placeholder="Your name"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-kd-fg-subtle">
+              We&apos;ll show this to the restaurant and your rider.
+            </p>
+          </div>
+        )}
+
         <AddressSelector
           selectedId={selectedAddressId}
           onSelect={selectSavedAddress}

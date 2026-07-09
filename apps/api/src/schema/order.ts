@@ -128,6 +128,18 @@ export const OrderType = builder.prismaObject("Order", {
     cutleryRequested: t.exposeBoolean("cutleryRequested"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     contactPhone: t.exposeString("contactPhone"),
+    // Customer's saved name — shown on the vendor board and rider card so staff
+    // and riders have someone to ask for. Null until captured at first checkout.
+    customerName: t.string({
+      nullable: true,
+      resolve: async (order) => {
+        const customer = await prisma.user.findUnique({
+          where: { id: order.customerId },
+          select: { name: true },
+        });
+        return customer?.name ?? null;
+      },
+    }),
     customerNote: t.exposeString("customerNote", { nullable: true }),
     addressSnapshotJson: t.field({ type: "JSON", resolve: (o) => o.addressSnapshotJson }),
     acceptDeadlineAt: t.field({ type: "DateTime", resolve: (o) => o.acceptDeadlineAt }),
