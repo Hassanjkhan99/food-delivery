@@ -10,7 +10,7 @@ import { AddressChip } from "@/components/home/AddressChip";
 import { CuisineRail } from "@/components/home/CuisineRail";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { OrderAgainRow, type ReorderTarget } from "@/components/home/OrderAgainRow";
-import { RestaurantCard } from "@/components/home/RestaurantCard";
+import { RestaurantCard, RestaurantMiniCard } from "@/components/home/RestaurantCard";
 import { Swimlane } from "@/components/home/Swimlane";
 import { HomeSkeleton } from "@/components/home/HomeSkeleton";
 import { useOnlineStatus, useScrollRestoration } from "@/components/home/hooks";
@@ -24,6 +24,14 @@ const HomeQuery = graphql(`
       title
       imageUrl
       linkHref
+    }
+    featuredBranches {
+      campaignId
+      label
+      slaCapped
+      branch {
+        id
+      }
     }
     browseBranches(lat: $lat, lng: $lng) {
       distanceM
@@ -48,6 +56,7 @@ const HomeQuery = graphql(`
           avgRating
           ratingCount
           cuisineTags
+          dealBadge
           theme {
             primaryColor
           }
@@ -147,10 +156,25 @@ export default function HomePage() {
           ratingCount: h.branch.restaurant.ratingCount,
           cuisineTags: h.branch.restaurant.cuisineTags ?? [],
           primaryColor: h.branch.restaurant.theme?.primaryColor ?? null,
+          dealBadge: h.branch.restaurant.dealBadge ?? null,
         },
       })),
     [data],
   );
+
+  // Promoted rail (#22): active featured-slot placements, ordered by the server (spend,
+  // SLA-capped last) and resolved against the deliverable feed so we never link to a
+  // branch that doesn't reach this location.
+  const promoted = useMemo(() => {
+    const byBranch = new Map(hits.map((h) => [h.branchId, h]));
+    const out: FeedHit[] = [];
+    for (const f of data?.featuredBranches ?? []) {
+      const hit = byBranch.get(f.branch.id);
+      if (!hit) continue;
+      out.push({ ...hit, promoted: true, restaurant: { ...hit.restaurant, dealBadge: f.label ?? hit.restaurant.dealBadge } });
+    }
+    return out;
+  }, [data, hits]);
 
   // Cuisines present in the feed, ordered by the platform taxonomy.
   const availableCuisines = useMemo(() => {
@@ -281,6 +305,18 @@ export default function HomePage() {
             <>
               {data.homeBanners.length > 0 && <PromoCarousel banners={data.homeBanners} />}
               <OrderAgainRow targets={reorderTargets} />
+              {promoted.length > 0 && (
+                <section className="space-y-3">
+                  <h2 className="text-lg font-bold text-kd-fg">Promoted</h2>
+                  <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex gap-4">
+                      {promoted.map((hit) => (
+                        <RestaurantMiniCard key={hit.branchId} hit={hit} />
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )}
               <Swimlane title="Top rated near you" hits={topRated} />
               <Swimlane title="Free delivery" hits={freeDelivery} />
             </>
