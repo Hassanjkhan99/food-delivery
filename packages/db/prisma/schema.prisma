@@ -184,6 +184,14 @@ enum CampaignType {
   deal_badge
 }
 
+// In-app notification/offers inbox (#56). `transactional` covers order lifecycle
+// updates (always delivered, never opt-outable); `promo` covers admin-composed
+// marketing blasts (suppressed when User.marketingOptOut is set).
+enum NotificationKind {
+  transactional
+  promo
+}
+
 enum CampaignStatus {
   draft
   pending_approval
@@ -199,6 +207,9 @@ model User {
   phone     String   @unique
   name      String?
   email     String?
+  // Marketing opt-out (#56). When true, promo inbox entries are suppressed for this
+  // user; transactional order updates are always delivered regardless.
+  marketingOptOut Boolean @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz()
   updatedAt DateTime @updatedAt @db.Timestamptz()
 
@@ -211,6 +222,7 @@ model User {
   ownedRestaurants Restaurant[]        @relation("RestaurantOwner")
   tickets          SupportTicket[]
   pushSubs         PushSubscription[]
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -924,6 +936,34 @@ model Campaign {
 
   @@index([restaurantId])
   @@map("campaigns")
+}
+
+// In-app notification / offers inbox (#56). One row per customer-visible message:
+// order-lifecycle updates (transactional, deep-link to the order) and admin promo
+// blasts (promo, deep-link to a restaurant/voucher). Read state is per-row (readAt).
+// This is the in-app companion to the #13 delivery pipeline (WhatsApp/push/SMS);
+// rows here are what the bell + inbox render after the fact.
+model Notification {
+  id           String           @id @default(cuid())
+  userId       String
+  kind         NotificationKind @default(transactional)
+  title        String
+  body         String
+  // Client-side deep link (e.g. /orders/{id} or /r/{slug}). Optional; the inbox
+  // renders a plain entry when absent.
+  linkHref     String?
+  // Soft references for context/filtering. Not FKs so a row can outlive the subject
+  // and creation stays non-fatal even if the id is stale.
+  orderId      String?
+  restaurantId String?
+  readAt       DateTime?        @db.Timestamptz()
+  createdAt    DateTime         @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("notifications")
 }
 
 // Delivery-area waitlist (#64): captures "notify me" sign-ups from areas we don't

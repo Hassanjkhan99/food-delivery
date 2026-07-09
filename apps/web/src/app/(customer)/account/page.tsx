@@ -17,6 +17,7 @@ const AccountViewerQuery = graphql(`
         id
         name
         phone
+        marketingOptOut
       }
     }
   }
@@ -28,11 +29,22 @@ const LogoutMutation = graphql(`
   }
 `);
 
+const SetMarketingOptOutMutation = graphql(`
+  mutation SetMarketingOptOut($optOut: Boolean!) {
+    setMarketingOptOut(optOut: $optOut) {
+      id
+      marketingOptOut
+    }
+  }
+`);
+
 export default function AccountPage() {
   const router = useRouter();
   const [{ data }] = useQuery({ query: AccountViewerQuery, requestPolicy: "network-only" });
   const [, logout] = useMutation(LogoutMutation);
+  const [, setMarketingOptOut] = useMutation(SetMarketingOptOutMutation);
   const viewer = data?.viewer;
+  const optedOut = viewer?.user?.marketingOptOut ?? false;
 
   if (!viewer) {
     return (
@@ -55,6 +67,24 @@ export default function AccountPage() {
           Roles: {viewer.roles?.map((r) => r?.role).join(", ") || "customer"}
         </p>
       </div>
+
+      <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-kd-border bg-kd-surface p-4">
+        <div className="text-sm">
+          <p className="font-medium text-kd-fg">Marketing notifications</p>
+          <p className="mt-0.5 text-xs text-kd-fg-muted">
+            Promotional offers in your inbox. Order updates are always sent.
+          </p>
+        </div>
+        <Button
+          variant={optedOut ? "outline" : "default"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setMarketingOptOut({ optOut: !optedOut })}
+        >
+          {optedOut ? "Opted out" : "On"}
+        </Button>
+      </div>
+
       <Button
         variant="outline"
         className="mt-6 w-full"

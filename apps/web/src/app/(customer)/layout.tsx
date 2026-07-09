@@ -5,6 +5,7 @@ import { useQuery } from "urql";
 import { ShoppingBag, User } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -47,13 +48,16 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               )}
             </Link>
             {viewer ? (
-              <Link
-                href="/account"
-                className="flex items-center gap-1 text-kd-fg-muted hover:text-kd-fg"
-              >
-                <User className="h-5 w-5" />
-                <span className="hidden sm:inline">{viewer.user?.name ?? "Account"}</span>
-              </Link>
+              <>
+                <NotificationBell />
+                <Link
+                  href="/account"
+                  className="flex items-center gap-1 text-kd-fg-muted hover:text-kd-fg"
+                >
+                  <User className="h-5 w-5" />
+                  <span className="hidden sm:inline">{viewer.user?.name ?? "Account"}</span>
+                </Link>
+              </>
             ) : (
               <Link
                 href="/login"
