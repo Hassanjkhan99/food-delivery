@@ -12,6 +12,7 @@ export type FeedHit = {
   branchId: string;
   distanceM: number;
   etaMinutes: number;
+  priceBand: number;
   minOrderMinor: number;
   deliveryFeeMinor: number;
   isAcceptingOrders: boolean;
