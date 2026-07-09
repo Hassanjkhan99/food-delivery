@@ -221,6 +221,18 @@ async function main() {
     cuisineTags: ["Desi", "BBQ/Karahi"],
   });
 
+  // Structured opening hours (#19) for one branch, exercising the BranchHours model
+  // path (the rest keep the legacy hoursJson fallback). These mirror KBH's hoursJson
+  // window (11:00–23:30 daily = minutes 660–1410) so open/closed results are identical.
+  await prisma.branchHours.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      branchId: kbh.b.id,
+      dayOfWeek,
+      openMinute: 11 * 60,
+      closeMinute: 23 * 60 + 30,
+    })),
+  });
+
   // Home promo banners (ux-parity #36) — lightweight demo set. Images are static
   // SVGs in apps/web/public/banners (no external/Google imagery). Real campaigns
   // land with #22.

@@ -1,8 +1,9 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
-import { branchOpenState, haversineMeters } from "@fd/shared";
+import { haversineMeters } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
+import { branchOpenNow } from "../services/branchHours.js";
 import { builder } from "./builder.js";
 
 builder.prismaObject("RestaurantTheme", {
@@ -122,14 +123,20 @@ builder.prismaObject("Branch", {
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     isAcceptingOrders: t.exposeBoolean("isAcceptingOrders"),
     hoursJson: t.field({ type: "JSON", nullable: true, resolve: (b) => b.hoursJson }),
-    // Server-computed open/closed state from hoursJson (evaluated in PKT). The home
-    // feed shows a "Closed — opens HH:MM" overlay instead of hiding closed branches.
+    // Structured opening hours (#19), day-sorted then by start time. Empty when the
+    // branch still relies on the legacy hoursJson blob (or has no hours at all).
+    hours: t.relation("hours", {
+      query: { orderBy: [{ dayOfWeek: "asc" }, { openMinute: "asc" }] },
+    }),
+    // Server-computed open/closed state (evaluated in PKT). Prefers the structured
+    // BranchHours rows and falls back to hoursJson (#19/#63). The home feed shows a
+    // "Closed — opens HH:MM" overlay instead of hiding closed branches.
     isOpenNow: t.boolean({
-      resolve: (b) => branchOpenState(b.hoursJson as never, Date.now()).isOpen,
+      resolve: (b) => branchOpenNow(b).then((s) => s.isOpen),
     }),
     opensAtLabel: t.string({
       nullable: true,
-      resolve: (b) => branchOpenState(b.hoursJson as never, Date.now()).opensAtLabel,
+      resolve: (b) => branchOpenNow(b).then((s) => s.opensAtLabel),
     }),
     restaurant: t.relation("restaurant"),
     // Image pipeline (#50): uploaded restaurant hero -> Google Places venue photo
@@ -224,6 +231,15 @@ builder.prismaObject("Branch", {
   }),
 });
 
+builder.prismaObject("BranchHours", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    dayOfWeek: t.exposeInt("dayOfWeek"),
+    openMinute: t.exposeInt("openMinute"),
+    closeMinute: t.exposeInt("closeMinute"),
+  }),
+});
+
 builder.prismaObject("Menu", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -284,6 +300,8 @@ const ModifierGroupType = builder.prismaObject("ModifierGroup", {
     name: t.exposeString("name"),
     minSelect: t.exposeInt("minSelect"),
     maxSelect: t.exposeInt("maxSelect"),
+    // Derived (no column): a group the customer must choose from at least once.
+    required: t.boolean({ resolve: (g) => g.minSelect >= 1 }),
     // prismaField (not t.relation): parents of this type are sometimes loaded manually
     // (MenuItem.modifierGroups), where relation include-propagation can't apply.
     options: t.prismaField({

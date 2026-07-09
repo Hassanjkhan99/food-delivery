@@ -6,15 +6,14 @@ import { prisma, type Order } from "@fd/db";
 import {
   ACCEPTANCE_SLA_SECONDS,
   assertTransition,
-  branchOpenState,
   type ActorRole,
-  type BranchHours,
   type OrderStatus,
   type PlaceOrderInput,
 } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { publishOrderChanged } from "../pubsub.js";
 import { logger } from "../logger.js";
+import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
 import { mockProvider } from "./payments/mockProvider.js";
@@ -47,13 +46,14 @@ export async function placeOrder(
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
 
   // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
-  // rejects when isAcceptingOrders is false; here we also honour the published hours so
-  // an order can't be placed after close. Uses a stable error code the client maps to a
-  // friendly "closed" message. TODO(slice 2): once an hours *model* replaces hoursJson,
-  // switch branchOpenState to read it — the code/behaviour below stays the same.
+  // rejects when isAcceptingOrders is false; here we also honour the opening hours so an
+  // order can't be placed after close. branchOpenNow reads the structured BranchHours
+  // model (#19) and falls back to the legacy hoursJson. Uses a stable error code the
+  // client maps to a friendly "closed" message.
   const branch = await prisma.branch.findUnique({ where: { id: quote.branchId } });
   if (!branch) throw new GraphQLError("Restaurant not available");
-  if (!branch.isAcceptingOrders || !branchOpenState(branch.hoursJson as BranchHours, Date.now()).isOpen) {
+  const openNow = (await branchOpenNow(branch)).isOpen;
+  if (!branch.isAcceptingOrders || !openNow) {
     throw new GraphQLError("This restaurant is currently closed", {
       extensions: { code: "branch_closed" },
     });

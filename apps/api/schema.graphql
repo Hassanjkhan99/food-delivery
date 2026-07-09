@@ -10,6 +10,12 @@ type Address {
   text: String!
 }
 
+type AnalyticsTopItem {
+  name: String!
+  qty: Int!
+  revenueMinor: Int!
+}
+
 type AuditLog {
   action: String!
   actorRole: String
@@ -26,6 +32,7 @@ type Branch {
   addressText: String!
   deliveryFeeMinor: Int!
   deliveryRadiusM: Int!
+  hours: [BranchHours!]!
   hoursJson: JSON
   id: ID!
   isAcceptingOrders: Boolean!
@@ -38,6 +45,19 @@ type Branch {
   photo: BranchPhoto
   popularItems(limit: Int): [MenuItem!]!
   restaurant: Restaurant!
+}
+
+type BranchHours {
+  closeMinute: Int!
+  dayOfWeek: Int!
+  id: ID!
+  openMinute: Int!
+}
+
+input BranchHoursInput {
+  closeMinute: Int!
+  dayOfWeek: Int!
+  openMinute: Int!
 }
 
 type BranchPhoto {
@@ -177,6 +197,7 @@ type ModifierGroup {
   minSelect: Int!
   name: String!
   options: [ModifierOption!]!
+  required: Boolean!
 }
 
 type ModifierOption {
@@ -195,6 +216,8 @@ type Mutation {
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   deleteAddress(id: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
+  deleteModifierGroup(id: String!): Boolean!
+  deleteModifierOption(id: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
@@ -220,7 +243,9 @@ type Mutation {
   saveAddress(input: SaveAddressInput!): Address!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
+  setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
@@ -232,6 +257,8 @@ type Mutation {
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
+  upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
+  upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
 }
 
@@ -355,6 +382,7 @@ type Query {
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
   refundQueue: [Refund!]!
+  restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
@@ -423,6 +451,15 @@ type Restaurant {
   status: String!
   theme: RestaurantTheme
   tier: String!
+}
+
+type RestaurantAnalytics {
+  avgOrderValueMinor: Int!
+  ordersByDayOfWeek: [Int!]!
+  ordersByHour: [Int!]!
+  topItems: [AnalyticsTopItem!]!
+  totalOrders: Int!
+  totalRevenueMinor: Int!
 }
 
 type RestaurantTheme {

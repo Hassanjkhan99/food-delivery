@@ -335,9 +335,30 @@ model Branch {
   menus      Menu[]
   orders     Order[]
   sourceDocs MenuSourceDoc[]
+  hours      BranchHours[]
 
   @@index([restaurantId])
   @@map("branches")
+}
+
+// Structured per-day opening hours (#19). Supersedes the ad-hoc Branch.hoursJson blob:
+// one row per open window per day (a day may have several, e.g. a lunch + dinner split).
+// dayOfWeek is a JS weekday (0 = Sunday … 6 = Saturday); minutes are since-midnight in
+// PKT (UTC+5, no DST) to match branchHoursOpenState. A window with closeMinute <= openMinute
+// spans midnight and spills into the next calendar day. A branch with NO rows is treated
+// as always open (isOpenNow falls back to hoursJson, then to "open"). setBranchHours
+// replaces the whole set transactionally, so there is no update/delete path for a single row.
+model BranchHours {
+  id          String @id @default(cuid())
+  branchId    String
+  dayOfWeek   Int
+  openMinute  Int
+  closeMinute Int
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@map("branch_hours")
 }
 
 model RestaurantTheme {
