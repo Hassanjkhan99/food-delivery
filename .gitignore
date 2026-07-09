@@ -7,7 +7,7 @@ dist/
 .env
 .env.local
 *.tsbuildinfo
-src/generated/
-apps/web/src/graphql/generated/
+**/src/generated/
+**/src/graphql/generated/
 coverage/
 .DS_Store
