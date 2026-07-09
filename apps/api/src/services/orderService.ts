@@ -104,12 +104,23 @@ export async function placeOrder(
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
           items: {
             create: quote.lines.map((l) => ({
-              menuSnapshotJson: {
-                menuItemId: l.menuItemId,
-                name: l.name,
-                unitPriceMinor: l.unitPriceMinor,
-                modifiers: l.modifiers,
-              },
+              // Freeze the line. For a combo (#53) we also freeze the component list so
+              // the order never depends on the live combo/menu; kind distinguishes them.
+              menuSnapshotJson: l.comboId
+                ? {
+                    kind: "combo",
+                    comboId: l.comboId,
+                    name: l.name,
+                    unitPriceMinor: l.unitPriceMinor,
+                    components: l.comboComponents,
+                  }
+                : {
+                    kind: "item",
+                    menuItemId: l.menuItemId,
+                    name: l.name,
+                    unitPriceMinor: l.unitPriceMinor,
+                    modifiers: l.modifiers,
+                  },
               qty: l.qty,
               unitPriceMinor: l.unitPriceMinor,
               lineTotalMinor: l.lineTotalMinor,

@@ -249,6 +249,11 @@ builder.prismaObject("Menu", {
     categories: t.relation("categories", {
       query: { orderBy: { sortOrder: "asc" } },
     }),
+    // Combos / meal deals (#53), available ones first, then by sort order. The client
+    // aggregates these + discounted items into a "Deals" section at the top of the menu.
+    combos: t.relation("combos", {
+      query: { orderBy: [{ isAvailable: "desc" }, { sortOrder: "asc" }] },
+    }),
   }),
 });
 
@@ -268,6 +273,16 @@ builder.prismaObject("MenuItem", {
     name: t.exposeString("name"),
     description: t.exposeString("description", { nullable: true }),
     priceMinor: t.exposeInt("priceMinor"),
+    // Item-level offer (#53): the "was" price. The client strikes it through and shows a
+    // "% off" badge; priceMinor stays the charged price. Only meaningful when strictly
+    // greater than priceMinor — we null it out otherwise so the UI never shows a fake deal.
+    compareAtPriceMinor: t.int({
+      nullable: true,
+      resolve: (item) =>
+        item.compareAtPriceMinor != null && item.compareAtPriceMinor > item.priceMinor
+          ? item.compareAtPriceMinor
+          : null,
+    }),
     isAvailable: t.exposeBoolean("isAvailable"),
     badges: t.exposeStringList("badges"),
     // Image pipeline (#50): uploaded dish photo only. Google Places has no
@@ -322,6 +337,47 @@ builder.prismaObject("ModifierOption", {
     name: t.exposeString("name"),
     priceDeltaMinor: t.exposeInt("priceDeltaMinor"),
     isAvailable: t.exposeBoolean("isAvailable"),
+  }),
+});
+
+// Combo / meal deal (#53). priceMinor is the fixed bundle price. originalPriceMinor is
+// the summed a-la-carte price of the components (server-computed) so the client can show
+// the saving without trusting the client. Components are the frozen-at-quote item list.
+builder.prismaObject("Combo", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    name: t.exposeString("name"),
+    description: t.exposeString("description", { nullable: true }),
+    priceMinor: t.exposeInt("priceMinor"),
+    isAvailable: t.exposeBoolean("isAvailable"),
+    items: t.relation("items", { query: { orderBy: { sortOrder: "asc" } } }),
+    imageUrl: t.string({
+      nullable: true,
+      resolve: async (combo) => {
+        if (!combo.imageAssetId) return null;
+        const a = await prisma.mediaAsset.findUnique({ where: { id: combo.imageAssetId } });
+        return a ? (await import("../services/uploads.js")).assetUrl(a.objectKey) : null;
+      },
+    }),
+    // Sum of the components' current a-la-carte prices (item price × qty). The "% off" is
+    // (original - price) / original. Computed server-side so the badge can't be spoofed.
+    originalPriceMinor: t.int({
+      resolve: async (combo) => {
+        const items = await prisma.comboItem.findMany({
+          where: { comboId: combo.id },
+          include: { menuItem: true },
+        });
+        return items.reduce((s, ci) => s + ci.menuItem.priceMinor * ci.qty, 0);
+      },
+    }),
+  }),
+});
+
+builder.prismaObject("ComboItem", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    qty: t.exposeInt("qty"),
+    menuItem: t.relation("menuItem"),
   }),
 });
 

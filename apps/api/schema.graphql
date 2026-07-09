@@ -81,9 +81,27 @@ input CardInput {
 }
 
 input CartLineInput {
-  menuItemId: String!
+  comboId: String
+  menuItemId: String
   modifierOptionIds: [String!]
   notes: String
+  qty: Int!
+}
+
+type Combo {
+  description: String
+  id: ID!
+  imageUrl: String
+  isAvailable: Boolean!
+  items: [ComboItem!]!
+  name: String!
+  originalPriceMinor: Int!
+  priceMinor: Int!
+}
+
+type ComboItem {
+  id: ID!
+  menuItem: MenuItem!
   qty: Int!
 }
 
@@ -162,6 +180,7 @@ type MediaAsset {
 
 type Menu {
   categories: [MenuCategory!]!
+  combos: [Combo!]!
   id: ID!
   layoutJson: JSON
   status: String!
@@ -178,6 +197,7 @@ type MenuCategory {
 
 type MenuItem {
   badges: [String!]!
+  compareAtPriceMinor: Int
   description: String
   id: ID!
   imageUrl: String
@@ -214,6 +234,7 @@ type ModifierOption {
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   acceptTask(taskId: String!): DeliveryTask!
+  addComboItem(comboId: String!, menuItemId: String!, qty: Int): Combo!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
@@ -221,6 +242,7 @@ type Mutation {
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
+  deleteCombo(comboId: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
   deleteModifierOption(id: String!): Boolean!
@@ -240,6 +262,7 @@ type Mutation {
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
+  removeComboItem(comboItemId: String!): Combo!
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
@@ -251,6 +274,7 @@ type Mutation {
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
+  setComboAvailability(available: Boolean!, comboId: String!): Combo!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
@@ -263,7 +287,8 @@ type Mutation {
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
-  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
+  upsertCombo(branchId: String!, description: String, id: String, name: String!, priceMinor: Int!): Combo!
+  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, compareAtPriceMinor: Int, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
   upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
@@ -422,8 +447,9 @@ input QuoteCartInput {
 }
 
 type QuoteLine {
+  comboId: String
   lineTotalMinor: Int!
-  menuItemId: String!
+  menuItemId: String
   name: String!
   qty: Int!
   unitPriceMinor: Int!

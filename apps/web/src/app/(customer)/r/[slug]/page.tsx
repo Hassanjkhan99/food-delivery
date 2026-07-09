@@ -6,7 +6,7 @@
 // the restaurant's physical menu structure. On top of that we layer the Foodpanda
 // conversion patterns (UX-03): a "Popular" auto-section, in-menu search, a scroll-
 // synced category rail, a collapsing hero, one-tap quick-add, and a floating cart bar.
-import { use, useMemo, useState } from "react";
+import { use, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "urql";
 import { motion, useReducedMotion } from "framer-motion";
@@ -27,7 +27,8 @@ import { ParallaxHero } from "@/components/theme/ParallaxHero";
 import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
 import { useCart } from "@/lib/cart";
 import { ItemModal, type MenuItemForModal } from "./item-modal";
-import { ItemCard, type ItemForCard } from "./item-card";
+import { ItemCard, percentOff, type ItemForCard } from "./item-card";
+import { ComboCard, type ComboForCard } from "./combo-card";
 import { MenuNav, type NavSection } from "./menu-nav";
 import { CartBarSpacer, FloatingCartBar } from "./floating-cart-bar";
 import { useHeroCollapsed, useScrollSpy } from "./use-menu-scroll";
@@ -66,6 +67,7 @@ const BranchQuery = graphql(`
         name
         description
         priceMinor
+        compareAtPriceMinor
         isAvailable
         badges
         imageUrl
@@ -85,6 +87,23 @@ const BranchQuery = graphql(`
       activeMenu {
         id
         layoutJson
+        combos {
+          id
+          name
+          description
+          priceMinor
+          originalPriceMinor
+          isAvailable
+          imageUrl
+          items {
+            id
+            qty
+            menuItem {
+              id
+              name
+            }
+          }
+        }
         categories {
           id
           name
@@ -94,6 +113,7 @@ const BranchQuery = graphql(`
             name
             description
             priceMinor
+            compareAtPriceMinor
             isAvailable
             badges
             imageUrl
@@ -126,6 +146,9 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
   const [conflict, setConflict] = useState<ItemForCard | null>(null);
   const [search, setSearch] = useState("");
+  // When a combo triggers the branch-conflict dialog we stash it here so "Clear & add"
+  // re-adds the combo (not a menu item) after clearing the other restaurant's cart.
+  const pendingCombo = useRef<ComboForCard | null>(null);
 
   const addLine = useCart((s) => s.addLine);
   const clearCart = useCart((s) => s.clear);
@@ -159,6 +182,29 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       : real;
   }, [branch, layout.categoryOrder]);
 
+  // Deals (#53): combos + any discounted items, aggregated into a pseudo-section pinned
+  // above Popular. Combos come from the active menu; discounted items are scanned out of
+  // the real categories (deduped, available only). Guarded so a missing menu can't crash.
+  const combos = useMemo<ComboForCard[]>(
+    () => (branch?.activeMenu?.combos ?? []).filter((c) => c.isAvailable) as ComboForCard[],
+    [branch],
+  );
+  const discountedItems = useMemo<ItemForCard[]>(() => {
+    const cats = branch?.activeMenu?.categories ?? [];
+    const seen = new Set<string>();
+    const out: ItemForCard[] = [];
+    for (const c of cats) {
+      for (const it of c.items as ItemForCard[]) {
+        if (it.isAvailable && percentOff(it) != null && !seen.has(it.id)) {
+          seen.add(it.id);
+          out.push(it);
+        }
+      }
+    }
+    return out;
+  }, [branch]);
+  const hasDeals = combos.length > 0 || discountedItems.length > 0;
+
   // Client-side in-menu search. Popular is hidden while searching so items don't
   // appear twice (once under Popular, once under their real category).
   const q = search.trim().toLowerCase();
@@ -176,7 +222,10 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       .filter((s) => s.items.length > 0);
   }, [sections, q]);
 
-  const activeId = useScrollSpy(visibleSections.map((s) => s.domId));
+  const activeId = useScrollSpy([
+    ...(hasDeals && !q ? ["cat-deals"] : []),
+    ...visibleSections.map((s) => s.domId),
+  ]);
 
   if (fetching) {
     return (
@@ -190,7 +239,12 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
 
   const r = branch.restaurant;
   const reviewsHref = `/r/${r.slug}/reviews`;
-  const navSections: NavSection[] = visibleSections.map((s) => ({ domId: s.domId, name: s.name }));
+  // Deals is pinned first in the rail (hidden while searching, matching Popular's behaviour).
+  const showDeals = hasDeals && !q;
+  const navSections: NavSection[] = [
+    ...(showDeals ? [{ domId: "cat-deals", name: "Deals" }] : []),
+    ...visibleSections.map((s) => ({ domId: s.domId, name: s.name })),
+  ];
 
   // Closed-by-hours (or paused) → don't let the customer build a cart we can't fulfil.
   // isOpenNow already folds in the branch's published hours; !isAcceptingOrders is the
@@ -220,6 +274,33 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
     );
     if (result === "branch_conflict") setConflict(item);
     else setConflict(null);
+  }
+
+  // Add a combo/meal deal (#53) as one cart line keyed by comboId. The server re-prices
+  // and snapshots it; the client price here is just the display estimate. Branch-conflict
+  // handling reuses the same dialog (we stash a synthetic ItemForCard-like shape name).
+  function addCombo(combo: ComboForCard, clearFirst = false) {
+    if (!branch || !branch.isAcceptingOrders || !branch.isOpenNow) return;
+    if (clearFirst) clearCart();
+    const result = addLine(
+      { id: branch.id, slug: r.slug, name: r.name },
+      {
+        comboId: combo.id,
+        name: combo.name,
+        qty: 1,
+        unitPriceMinor: combo.priceMinor,
+        modifierOptionIds: [],
+        modifierNames: [],
+      },
+    );
+    if (result === "branch_conflict") {
+      setConflict({ id: combo.id, name: combo.name } as ItemForCard);
+      // Remember this was a combo so "Clear cart & add" re-adds correctly.
+      pendingCombo.current = combo;
+    } else {
+      setConflict(null);
+      pendingCombo.current = null;
+    }
   }
 
   function onJump(domId: string) {
@@ -302,7 +383,45 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         </div>
       )}
 
-      {visibleSections.length === 0 ? (
+      {showDeals && (
+        <motion.section
+          id="cat-deals"
+          className="mb-10 scroll-mt-36"
+          initial={reduced ? false : { opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.45 }}
+        >
+          <h2 className="mb-1 text-2xl font-semibold" style={{ color: "var(--brand-primary)" }}>
+            Deals
+          </h2>
+          <p className="mb-3 text-sm opacity-60">Meal deals and discounted picks.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {combos.map((combo) => (
+              <ComboCard
+                key={`combo-${combo.id}`}
+                combo={combo}
+                cardStyle={theme.cardStyle}
+                accepting={orderable}
+                onAdd={(c) => addCombo(c)}
+              />
+            ))}
+            {discountedItems.map((item) => (
+              <ItemCard
+                key={`deal-${item.id}`}
+                item={item}
+                mode="list"
+                cardStyle={theme.cardStyle}
+                accepting={orderable}
+                onOpen={(it) => setOpenItem(it)}
+                onQuickAdd={(it) => quickAdd(it)}
+              />
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {visibleSections.length === 0 && !showDeals ? (
         <p className="py-12 text-center text-sm opacity-60">
           No items match &ldquo;{search}&rdquo;.
         </p>
@@ -375,10 +494,23 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
               </DialogDescription>
             </DialogHeader>
             <div className="flex gap-2">
-              <Button variant="destructive" onClick={() => quickAdd(conflict, true)}>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  const combo = pendingCombo.current;
+                  if (combo) addCombo(combo, true);
+                  else quickAdd(conflict, true);
+                }}
+              >
                 Clear cart & add
               </Button>
-              <Button variant="outline" onClick={() => setConflict(null)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  pendingCombo.current = null;
+                  setConflict(null);
+                }}
+              >
                 Keep cart
               </Button>
             </div>

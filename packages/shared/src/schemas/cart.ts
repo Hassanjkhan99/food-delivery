@@ -1,13 +1,22 @@
 // Cart/checkout validation shared by the web forms and API resolvers.
 import { z } from "zod";
 
-export const cartLineSchema = z.object({
-  menuItemId: z.string().min(1),
-  qty: z.number().int().min(1).max(50),
-  // Selected modifier option ids, validated server-side against group min/max.
-  modifierOptionIds: z.array(z.string()).default([]),
-  notes: z.string().max(300).optional(),
-});
+// A cart line is EITHER a single menu item (with modifiers) OR a combo/meal deal (#53).
+// comboId, when present, takes precedence and the modifier fields are ignored — a combo
+// is priced and snapshotted server-side as one bundled line. Exactly one of
+// menuItemId / comboId must be set; validated by the refinement below.
+export const cartLineSchema = z
+  .object({
+    menuItemId: z.string().min(1).optional(),
+    comboId: z.string().min(1).optional(),
+    qty: z.number().int().min(1).max(50),
+    // Selected modifier option ids, validated server-side against group min/max.
+    modifierOptionIds: z.array(z.string()).default([]),
+    notes: z.string().max(300).optional(),
+  })
+  .refine((l) => Boolean(l.menuItemId) !== Boolean(l.comboId), {
+    message: "Each cart line must reference exactly one of a menu item or a combo",
+  });
 
 export const quoteInputSchema = z.object({
   branchId: z.string().min(1),
