@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/rider", label: "Jobs" },
   { href: "/rider/earnings", label: "Earnings" },
+  { href: "/rider/payouts", label: "Payouts" },
 ];
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {

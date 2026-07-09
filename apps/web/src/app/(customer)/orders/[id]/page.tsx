@@ -5,6 +5,7 @@ import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs, REVIEW_TAGS } from "@fd/shared";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,22 +76,6 @@ const RateMutation = graphql(`
   }
 `);
 
-const TIMELINE_LABEL: Record<string, string> = {
-  pending_acceptance: "Order placed",
-  accepted: "Restaurant accepted",
-  preparing: "Preparing your food",
-  ready_for_pickup: "Ready for pickup",
-  rider_assigned: "Rider assigned",
-  picked_up: "Rider picked up",
-  out_for_delivery: "Out for delivery",
-  delivered: "Delivered 🎉",
-  rejected: "Restaurant rejected",
-  auto_expired: "Restaurant didn't respond in time",
-  cancelled: "Cancelled",
-  failed_delivery_attempt: "Delivery attempt failed",
-  reassigning: "Finding a new rider",
-};
-
 const ACTIVE_STATUSES = [
   "pending_acceptance",
   "accepted",
@@ -101,6 +86,46 @@ const ACTIVE_STATUSES = [
   "out_for_delivery",
   "reassigning",
 ];
+
+// The happy-path stages the customer sees, in order. Each stage collapses one
+// or more raw order statuses so the progress bar stays simple and readable.
+type Stage = { key: string; label: string; statuses: string[] };
+const STAGES: Stage[] = [
+  { key: "placed", label: "Placed", statuses: ["pending_acceptance"] },
+  { key: "accepted", label: "Accepted", statuses: ["accepted"] },
+  { key: "preparing", label: "Preparing", statuses: ["preparing"] },
+  { key: "ready", label: "Ready", statuses: ["ready_for_pickup", "rider_assigned"] },
+  {
+    key: "out_for_delivery",
+    label: "Out for delivery",
+    statuses: ["picked_up", "out_for_delivery", "reassigning"],
+  },
+  { key: "delivered", label: "Delivered", statuses: ["delivered"] },
+];
+
+// Terminal statuses that end the happy path unhappily. When the order lands on
+// one of these we show a distinct notice instead of the staged tracker.
+const TERMINAL_UNHAPPY: Record<string, { label: string; tone: "danger" | "warning" }> = {
+  rejected: { label: "Restaurant rejected this order", tone: "danger" },
+  auto_expired: { label: "Restaurant didn't respond in time", tone: "warning" },
+  cancelled: { label: "Order cancelled", tone: "warning" },
+};
+
+// Statuses at which the rider is actively delivering — surface rider contact.
+const OUT_FOR_DELIVERY_STATUSES = ["picked_up", "out_for_delivery"];
+
+function stageIndexForStatus(status: string): number {
+  const idx = STAGES.findIndex((s) => s.statuses.includes(status));
+  // failed_delivery_attempt keeps the shopper on the "out for delivery" stage.
+  if (idx === -1 && status === "failed_delivery_attempt") {
+    return STAGES.findIndex((s) => s.key === "out_for_delivery");
+  }
+  return idx;
+}
+
+function formatStageTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
 
 function Countdown({ deadline }: { deadline: string }) {
   const [left, setLeft] = useState(() => Math.max(0, new Date(deadline).getTime() - Date.now()));
@@ -162,6 +187,31 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
   const address = order.addressSnapshotJson as { text?: string } | null;
 
+  // Map each completed stage to the earliest event timestamp for one of its
+  // statuses — this gives a per-stage "done at" time straight from the event log.
+  const stageTimes: Record<string, string> = {};
+  for (const stage of STAGES) {
+    const ev = order.events
+      .filter((e) => stage.statuses.includes(e.toStatus))
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt as unknown as string).getTime() -
+          new Date(b.createdAt as unknown as string).getTime(),
+      )[0];
+    if (ev) stageTimes[stage.key] = ev.createdAt as unknown as string;
+  }
+
+  const terminal = TERMINAL_UNHAPPY[order.status];
+  const currentStageIdx = stageIndexForStatus(order.status);
+  const isOutForDelivery = OUT_FOR_DELIVERY_STATUSES.includes(order.status);
+  const failedAttempt = order.status === "failed_delivery_attempt";
+
+  // TODO(rider-contact): the API contract does not expose the assigned rider on
+  // Order (no rider relation / phone field). When the backend adds it (e.g.
+  // Order.deliveryTask.rider { user { name phone } }), read it here and wire the
+  // tel: link. Until then we surface the restaurant/support entry point instead.
+  const rider = (order as { rider?: { name?: string; phone?: string } | null }).rider ?? null;
+
   return (
     <main className="mx-auto max-w-lg">
       <div className="mb-6 flex items-start justify-between">
@@ -178,21 +228,120 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      {/* Timeline */}
-      <ol className="relative mb-8 space-y-4 border-l border-kd-border pl-5">
-        {order.events.map((e) => (
-          <li key={e.id} className="relative">
-            <span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full bg-kd-fg" />
-            <p className="text-sm font-medium text-kd-fg">
-              {TIMELINE_LABEL[e.toStatus] ?? e.toStatus}
+      {/* Staged progress tracker (happy path). */}
+      {!terminal && (
+        <ol className="relative mb-6 space-y-5 border-l border-kd-border pl-5">
+          {STAGES.map((stage, idx) => {
+            const done = currentStageIdx > idx || order.status === "delivered";
+            const current = currentStageIdx === idx && order.status !== "delivered";
+            const time = stageTimes[stage.key];
+            return (
+              <li key={stage.key} className="relative">
+                <span
+                  className={`absolute top-1 -left-[26px] h-3 w-3 rounded-full ring-4 ring-kd-bg ${
+                    done
+                      ? "bg-kd-success"
+                      : current
+                        ? "animate-pulse bg-kd-primary"
+                        : "bg-kd-border"
+                  }`}
+                />
+                <div className="flex items-center gap-2">
+                  <p
+                    className={`text-sm font-medium ${
+                      current
+                        ? "text-kd-primary"
+                        : done
+                          ? "text-kd-fg"
+                          : "text-kd-fg-subtle"
+                    }`}
+                  >
+                    {stage.label}
+                  </p>
+                  {current && (
+                    <Badge variant="secondary" className="border-transparent">
+                      In progress
+                    </Badge>
+                  )}
+                </div>
+                {time && (
+                  <p className="text-xs text-kd-fg-muted">{formatStageTime(time)}</p>
+                )}
+                {current && stage.key === "placed" && (
+                  <p className="text-xs text-kd-fg-muted">Waiting for the restaurant to accept</p>
+                )}
+                {current &&
+                  (stage.key === "preparing" || stage.key === "accepted") &&
+                  order.prepEtaMinutes && (
+                    <p className="text-xs text-kd-fg-muted">
+                      Estimated {order.prepEtaMinutes} min prep time
+                    </p>
+                  )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {/* Delivery attempt failed — still on the road, reassuring copy. */}
+      {failedAttempt && (
+        <div className="mb-6 rounded-xl border border-kd-warning bg-kd-warning-soft p-4 text-sm text-kd-warning">
+          A delivery attempt didn&apos;t succeed. We&apos;re sorting it out — hang tight or reach
+          out below.
+        </div>
+      )}
+
+      {/* Terminal unhappy state — replaces the tracker. */}
+      {terminal && (
+        <div
+          className={`mb-6 rounded-xl border p-4 text-sm ${
+            terminal.tone === "danger"
+              ? "border-kd-danger bg-kd-danger-soft text-kd-danger"
+              : "border-kd-warning bg-kd-warning-soft text-kd-warning"
+          }`}
+        >
+          <p className="font-medium">{terminal.label}</p>
+          {order.events.find((e) => e.toStatus === order.status)?.reason && (
+            <p className="mt-1 text-kd-fg-muted">
+              {order.events.find((e) => e.toStatus === order.status)?.reason}
             </p>
-            <p className="text-xs text-kd-fg-muted">
-              {new Date(e.createdAt as unknown as string).toLocaleTimeString()}
-              {e.reason ? ` — ${e.reason}` : ""}
+          )}
+          {order.paymentMode !== "cod" && (
+            <p className="mt-1 text-kd-fg-muted">
+              Any charge for this order will be refunded to your original payment method.
             </p>
-          </li>
-        ))}
-      </ol>
+          )}
+        </div>
+      )}
+
+      {/* Rider contact — shown while the order is out for delivery. */}
+      {isOutForDelivery && (
+        <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-kd-fg">
+                {rider?.name ? `${rider.name} is on the way` : "Your rider is on the way"}
+              </p>
+              <p className="text-xs text-kd-fg-muted">
+                {order.status === "out_for_delivery"
+                  ? "Out for delivery now"
+                  : "Picked up your order"}
+              </p>
+            </div>
+            {rider?.phone ? (
+              <Button size="sm" variant="outline" render={<a href={`tel:${rider.phone}`} />}>
+                Call rider
+              </Button>
+            ) : (
+              // TODO(rider-contact): enable a direct tel: link once the API exposes
+              // the assigned rider's phone on Order. For now route to support.
+              <Button size="sm" variant="outline" render={<a href="#order-help" />}>
+                Contact
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Items */}
       <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
@@ -323,6 +472,33 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           Cancel order
         </Button>
       )}
+
+      {/* Help / support entry point — always available. */}
+      <div
+        id="order-help"
+        className="mt-8 rounded-xl border border-kd-border bg-kd-surface-muted p-4 text-center"
+      >
+        <p className="text-sm font-medium text-kd-fg">Need help with this order?</p>
+        <p className="mt-1 text-xs text-kd-fg-muted">
+          Something wrong with your delivery, payment, or items? We&apos;re here to help.
+        </p>
+        {/* TODO(support): point at a real support channel (in-app chat / ticket)
+            once one exists; mailto keeps a working entry point meanwhile. */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-3"
+          render={
+            <a
+              href={`mailto:support@khaanado.com?subject=${encodeURIComponent(
+                `Help with order ${order.code}`,
+              )}`}
+            />
+          }
+        >
+          Get help
+        </Button>
+      </div>
     </main>
   );
 }

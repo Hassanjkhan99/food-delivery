@@ -2,11 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, CookingPot, Palette, Settings, Users, Wallet } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardList,
+  CookingPot,
+  Palette,
+  Settings,
+  Users,
+  Wallet,
+} from "lucide-react";
 
 const NAV = [
   { href: "/restaurant/orders", label: "Orders", icon: ClipboardList },
   { href: "/restaurant/menu", label: "Menu", icon: CookingPot },
+  { href: "/restaurant/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/restaurant/branding", label: "Branding", icon: Palette },
   { href: "/restaurant/riders", label: "Riders", icon: Users },
   { href: "/restaurant/wallet", label: "Wallet", icon: Wallet },

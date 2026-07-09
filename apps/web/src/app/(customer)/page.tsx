@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "urql";
+import { useMutation, useQuery } from "urql";
 import { Search, WifiOff, X } from "lucide-react";
 import { CUISINE_TAGS } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
@@ -88,6 +88,15 @@ const OrderAgainQuery = graphql(`
           }
         }
       }
+    }
+  }
+`);
+
+const JoinWaitlistMutation = graphql(`
+  mutation JoinWaitlist($email: String!, $areaLabel: String, $lat: Float, $lng: Float) {
+    joinWaitlist(email: $email, areaLabel: $areaLabel, lat: $lat, lng: $lng) {
+      id
+      email
     }
   }
 `);
@@ -279,7 +288,7 @@ export default function HomePage() {
 
           {/* Empty */}
           {hits.length === 0 ? (
-            <EmptyState label={loc.label} />
+            <EmptyState label={loc.label} lat={loc.lat} lng={loc.lng} />
           ) : (
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-kd-fg">
@@ -306,9 +315,27 @@ export default function HomePage() {
   );
 }
 
-function EmptyState({ label }: { label: string }) {
+function EmptyState({ label, lat, lng }: { label: string; lat: number; lng: number }) {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [{ fetching }, joinWaitlist] = useMutation(JoinWaitlistMutation);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const value = email.trim();
+    if (!value) return;
+    const result = await joinWaitlist({ email: value, areaLabel: label, lat, lng });
+    if (result.error || !result.data?.joinWaitlist) {
+      setError(
+        result.error?.graphQLErrors[0]?.message ?? "Couldn't add you to the waitlist. Try again.",
+      );
+      return;
+    }
+    setDone(true);
+  }
+
   return (
     <div className="rounded-2xl border border-kd-border bg-kd-surface p-8 text-center">
       <div className="text-4xl">🛵</div>
@@ -321,23 +348,22 @@ function EmptyState({ label }: { label: string }) {
           Thanks — we&apos;ll be in touch! 🎉
         </p>
       ) : (
-        <form
-          className="mx-auto mt-4 flex max-w-sm gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (email.trim()) setDone(true);
-          }}
-        >
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@email.com"
-            className="min-w-0 flex-1 rounded-xl border border-kd-border bg-kd-surface px-3 py-2 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
-          />
-          <Button type="submit">Notify me</Button>
-        </form>
+        <>
+          <form className="mx-auto mt-4 flex max-w-sm gap-2" onSubmit={onSubmit}>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@email.com"
+              className="min-w-0 flex-1 rounded-xl border border-kd-border bg-kd-surface px-3 py-2 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+            />
+            <Button type="submit" disabled={fetching}>
+              {fetching ? "Adding…" : "Notify me"}
+            </Button>
+          </form>
+          {error && <p className="mt-3 text-sm text-kd-danger">{error}</p>}
+        </>
       )}
     </div>
   );

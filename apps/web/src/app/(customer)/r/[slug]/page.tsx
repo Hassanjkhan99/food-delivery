@@ -41,6 +41,8 @@ const BranchQuery = graphql(`
       minOrderMinor
       deliveryFeeMinor
       isAcceptingOrders
+      isOpenNow
+      opensAtLabel
       restaurant {
         id
         name
@@ -190,8 +192,20 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   const reviewsHref = `/r/${r.slug}/reviews`;
   const navSections: NavSection[] = visibleSections.map((s) => ({ domId: s.domId, name: s.name }));
 
+  // Closed-by-hours (or paused) → don't let the customer build a cart we can't fulfil.
+  // isOpenNow already folds in the branch's published hours; !isAcceptingOrders is the
+  // manual pause. Either one blocks quick-add / add-to-cart via `orderable` below.
+  const closedByHours = !branch.isOpenNow;
+  const orderable = branch.isAcceptingOrders && !closedByHours;
+  const closedLabel = closedByHours
+    ? branch.opensAtLabel
+      ? `Closed now · opens ${branch.opensAtLabel}`
+      : "Closed now"
+    : "Temporarily paused";
+
   function quickAdd(item: ItemForCard, clearFirst = false) {
-    if (!branch) return;
+    // Hard guard: never build a cart for a closed/paused branch even if a UI path slips through.
+    if (!branch || !branch.isAcceptingOrders || !branch.isOpenNow) return;
     if (clearFirst) clearCart();
     const result = addLine(
       { id: branch.id, slug: r.slug, name: r.name },
@@ -250,7 +264,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
               <Timer className="h-4 w-4" /> Min {formatRs(branch.minOrderMinor)}
             </span>
             <span>Delivery {formatRs(branch.deliveryFeeMinor)}</span>
-            {!branch.isAcceptingOrders && <Badge variant="destructive">Paused</Badge>}
+            {!orderable && <Badge variant="destructive">{closedLabel}</Badge>}
           </div>
         </div>
       </ParallaxHero>
@@ -270,6 +284,23 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         onSearch={setSearch}
         onJump={onJump}
       />
+
+      {!orderable && (
+        <div
+          role="status"
+          className="mb-6 flex items-start gap-3 rounded-2xl border border-kd-danger bg-kd-danger-soft p-4"
+        >
+          <Timer className="mt-0.5 h-5 w-5 shrink-0 text-kd-danger" />
+          <div className="text-sm">
+            <p className="font-semibold text-kd-danger">{closedLabel}</p>
+            <p className="opacity-70">
+              {closedByHours
+                ? "This restaurant is outside its opening hours. You can browse the menu, but ordering is unavailable right now."
+                : "This restaurant has paused new orders. You can browse the menu, but ordering is unavailable right now."}
+            </p>
+          </div>
+        </div>
+      )}
 
       {visibleSections.length === 0 ? (
         <p className="py-12 text-center text-sm opacity-60">
@@ -312,7 +343,7 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
                     item={item}
                     mode={mode}
                     cardStyle={theme.cardStyle}
-                    accepting={branch.isAcceptingOrders}
+                    accepting={orderable}
                     onOpen={(it) => setOpenItem(it)}
                     onQuickAdd={(it) => quickAdd(it)}
                   />
