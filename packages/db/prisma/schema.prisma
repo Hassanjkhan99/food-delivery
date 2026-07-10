@@ -222,7 +222,6 @@ enum CampaignStatus {
   rejected
 }
 
-<<<<<<< HEAD
 // Promo-code engine (#52). A voucher's discount is either a percentage (valueBps,
 // optionally capped by maxDiscountMinor) or a flat amount (valueMinor), or free
 // delivery (waives the order's deliveryFeeMinor). funder decides which ledger legs
