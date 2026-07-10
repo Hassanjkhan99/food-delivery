@@ -95,16 +95,15 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
   // to charge; losers fall through and only report success once the winner has settled.
   let claimedId: string | null = null;
   if (existing) {
-    // Reactivate a cancelled / expired / lapsed row. The guard matches rows that are NOT
-    // currently active-and-unexpired — crucially it also covers a status="active" row whose
-    // period has already lapsed (there is no expiry job), which a `status != active` guard
-    // would miss and wrongly refuse to renew (Codex P1). The claim pushes currentPeriodEnd
-    // into the future, so a second concurrent updateMany matches 0 rows: exactly one flips.
+    // Reclaim the existing (non-settled — the settled fast-path above already returned) row
+    // via optimistic concurrency: match on the currentPeriodStart we observed, and the claim
+    // advances it to `now`. Exactly one concurrent caller wins; the rest see 0 rows updated.
+    // Because the single-winner guarantee comes from the CAS token (not the row's status), it
+    // recovers ANY stuck state — a lapsed active row (no expiry job), a cancelled row, AND a
+    // stale unpaid claim left by a crashed/hung charge (active + future + lastChargeRef null),
+    // which a status/period guard would refuse to reclaim forever (Codex P1 + P2).
     const flipped = await prisma.subscription.updateMany({
-      where: {
-        id: existing.id,
-        OR: [{ status: { not: "active" } }, { currentPeriodEnd: { lte: now } }],
-      },
+      where: { id: existing.id, currentPeriodStart: existing.currentPeriodStart },
       data: { ...claim, cancelledAt: null },
     });
     if (flipped.count === 1) claimedId = existing.id;
