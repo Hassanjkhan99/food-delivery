@@ -30,6 +30,7 @@ const BoardQuery = graphql(`
       placedAt
       contactPhone
       pickupPin
+      customerName
       items {
         id
         qty
@@ -120,6 +121,7 @@ type BoardOrder = {
   status: string;
   paymentMode: string;
   grandTotalMinor: number;
+  customerName?: string | null;
   customerNote?: string | null;
   cutleryRequested: boolean;
   contactPhone?: string | null;
@@ -149,6 +151,9 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
           {order.paymentMode === "cod" ? "COD" : "PAID"} · {formatRs(order.grandTotalMinor)}
         </Badge>
       </div>
+      {order.customerName && (
+        <p className="mt-0.5 text-xs text-kd-fg-muted">{order.customerName}</p>
+      )}
       <ul className="mt-1 space-y-0.5 text-kd-fg-muted">
         {order.items.map((i) => {
           const snap = i.menuSnapshotJson as {

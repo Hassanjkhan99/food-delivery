@@ -85,7 +85,6 @@ input CartLineInput {
   modifierOptionIds: [String!]
   notes: String
   qty: Int!
-  unavailabilityPreference: String
 }
 
 type CsvImportResult {
@@ -141,12 +140,6 @@ type HomeBanner {
   imageUrl: String!
   linkHref: String
   title: String!
-}
-
-type ItemSearchResult {
-  branch: Branch!
-  distanceM: Int!
-  item: MenuItem!
 }
 
 scalar JSON
@@ -250,6 +243,7 @@ type Mutation {
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  revokeSession(sessionId: String!): Boolean!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
@@ -268,6 +262,7 @@ type Mutation {
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
+  updateProfile(email: String, name: String): User!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
@@ -282,6 +277,7 @@ type Order {
   branch: Branch!
   code: String!
   contactPhone: String!
+  customerName: String
   customerNote: String
   cutleryRequested: Boolean!
   deliveredAt: DateTime
@@ -394,13 +390,13 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
+  mySessions: [Session!]!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
-  searchMarketplace(lat: Float!, lng: Float!, query: String!): SearchMarketplaceResult!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -555,9 +551,12 @@ input SaveAddressInput {
   text: String!
 }
 
-type SearchMarketplaceResult {
-  items: [ItemSearchResult!]!
-  restaurants: [BranchSearchResult!]!
+type Session {
+  createdAt: DateTime!
+  expiresAt: DateTime!
+  id: ID!
+  isCurrent: Boolean!
+  userAgent: String
 }
 
 type Subscription {
