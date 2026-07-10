@@ -6,6 +6,7 @@ import { prisma, type Order } from "@fd/db";
 import {
   ACCEPTANCE_SLA_SECONDS,
   assertTransition,
+  TERMINAL_STATUSES,
   type ActorRole,
   type OrderStatus,
   type PlaceOrderInput,
@@ -44,6 +45,27 @@ const STATUS_TIMESTAMP: Partial<Record<OrderStatus, keyof Order>> = {
   delivered: "deliveredAt",
   cancelled: "cancelledAt",
 };
+
+/**
+ * A 4-digit pickup code that isn't currently in use by another *active* (non-terminal)
+ * pickup order at the same branch. Retries a handful of times, then widens to a 6-digit
+ * code so it always terminates even in the (practically impossible) fully-saturated case.
+ */
+async function generateUniquePickupCode(branchId: string): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = String(Math.floor(1000 + Math.random() * 9000));
+    const clash = await prisma.order.findFirst({
+      where: {
+        branchId,
+        pickupCode: candidate,
+        status: { notIn: TERMINAL_STATUSES as OrderStatus[] },
+      },
+      select: { id: true },
+    });
+    if (!clash) return candidate;
+  }
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
 export async function placeOrder(
   customerId: string,
@@ -125,9 +147,9 @@ export async function placeOrder(
     .toUpperCase()}`;
 
   // Short 4-digit code the customer quotes at the counter to collect a pickup order.
-  const pickupCode = isPickup
-    ? String(Math.floor(1000 + Math.random() * 9000))
-    : null;
+  // Must be unique among the branch's *active* pickups so a counter can't mistakenly
+  // hand an order to the wrong customer (follow-up #115).
+  const pickupCode = isPickup ? await generateUniquePickupCode(quote.branchId) : null;
 
   try {
     const order = await prisma.$transaction(async (tx) => {
