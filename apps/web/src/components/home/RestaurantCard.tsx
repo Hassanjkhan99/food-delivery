@@ -62,6 +62,18 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
               "aspect-[16/10] w-full transition-transform duration-300 group-hover:scale-[1.03]",
               avail.closed && "grayscale-[0.6]",
             )}
+            // Render the closed scrim INSIDE the image so the Google attribution stays
+            // on top of it (ToS-required credit must not be hidden) — #36 review.
+            overlay={
+              avail.closed && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/45 text-center">
+                  <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-kd-fg">
+                    {avail.label}
+                  </span>
+                  <span className="text-xs font-semibold text-white/90">Pre-order for later</span>
+                </div>
+              )
+            }
           />
 
           {hit.deliveryFeeMinor === 0 && !avail.closed && (
@@ -72,21 +84,12 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
 
           <FavoriteButton />
 
-          {avail.closed ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/45 text-center">
-              <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-kd-fg">
-                {avail.label}
-              </span>
-              <span className="text-xs font-semibold text-white/90">Pre-order for later</span>
-            </div>
-          ) : (
-            r.avgRating != null && (
-              <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-xs font-bold text-kd-fg shadow-sm">
-                <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
-                {r.avgRating.toFixed(1)}
-                <span className="font-medium text-kd-fg-muted">({r.ratingCount})</span>
-              </span>
-            )
+          {!avail.closed && r.avgRating != null && (
+            <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-xs font-bold text-kd-fg shadow-sm">
+              <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
+              {r.avgRating.toFixed(1)}
+              <span className="font-medium text-kd-fg-muted">({r.ratingCount})</span>
+            </span>
           )}
         </div>
 
@@ -127,12 +130,15 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           tint={r.primaryColor}
           className={cn("aspect-[16/10] w-44 rounded-xl", avail.closed && "grayscale-[0.6]")}
           sizes="176px"
+          // Scrim inside the image so the Google attribution stays visible — #36 review.
+          overlay={
+            avail.closed && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 text-xs font-bold text-white">
+                {hit.opensAtLabel ? `Opens ${hit.opensAtLabel}` : "Closed"}
+              </span>
+            )
+          }
         />
-        {avail.closed && (
-          <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 text-xs font-bold text-white">
-            {hit.opensAtLabel ? `Opens ${hit.opensAtLabel}` : "Closed"}
-          </span>
-        )}
       </div>
       <p className="mt-1.5 truncate text-sm font-medium text-kd-fg">{r.name}</p>
       <div className="flex items-center gap-1.5 text-xs text-kd-fg-muted tabular-nums">

@@ -224,25 +224,24 @@ async function main() {
   // Home promo banners (ux-parity #36) — lightweight demo set. Images are static
   // SVGs in apps/web/public/banners (no external/Google imagery). Real campaigns
   // land with #22.
+  //
+  // NOTE: the "WELCOME50" code banner is intentionally omitted here — this branch has
+  // no promo-code input and quoteCart/placeOrder apply no discount, so advertising a
+  // code would charge customers full price. The voucher engine lands separately
+  // (PR #70); the discount-code banner can be re-seeded once that plumbing is on this feed.
   await prisma.homeBanner.createMany({
     data: [
-      {
-        title: "50% off your first order",
-        imageUrl: "/banners/welcome50.svg",
-        linkHref: "/r/karachi-biryani-house",
-        sortOrder: 0,
-      },
       {
         title: "Free delivery weekend",
         imageUrl: "/banners/free-delivery.svg",
         linkHref: "/r/green-bowl",
-        sortOrder: 1,
+        sortOrder: 0,
       },
       {
         title: "Biryani cravings sorted",
         imageUrl: "/banners/biryani.svg",
         linkHref: "/r/karachi-biryani-house",
-        sortOrder: 2,
+        sortOrder: 1,
       },
     ],
   });

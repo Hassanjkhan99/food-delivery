@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
+import { useResetGraphQLClient } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 
 const AccountViewerQuery = graphql(`
@@ -30,6 +31,7 @@ const LogoutMutation = graphql(`
 
 export default function AccountPage() {
   const router = useRouter();
+  const resetClient = useResetGraphQLClient();
   const [{ data }] = useQuery({ query: AccountViewerQuery, requestPolicy: "network-only" });
   const [, logout] = useMutation(LogoutMutation);
   const viewer = data?.viewer;
@@ -60,6 +62,9 @@ export default function AccountPage() {
         className="mt-6 w-full"
         onClick={async () => {
           await logout({});
+          // Drop the urql cache so a cached viewer/myOrders can't render the previous
+          // customer's data on a shared browser (#36 review), then refresh the tree.
+          resetClient();
           router.push("/");
           router.refresh();
         }}

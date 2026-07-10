@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "urql";
 import { Search, WifiOff, X } from "lucide-react";
 import { CUISINE_TAGS } from "@fd/shared";
@@ -116,6 +116,25 @@ export default function HomePage() {
 
   const [activeCuisine, setActiveCuisine] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  // isOpenNow/opensAtLabel are computed from server time, but HomeQuery is cache-first,
+  // so the open/closed overlays would go stale across an opening/closing boundary within
+  // a session. Refresh in the background on window focus and on a lightweight timer so
+  // time-based open state stays current (data-first: no loading flash). — #36 review.
+  useEffect(() => {
+    const refresh = () => refetch({ requestPolicy: "cache-and-network" });
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", refresh);
+    const timer = window.setInterval(refresh, 5 * 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(timer);
+    };
+  }, [refetch]);
 
   const hits: FeedHit[] = useMemo(
     () =>

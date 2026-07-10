@@ -2,7 +2,7 @@
 
 import { Client, Provider, cacheExchange, fetchExchange, subscriptionExchange } from "urql";
 import { createClient as createSSEClient } from "graphql-sse";
-import { useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/graphql";
 
@@ -33,7 +33,26 @@ export function makeClient() {
   });
 }
 
+/**
+ * Lets any client component drop the urql cache — the document cache has no public
+ * `reset()`, so we swap in a fresh Client (new empty cache) instead. Call this on
+ * logout so a cached `myOrders`/`viewer` can't render the previous customer's data on
+ * a shared browser. — #36 review.
+ */
+const ResetClientContext = createContext<() => void>(() => {});
+
+export function useResetGraphQLClient() {
+  return useContext(ResetClientContext);
+}
+
 export function GraphQLProvider({ children }: { children: ReactNode }) {
-  const client = useMemo(() => makeClient(), []);
-  return <Provider value={client}>{children}</Provider>;
+  // Hold the Client in state; resetting swaps in a fresh one (new empty cache) which
+  // remounts subscribers so auth-derived queries re-run against the clean cache.
+  const [client, setClient] = useState(makeClient);
+  const reset = useCallback(() => setClient(makeClient()), []);
+  return (
+    <ResetClientContext.Provider value={reset}>
+      <Provider value={client}>{children}</Provider>
+    </ResetClientContext.Provider>
+  );
 }
