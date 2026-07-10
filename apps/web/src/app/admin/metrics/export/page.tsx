@@ -42,7 +42,9 @@ export default function AdminMetricsExportPage() {
       const from = range.from ? new Date(`${range.from}T00:00:00.000Z`) : null;
       const to = range.to ? new Date(`${range.to}T23:59:59.999Z`) : null;
       const res = await client
-        .query(MetricsCsvQuery, { from, to, granularity })
+        // network-only so an active-period export always re-runs the resolver
+        // rather than re-serving a cached CSV for the same date range.
+        .query(MetricsCsvQuery, { from, to, granularity }, { requestPolicy: "network-only" })
         .toPromise();
       const csv = res.data?.adminMetricsCsv;
       if (res.error || !csv) throw new Error(res.error?.message ?? "Export failed");

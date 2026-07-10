@@ -56,7 +56,13 @@ export default function SettlementsPage() {
     try {
       const { from, to } = bounds();
       const res = await client
-        .query(SettlementCsvQuery, { restaurantId: restaurant.id, from, to })
+        // Always re-run the resolver: cache-first would re-serve a stale CSV for
+        // the same date range after new orders are delivered in an active period.
+        .query(
+          SettlementCsvQuery,
+          { restaurantId: restaurant.id, from, to },
+          { requestPolicy: "network-only" },
+        )
         .toPromise();
       const csv = res.data?.settlementReportCsv;
       if (res.error || !csv) throw new Error(res.error?.message ?? "Export failed");
@@ -75,7 +81,11 @@ export default function SettlementsPage() {
     try {
       const { from, to } = bounds();
       const res = await client
-        .query(EimsInvoiceCsvQuery, { branchId: branch.id, from, to })
+        .query(
+          EimsInvoiceCsvQuery,
+          { branchId: branch.id, from, to },
+          { requestPolicy: "network-only" },
+        )
         .toPromise();
       const csv = res.data?.eimsInvoiceCsv;
       if (res.error || !csv) throw new Error(res.error?.message ?? "Export failed");

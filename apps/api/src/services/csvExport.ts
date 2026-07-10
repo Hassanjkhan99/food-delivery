@@ -3,18 +3,24 @@
 // Everything here is DERIVED live from Order/OrderItem/LedgerEntry/Payout — there
 // are no stored aggregates and no schema changes. The settlement report is built
 // so its `net` column reconciles against the same ledger movement the wallet uses
-// (see settlementReportCsv): net = subtotal + tax + delivery − commission − platform
-// fee, which is exactly the restaurant:{id}:payable credit posted on delivery for a
-// card order (COD posts the fees as a debit instead — same net position).
+// (see settlementReportCsv): net = subtotal + tax + delivery − commission, which is
+// exactly the restaurant:{id}:payable credit posted on delivery for a card order.
+// The platform fee is a separate platform-revenue leg and is NOT part of net.
 //
 // Money is kept in minor units in the raw ledger math and rendered as decimal
 // rupees in the CSV (2dp) so the file opens cleanly in Excel / BI tools.
 import type { Order, OrderItem } from "@fd/db";
 
-/** Serialize a single CSV field: quote when it contains a comma, quote, or newline. */
+/**
+ * Serialize a single CSV field. Quote when it contains a comma, quote, or newline.
+ * Also neutralize CSV-injection: restaurant-controlled values (branch/menu names)
+ * that begin with a formula trigger (=, +, -, @, or a leading tab/CR) are prefixed
+ * with a single quote so Excel/BI tools treat them as text, not formulas.
+ */
 function csvField(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return "";
-  const s = String(value);
+  let s = String(value);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -38,20 +44,21 @@ function isoDate(d: Date | null | undefined): string {
 
 /**
  * Net booked to the restaurant for one delivered order, in minor units.
- * Mirrors ledgerService.onOrderDelivered: restaurant keeps gross (subtotal+tax+
- * delivery) minus commission; the platform fee is a separate platform-revenue leg,
- * so it is also subtracted here to get the true net payable movement.
+ * Mirrors ledgerService.onOrderDelivered's `restaurantShare`: the restaurant keeps
+ * gross (subtotal+tax+delivery) minus commission. The platform fee is NOT deducted
+ * here — it is a separate platform-revenue leg funded from the customer's grand
+ * total, so the restaurant:{id}:payable movement (this net) never includes it.
+ * Deducting it made every card row's net lower than the ledger by the platform fee.
  */
 export function orderNetMinor(o: Pick<
   Order,
-  "subtotalMinor" | "taxTotalMinor" | "deliveryFeeMinor" | "commissionMinor" | "platformFeeMinor"
+  "subtotalMinor" | "taxTotalMinor" | "deliveryFeeMinor" | "commissionMinor"
 >): number {
   return (
     o.subtotalMinor +
     o.taxTotalMinor +
     o.deliveryFeeMinor -
-    o.commissionMinor -
-    o.platformFeeMinor
+    o.commissionMinor
   );
 }
 
@@ -207,18 +214,23 @@ export function eimsInvoiceCsv(orders: InvoiceOrder[]): string {
   ];
   const rows: Array<Array<string | number | null>> = [];
   for (const o of orders) {
-    // Apportion the order tax across lines by line subtotal; give any rounding
-    // remainder to the last line so per-order ST sums back to taxTotalMinor.
+    // Apportion the order tax across lines by line subtotal. We round the running
+    // *cumulative* tax at each line and take the per-line delta, so cumulative tax
+    // is monotonically non-decreasing — every line's ST charge is ≥ 0 and the lines
+    // still sum exactly to taxTotalMinor (the last delta absorbs the remainder).
+    // Rounding each line independently could over-allocate and force a negative
+    // remainder on the final invoice line.
     const lineSubtotal = o.items.reduce((s, it) => s + it.lineTotalMinor, 0);
+    let cumulativeSubtotal = 0;
     let taxAssigned = 0;
     o.items.forEach((it, idx) => {
-      const isLast = idx === o.items.length - 1;
-      const lineTax = isLast
-        ? o.taxTotalMinor - taxAssigned
-        : lineSubtotal > 0
-          ? Math.round((o.taxTotalMinor * it.lineTotalMinor) / lineSubtotal)
+      cumulativeSubtotal += it.lineTotalMinor;
+      const cumulativeTax =
+        lineSubtotal > 0
+          ? Math.round((o.taxTotalMinor * cumulativeSubtotal) / lineSubtotal)
           : 0;
-      taxAssigned += lineTax;
+      const lineTax = cumulativeTax - taxAssigned;
+      taxAssigned = cumulativeTax;
       rows.push([
         o.code,
         o.branch.name,
