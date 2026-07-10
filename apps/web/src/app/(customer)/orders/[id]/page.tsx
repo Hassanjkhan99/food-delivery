@@ -2,8 +2,10 @@
 
 import { use, useEffect, useState } from "react";
 import { useMutation, useQuery, useSubscription } from "urql";
+import { Loader2 } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { formatRs, REVIEW_TAGS } from "@fd/shared";
+import { useI18n } from "@/i18n/provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -158,6 +160,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [comment, setComment] = useState("");
   const [rated, setRated] = useState(false);
   const order = data?.order;
+  const { t } = useI18n();
 
   const toggleTag = (value: string) =>
     setReviewTags((prev) =>
@@ -165,17 +168,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     );
 
   // Live status via SSE; a slow poll remains as a reconnect safety net.
-  useSubscription(
+  const isActive = !!order && ACTIVE_STATUSES.includes(order.status);
+  const [{ error: subError }] = useSubscription(
     {
       query: OrderStatusSubscription,
       variables: { orderId: id },
-      pause: !order || !ACTIVE_STATUSES.includes(order.status),
+      pause: !isActive,
     },
     (_prev, event) => {
       refetch({ requestPolicy: "network-only" });
       return event;
     },
   );
+  // Surface a reconnecting pill on flaky networks (#49): graphql-sse auto-retries,
+  // so we just reflect that the live stream dropped while the order is still active.
+  const reconnecting = isActive && !!subError;
   useEffect(() => {
     if (!order || !ACTIVE_STATUSES.includes(order.status)) return;
     const t = setInterval(() => refetch({ requestPolicy: "network-only" }), 30_000);
@@ -227,6 +234,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
       </div>
+
+      {reconnecting && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 flex items-center gap-2 rounded-lg bg-kd-warning-soft px-3 py-2 text-xs text-kd-warning"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          {t("common.reconnecting")}
+        </div>
+      )}
 
       {/* Staged progress tracker (happy path). */}
       {!terminal && (

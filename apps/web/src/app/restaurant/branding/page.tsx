@@ -3,6 +3,8 @@
 // Theme editor with live preview: colors, font, card style, hero effect, logo/hero art.
 import { useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
+import { AlertTriangle } from "lucide-react";
+import { contrastRatio, WCAG_AA_NORMAL } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
 import { useConsole } from "../useConsole";
 import { uploadFile } from "@/lib/upload";
@@ -122,6 +124,11 @@ export default function BrandingPage() {
     </div>
   );
 
+  // a11y contrast guard (#49): warn owners when body text on the storefront
+  // background falls below WCAG AA (4.5:1). Non-blocking — they can still save.
+  const textBgRatio = contrastRatio(theme.textColor, theme.backgroundColor);
+  const lowContrast = textBgRatio != null && textBgRatio < WCAG_AA_NORMAL;
+
   return (
     <main className="grid max-w-5xl gap-6 lg:grid-cols-2">
       <div>
@@ -131,6 +138,20 @@ export default function BrandingPage() {
           {colorField("Accent color", "accentColor")}
           {colorField("Background", "backgroundColor")}
           {colorField("Text color", "textColor")}
+
+          {lowContrast && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-lg bg-kd-warning-soft px-3 py-2 text-xs text-kd-warning"
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                Low contrast: your text on the background is{" "}
+                <strong>{textBgRatio!.toFixed(1)}:1</strong>, below the recommended{" "}
+                {WCAG_AA_NORMAL}:1. Customers with low vision may struggle to read your menu.
+              </span>
+            </p>
+          )}
 
           <div className="flex items-center justify-between">
             <Label>Font</Label>
