@@ -25,6 +25,21 @@ export async function hasActiveMembership(userId: string): Promise<boolean> {
   return sub !== null;
 }
 
+// A subscription is "settled" only when it is active, unexpired, AND actually paid for the
+// current period (lastChargeRef set). A row that is active+future but has no charge ref is a
+// slot claimed by a concurrent caller still mid-charge — not yet a real success.
+type SettleableSub = { status: string; currentPeriodEnd: Date; lastChargeRef: string | null };
+// NB: a `false` result does NOT imply null — a lapsed-but-still-"active" row is unsettled but
+// present — so this stays a plain boolean (not a type guard, which would over-narrow callers).
+function isSettled(sub: SettleableSub | null): boolean {
+  return (
+    sub !== null &&
+    sub.status === "active" &&
+    sub.currentPeriodEnd > new Date() &&
+    sub.lastChargeRef !== null
+  );
+}
+
 // Charge the sign-up fee via the mock provider using a saved card. COD isn't offered
 // for a subscription (nothing to collect on delivery), so a card is required.
 async function chargePlan(userId: string, planPriceMinor: number, paymentMethodId: string) {
@@ -52,9 +67,7 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
   if (!plan) throw new GraphQLError("Membership plan not available");
 
   const existing = await currentMembership(userId);
-  if (existing && existing.status === "active" && existing.currentPeriodEnd > new Date()) {
-    return existing;
-  }
+  if (isSettled(existing)) return existing!;
 
   const now = new Date();
   const periodEnd = new Date(now.getTime() + plan.billingPeriodDays * DAY_MS);
@@ -66,17 +79,25 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
     currentPeriodEnd: periodEnd,
     autoRenew: true,
     paymentMethodId,
-    // lastChargeRef is filled in only after the charge succeeds below.
+    // Cleared on every claim and re-set only after the charge succeeds, so lastChargeRef
+    // is a reliable "paid for THIS period" signal for isSettled() (Codex P2).
+    lastChargeRef: null,
   };
 
   // Step 1 — atomically claim the slot. Whichever caller wins gets a row id and proceeds
-  // to charge; losers see no claim and return the now-active membership without charging.
+  // to charge; losers fall through and only report success once the winner has settled.
   let claimedId: string | null = null;
   if (existing) {
-    // Reactivate a lapsed/cancelled row, but only if it isn't already active — the
-    // `status: { not: "active" }` guard means exactly one concurrent caller flips it.
+    // Reactivate a cancelled / expired / lapsed row. The guard matches rows that are NOT
+    // currently active-and-unexpired — crucially it also covers a status="active" row whose
+    // period has already lapsed (there is no expiry job), which a `status != active` guard
+    // would miss and wrongly refuse to renew (Codex P1). The claim pushes currentPeriodEnd
+    // into the future, so a second concurrent updateMany matches 0 rows: exactly one flips.
     const flipped = await prisma.subscription.updateMany({
-      where: { id: existing.id, status: { not: "active" } },
+      where: {
+        id: existing.id,
+        OR: [{ status: { not: "active" } }, { currentPeriodEnd: { lte: now } }],
+      },
       data: { ...claim, cancelledAt: null },
     });
     if (flipped.count === 1) claimedId = existing.id;
@@ -91,11 +112,14 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
   }
 
   if (claimedId === null) {
-    // Lost the race — another concurrent call already claimed & is charging. Return the
-    // active membership rather than charging a second time.
-    const active = await currentMembership(userId);
-    if (active) return active;
-    throw new GraphQLError("Could not create membership, please retry");
+    // Lost the race. Only report success if the winner has actually finished charging
+    // (settled); otherwise the winner could still decline and roll back, so ask the caller
+    // to retry rather than handing back an unpaid "active" membership (Codex P2).
+    const current = await currentMembership(userId);
+    if (isSettled(current)) return current!;
+    throw new GraphQLError("Membership is being set up — please retry in a moment", {
+      extensions: { code: "membership_pending" },
+    });
   }
 
   // Step 2 — charge exactly once. Roll the claim back if the card is declined.

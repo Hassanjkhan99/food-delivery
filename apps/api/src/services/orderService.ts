@@ -2,7 +2,7 @@
 // transition(): optimistic-concurrency guard, append-only OrderEvent, audit for
 // privileged actors, money side-effects, and pubsub — one transaction.
 import { randomUUID } from "node:crypto";
-import { prisma, type Order } from "@fd/db";
+import { prisma, type Order, type Prisma } from "@fd/db";
 import {
   ACCEPTANCE_SLA_SECONDS,
   assertTransition,
@@ -54,11 +54,17 @@ const STATUS_TIMESTAMP: Partial<Record<OrderStatus, keyof Order>> = {
  * A 4-digit pickup code that isn't currently in use by another *active* (non-terminal)
  * pickup order at the same branch. Retries a handful of times, then widens to a 6-digit
  * code so it always terminates even in the (practically impossible) fully-saturated case.
+ *
+ * Runs on the transaction client while the caller holds a per-branch advisory lock, so the
+ * read-then-insert is serialized per branch and can't hand two orders the same code.
  */
-async function generateUniquePickupCode(branchId: string): Promise<string> {
+async function generateUniquePickupCode(
+  tx: Prisma.TransactionClient,
+  branchId: string,
+): Promise<string> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = String(Math.floor(1000 + Math.random() * 9000));
-    const clash = await prisma.order.findFirst({
+    const clash = await tx.order.findFirst({
       where: {
         branchId,
         pickupCode: candidate,
@@ -150,13 +156,18 @@ export async function placeOrder(
     .toString(36)
     .toUpperCase()}`;
 
-  // Short 4-digit code the customer quotes at the counter to collect a pickup order.
-  // Must be unique among the branch's *active* pickups so a counter can't mistakenly
-  // hand an order to the wrong customer (follow-up #115).
-  const pickupCode = isPickup ? await generateUniquePickupCode(quote.branchId) : null;
-
   try {
     const order = await prisma.$transaction(async (tx) => {
+      // Short 4-digit code the customer quotes at the counter to collect a pickup order.
+      // Assigned inside the txn under a per-branch advisory lock so two concurrent pickups
+      // at the same branch can't both read "free" and be handed the same code — the earlier
+      // pre-txn check-then-insert wasn't atomic (Codex P2 / follow-up #115).
+      let pickupCode: string | null = null;
+      if (isPickup) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${quote.branchId})::bigint)`;
+        pickupCode = await generateUniquePickupCode(tx, quote.branchId);
+      }
+
       const created = await tx.order.create({
         data: {
           code,
