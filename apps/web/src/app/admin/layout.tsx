@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Megaphone,
   Store,
+  Tag,
   Undo2,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/admin/tickets", label: "Support", icon: LifeBuoy },
   { href: "/admin/campaigns", label: "Promotions", icon: Megaphone },
   { href: "/admin/riders", label: "Riders", icon: Bike },
+  { href: "/admin/vouchers", label: "Vouchers", icon: Tag },
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },

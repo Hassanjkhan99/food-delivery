@@ -26,6 +26,9 @@ export const quoteInputSchema = z.object({
   // Optional rider tip in minor units; folded into the grand total. Capped to a sane
   // ceiling so a fat-fingered client can't book an absurd total.
   tipAmount: z.number().int().min(0).max(1_000_000).default(0),
+  // Optional promo code (#52). Validated + priced server-side; never trusted from the
+  // client for the discount amount, only the code string.
+  voucherCode: z.string().trim().min(1).max(40).optional(),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({

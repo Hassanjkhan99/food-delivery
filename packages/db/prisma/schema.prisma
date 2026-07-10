@@ -205,6 +205,28 @@ enum CampaignStatus {
   rejected
 }
 
+// Promo-code engine (#52). A voucher's discount is either a percentage (valueBps,
+// optionally capped by maxDiscountMinor) or a flat amount (valueMinor), or free
+// delivery (waives the order's deliveryFeeMinor). funder decides which ledger legs
+// the discount reverses on settlement: platform absorbs it as marketing spend,
+// restaurant absorbs it out of its payable, or split proportionally.
+enum VoucherType {
+  percentage
+  fixed
+  free_delivery
+}
+
+enum VoucherScope {
+  platform
+  restaurant
+}
+
+enum VoucherFunder {
+  platform
+  restaurant
+  split
+}
+
 // ───────────────────────────── identity & auth ─────────────────────────────
 
 model User {
@@ -315,6 +337,7 @@ model Restaurant {
   campaigns Campaign[]
   ratings   Rating[]
   sharedRiderPolicy SharedRiderPolicy?
+  vouchers  Voucher[]
 
   @@map("restaurants")
 }
@@ -661,6 +684,11 @@ model Order {
   tipAmount             Int         @default(0)
   // Whether to include cutlery/napkins with the order (sustainability opt-out).
   cutleryRequested      Boolean     @default(true)
+  // Voucher discount applied at checkout (#52), in minor units. Subtracted from the
+  // grand total. voucherId snapshots which voucher was redeemed (null if none). The
+  // authoritative redemption row lives in VoucherRedemption (unique per order).
+  discountMinor         Int         @default(0)
+  voucherId             String?
   grandTotalMinor       Int
   commissionBpsSnapshot Int
   paymentMode           PaymentMode
@@ -675,6 +703,7 @@ model Order {
 
   customer     User           @relation("CustomerOrders", fields: [customerId], references: [id])
   branch       Branch         @relation(fields: [branchId], references: [id])
+  voucher      Voucher?       @relation(fields: [voucherId], references: [id])
   items        OrderItem[]
   events       OrderEvent[]
   deliveryTask DeliveryTask?
@@ -683,6 +712,7 @@ model Order {
   cancellation Cancellation?
   rating       Rating?
   tickets      SupportTicket[]
+  redemption   VoucherRedemption?
 
   @@index([branchId, status])
   @@index([customerId, placedAt])
@@ -1186,4 +1216,71 @@ model Waitlist {
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   @@map("waitlist")
+}
+
+// ───────────────────────────── vouchers / promo codes (#52) ─────────────────────────────
+
+// A redeemable promo code. Validation (window, min-order, per-user + total-budget caps,
+// scope, first-order) all lives in voucherService — the single source of truth used by
+// both quote and placeOrder. Money is minor units; percentage discounts use valueBps
+// (850 = 8.5%) capped by maxDiscountMinor. usedCount is a denormalised counter kept in
+// sync with VoucherRedemption inside the placeOrder transaction (source of truth is the
+// redemption rows). A restaurant-scoped voucher only applies to orders at that restaurant.
+model Voucher {
+  id               String        @id @default(cuid())
+  code             String        @unique
+  description      String?
+  type             VoucherType
+  scope            VoucherScope  @default(platform)
+  funder           VoucherFunder @default(platform)
+  // percentage → valueBps (+ optional maxDiscountMinor cap); fixed → valueMinor;
+  // free_delivery → neither (waives the order's delivery fee).
+  valueBps         Int           @default(0)
+  valueMinor       Int           @default(0)
+  maxDiscountMinor Int?
+  minOrderMinor    Int           @default(0)
+  // Eligibility / limits. firstOrderOnly restricts to a customer's first delivered/placed
+  // order. perUserLimit caps redemptions per user (null = unlimited). totalBudgetMinor caps
+  // cumulative discount spend across all users (null = unbudgeted); usedBudgetMinor tracks it.
+  firstOrderOnly   Boolean       @default(false)
+  perUserLimit     Int?          @default(1)
+  totalBudgetMinor Int?
+  usedBudgetMinor  Int           @default(0)
+  usedCount        Int           @default(0)
+  // Restaurant-scoped vouchers only apply at this restaurant (null when scope=platform).
+  restaurantId     String?
+  startsAt         DateTime?     @db.Timestamptz()
+  endsAt           DateTime?     @db.Timestamptz()
+  active           Boolean       @default(true)
+  createdByUserId  String?
+  createdAt        DateTime      @default(now()) @db.Timestamptz()
+  updatedAt        DateTime      @updatedAt @db.Timestamptz()
+
+  restaurant  Restaurant?         @relation(fields: [restaurantId], references: [id])
+  redemptions VoucherRedemption[]
+  orders      Order[]
+
+  @@index([code])
+  @@map("vouchers")
+}
+
+// One row per successful redemption. unique(voucherId, orderId) makes double-apply on the
+// same order impossible; the per-user count is derived by counting rows for (voucherId, userId).
+// reversedAt is set when the order is cancelled/refunded so the redemption no longer counts
+// against the user's limit or the total budget.
+model VoucherRedemption {
+  id          String    @id @default(cuid())
+  voucherId   String
+  orderId     String    @unique
+  userId      String
+  amountMinor Int
+  reversedAt  DateTime? @db.Timestamptz()
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+
+  voucher Voucher @relation(fields: [voucherId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  @@unique([voucherId, orderId])
+  @@index([voucherId, userId])
+  @@map("voucher_redemptions")
 }

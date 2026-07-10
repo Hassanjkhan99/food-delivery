@@ -237,6 +237,7 @@ type Mutation {
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
+  createVoucher(input: VoucherInput!): Voucher!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
@@ -275,6 +276,7 @@ type Mutation {
   setItemAvailability(available: Boolean!, itemId: String!, until: String): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
+  setVoucherActive(active: Boolean!, id: String!): Voucher!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
@@ -283,6 +285,7 @@ type Mutation {
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
+  updateVoucher(id: String!, input: VoucherInput!): Voucher!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
@@ -300,6 +303,7 @@ type Order {
   cutleryRequested: Boolean!
   deliveredAt: DateTime
   deliveryFeeMinor: Int!
+  discountMinor: Int!
   events: [OrderEvent!]!
   grandTotalMinor: Int!
   id: ID!
@@ -380,6 +384,7 @@ input PlaceOrderInput {
   paymentMethodId: String
   paymentMode: String!
   tipAmount: Int
+  voucherCode: String
 }
 
 type PresignResult {
@@ -390,6 +395,7 @@ type PresignResult {
 type Query {
   allRestaurants: [Restaurant!]!
   auditLogs(take: Int): [AuditLog!]!
+  availableVouchers(restaurantId: String): [Voucher!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
@@ -417,6 +423,8 @@ type Query {
   restaurantApprovalQueue: [Restaurant!]!
   todaySummary(branchId: String!): TodaySummary!
   viewer: Viewer
+  voucher(id: String!): Voucher
+  vouchers: [Voucher!]!
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
 }
@@ -424,6 +432,7 @@ type Query {
 type Quote {
   branchId: String!
   deliveryFeeMinor: Int!
+  discountMinor: Int!
   distanceM: Int!
   grandTotalMinor: Int!
   inRadius: Boolean!
@@ -434,6 +443,8 @@ type Quote {
   subtotalMinor: Int!
   taxTotalMinor: Int!
   tipAmount: Int!
+  voucherCode: String
+  voucherError: String
 }
 
 input QuoteCartInput {
@@ -442,6 +453,7 @@ input QuoteCartInput {
   deliveryLng: Float!
   lines: [CartLineInput!]!
   tipAmount: Int
+  voucherCode: String
 }
 
 type QuoteLine {
@@ -611,6 +623,49 @@ type Viewer {
   home: String!
   roles: [RoleBinding!]!
   user: User!
+}
+
+type Voucher {
+  active: Boolean!
+  code: String!
+  createdAt: DateTime!
+  description: String
+  endsAt: DateTime
+  firstOrderOnly: Boolean!
+  funder: String!
+  id: ID!
+  maxDiscountMinor: Int
+  minOrderMinor: Int!
+  perUserLimit: Int
+  remainingBudgetMinor: Int
+  restaurantId: String
+  scope: String!
+  startsAt: DateTime
+  totalBudgetMinor: Int
+  type: String!
+  usedBudgetMinor: Int!
+  usedCount: Int!
+  valueBps: Int!
+  valueMinor: Int!
+}
+
+input VoucherInput {
+  active: Boolean
+  code: String!
+  description: String
+  endsAt: DateTime
+  firstOrderOnly: Boolean
+  funder: String
+  maxDiscountMinor: Int
+  minOrderMinor: Int
+  perUserLimit: Int
+  restaurantId: String
+  scope: String
+  startsAt: DateTime
+  totalBudgetMinor: Int
+  type: String!
+  valueBps: Int
+  valueMinor: Int
 }
 
 type Waitlist {
