@@ -7,6 +7,10 @@ import { GraphQLError } from "graphql";
 import { mockProvider } from "./payments/mockProvider.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// How long an unpaid claim is considered "in-flight" (a sibling subscribe still charging)
+// before it's treated as abandoned and reclaimable. The mock charge is synchronous, so this
+// only matters for crash/hang recovery; a real async PSP would use idempotency keys (#17).
+const CLAIM_LEASE_MS = 60 * 1000;
 
 // The signed-in customer's current membership (active first, else most recent).
 export async function currentMembership(userId: string) {
@@ -91,17 +95,32 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
     lastChargeRef: null,
   };
 
-  // Step 1 — atomically claim the slot. Whichever caller wins gets a row id and proceeds
-  // to charge; losers fall through and only report success once the winner has settled.
+  const pending = () =>
+    new GraphQLError("Membership is being set up — please retry in a moment", {
+      extensions: { code: "membership_pending" },
+    });
+
+  // A recent unpaid claim (active, no charge ref, claimed within the lease window) is a
+  // sibling subscribe still mid-charge. Don't reclaim it — that's how a staggered second
+  // call would steal an in-flight claim and double-charge (Codex P1). Only an unpaid claim
+  // older than the lease is treated as abandoned (crash/hang) and reclaimable below.
+  const leaseFloor = new Date(now.getTime() - CLAIM_LEASE_MS);
+  if (
+    existing &&
+    existing.status === "active" &&
+    existing.lastChargeRef === null &&
+    existing.currentPeriodStart > leaseFloor
+  ) {
+    throw pending();
+  }
+
+  // Step 1 — atomically claim the slot via optimistic CAS on the observed currentPeriodStart;
+  // the claim advances it to `now`, which doubles as this claim's lease stamp. Exactly one of
+  // N simultaneous callers wins (the rest see 0 rows). Since the single-winner guarantee comes
+  // from the CAS token — not the row's status — it also recovers a lapsed active row (no expiry
+  // job), a cancelled row, and a *stale* (past-lease) unpaid claim.
   let claimedId: string | null = null;
   if (existing) {
-    // Reclaim the existing (non-settled — the settled fast-path above already returned) row
-    // via optimistic concurrency: match on the currentPeriodStart we observed, and the claim
-    // advances it to `now`. Exactly one concurrent caller wins; the rest see 0 rows updated.
-    // Because the single-winner guarantee comes from the CAS token (not the row's status), it
-    // recovers ANY stuck state — a lapsed active row (no expiry job), a cancelled row, AND a
-    // stale unpaid claim left by a crashed/hung charge (active + future + lastChargeRef null),
-    // which a status/period guard would refuse to reclaim forever (Codex P1 + P2).
     const flipped = await prisma.subscription.updateMany({
       where: { id: existing.id, currentPeriodStart: existing.currentPeriodStart },
       data: { ...claim, cancelledAt: null },
@@ -118,28 +137,39 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
   }
 
   if (claimedId === null) {
-    // Lost the race. Only report success if the winner has actually finished charging
-    // (settled); otherwise the winner could still decline and roll back, so ask the caller
-    // to retry rather than handing back an unpaid "active" membership (Codex P2).
+    // Lost the race. Only report success if the winner has actually settled (charged);
+    // otherwise ask the caller to retry rather than hand back an unpaid claim (Codex P2).
     const current = await currentMembership(userId);
     if (isSettled(current)) return current!;
-    throw new GraphQLError("Membership is being set up — please retry in a moment", {
-      extensions: { code: "membership_pending" },
-    });
+    throw pending();
   }
 
-  // Step 2 — charge exactly once. Roll the claim back if the card is declined.
+  // Step 2 — charge exactly once, then settle. Settlement and rollback are BOTH guarded by the
+  // claim token (`currentPeriodStart === now` and still unpaid), so if this claim was superseded
+  // by a later reclaim after the lease expired (e.g. a genuinely hung charge), we neither clobber
+  // the new owner's row nor cancel it out from under them (Codex P1). Bulletproof exactly-once
+  // billing across a slow/async PSP is #17's concern — here the mock charge is synchronous.
   try {
     const chargeRef = await chargePlan(userId, plan.priceMinor, paymentMethodId);
-    return await prisma.subscription.update({
-      where: { id: claimedId },
+    const settled = await prisma.subscription.updateMany({
+      where: { id: claimedId, currentPeriodStart: now, lastChargeRef: null },
       data: { lastChargeRef: chargeRef },
+    });
+    if (settled.count === 0) {
+      // Superseded while charging (only reachable past the lease window). Hand back the
+      // current owner's membership if it's settled; the orphaned mock charge is a #17 concern.
+      const current = await currentMembership(userId);
+      if (isSettled(current)) return current!;
+      throw pending();
+    }
+    return prisma.subscription.findUniqueOrThrow({
+      where: { id: claimedId },
       include: { plan: true },
     });
   } catch (err) {
     await prisma.subscription
-      .update({
-        where: { id: claimedId },
+      .updateMany({
+        where: { id: claimedId, currentPeriodStart: now, lastChargeRef: null },
         data: { status: "cancelled", cancelledAt: new Date() },
       })
       .catch(() => {});
