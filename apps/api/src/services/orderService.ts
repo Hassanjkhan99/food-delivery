@@ -93,6 +93,7 @@ export async function placeOrder(
           customerNote: input.customerNote,
           subtotalMinor: quote.subtotalMinor,
           deliveryFeeMinor: quote.deliveryFeeMinor,
+          baseDeliveryFeeMinor: quote.baseDeliveryFeeMinor,
           taxTotalMinor: quote.taxTotalMinor,
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,

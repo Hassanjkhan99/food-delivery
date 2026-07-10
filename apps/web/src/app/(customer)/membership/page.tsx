@@ -134,7 +134,10 @@ export default function MembershipPage() {
           </div>
           {membership.currentPeriodEnd && (
             <p className="mt-2 text-xs text-kd-fg-muted">
-              {membership.autoRenew ? "Renews" : "Access until"}{" "}
+              {/* No auto-renewal path exists yet (#89): the plan is charged once at */}
+              {/* subscribe and benefits lapse at currentPeriodEnd. Always show this as */}
+              {/* an access-until date so we don't promise billing that never happens. */}
+              Access until{" "}
               {new Date(membership.currentPeriodEnd).toLocaleDateString("en-PK", {
                 year: "numeric",
                 month: "short",

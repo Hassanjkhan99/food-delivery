@@ -577,6 +577,11 @@ model Order {
   customerNote          String?
   subtotalMinor         Int
   deliveryFeeMinor      Int
+  // The branch's delivery fee before any customer-side discount (e.g. a Pro membership
+  // free/reduced-delivery benefit). Rider earnings/payouts are computed from this so a
+  // membership discount is absorbed by the platform, not deducted from the rider (#89).
+  // Nullable + defaulted for rows created before this column existed.
+  baseDeliveryFeeMinor  Int?
   taxTotalMinor         Int
   platformFeeMinor      Int
   commissionMinor       Int
