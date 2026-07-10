@@ -22,6 +22,8 @@ async function wipe() {
     "ratings",
     "support_tickets",
     "home_banners",
+    "subscriptions",
+    "membership_plans",
     "refunds",
     "cancellations",
     "payments",
@@ -140,6 +142,19 @@ async function main() {
       featuredSlotDailyRateSmallMinor: 0,
       featuredSlotDailyRateChainMinor: 50_000,
       createdByUserId: admin.id,
+    },
+  });
+
+  // Pandapro-style membership plan (#59): Rs 199/mo, free delivery on orders >= Rs 500,
+  // otherwise 50% off delivery. Mock-billed at sign-up.
+  await prisma.membershipPlan.create({
+    data: {
+      name: "KhaanaDo Pro",
+      priceMinor: 19_900,
+      freeDeliveryThresholdMinor: 50_000,
+      deliveryDiscountBps: 5_000,
+      billingPeriodDays: 30,
+      isActive: true,
     },
   });
 

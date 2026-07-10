@@ -124,6 +124,9 @@ QuoteType.implement({
     branchId: t.exposeString("branchId"),
     subtotalMinor: t.exposeInt("subtotalMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
+    baseDeliveryFeeMinor: t.exposeInt("baseDeliveryFeeMinor"),
+    membershipDeliverySavingMinor: t.exposeInt("membershipDeliverySavingMinor"),
+    membershipApplied: t.exposeBoolean("membershipApplied"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
@@ -367,7 +370,8 @@ builder.mutationFields((t) => ({
           redeemPoints: args.input.redeemPoints ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
-        // Anonymous quotes still price the cart; redemption only kicks in when signed in.
+        // Anonymous quotes still price the cart; voucher/loyalty redemption (#52/#57) and
+        // membership delivery benefit (#59) only kick in when signed in.
         ctx.userId,
       ),
   }),

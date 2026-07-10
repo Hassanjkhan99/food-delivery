@@ -258,7 +258,7 @@ export default function AccountPage() {
         </div>
       </section>
 
-      {/* Wallet + payment methods (#55) */}
+      {/* Wallet + payment methods (#55) + membership (#59) */}
       <nav className="space-y-2">
         <Link
           href="/wallet"
@@ -273,6 +273,13 @@ export default function AccountPage() {
         >
           <CreditCard className="h-5 w-5 text-kd-fg-subtle" />
           Payment methods
+        </Link>
+        <Link
+          href="/membership"
+          className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm font-medium text-kd-fg hover:border-kd-primary"
+        >
+          <CreditCard className="h-5 w-5 text-kd-fg-subtle" />
+          KhaanaDo Pro membership
         </Link>
       </nav>
 

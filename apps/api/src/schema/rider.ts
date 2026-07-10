@@ -308,7 +308,10 @@ builder.queryFields((t) => ({
         take: 100,
       });
       const rows: EarningsRow[] = tasks.map((task) => {
-        const deliveryFeeMinor = task.order.deliveryFeeMinor;
+        // Riders are paid the branch's full delivery fee; any customer-side discount
+        // (e.g. a Pro membership free-delivery benefit) is absorbed by the platform,
+        // not the rider (#89). Fall back to deliveryFeeMinor for pre-#89 orders.
+        const deliveryFeeMinor = task.order.baseDeliveryFeeMinor ?? task.order.deliveryFeeMinor;
         const tipMinor = task.order.tipAmount;
         return {
           taskId: task.id,
@@ -341,7 +344,8 @@ builder.queryFields((t) => ({
       for (const task of tasks) {
         const when = task.order.deliveredAt ?? task.createdAt;
         const { key, start, end } = isoWeekWindow(when);
-        const net = task.order.deliveryFeeMinor + task.order.tipAmount;
+        const net =
+          (task.order.baseDeliveryFeeMinor ?? task.order.deliveryFeeMinor) + task.order.tipAmount;
         const row = byWeek.get(key) ?? {
           periodKey: key,
           periodStart: start,

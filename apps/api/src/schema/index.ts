@@ -17,5 +17,6 @@ import "./voucher.js";
 import "./notification.js";
 import "./referral.js";
 import "./subscription.js";
+import "./membership.js";
 
 export const schema = builder.toSchema();
