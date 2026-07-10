@@ -2,6 +2,33 @@
 
 Read this first in any new session. Repo: https://github.com/Hassanjkhan99/food-delivery (private).
 
+## ⭐ Latest session — 2026-07-10 (finish-line sweep)
+
+Branch `chore/finish-line-sweep`, **PR #131** (open, Codex review requested). Full `pnpm typecheck`
+green; all four role UIs verified rendering with live seeded data.
+
+- **Migration history repaired (was broken).** The overnight `20260710999999_integration`
+  migration re-declared everything from `init`, so `prisma migrate dev`/`reset` failed with
+  `type "Role" already exists` — a clean DB couldn't be provisioned. Collapsed the 5 migrations
+  into a single clean baseline matching `schema.prisma`; added `20260710120000_subscription_one_per_user`.
+  `migrate dev` now replays with zero drift. **If you clone fresh, `pnpm db:migrate` works again.**
+- **All 32 stale draft PRs closed** with audit notes — they were 0 commits ahead of master
+  (content shipped via integration commit `9714461`, already Codex-reviewed → follow-ups filed
+  as backlog issues #107–#130). Do not reopen; the work is in master.
+- **Project board created:** "KhaanaDo Delivery" — https://github.com/users/Hassanjkhan99/projects/5 (115 items).
+- **Codex follow-ups triaged (23 issues).** Fixed in #131: #121 (COD loyalty leg), #123 (membership
+  double-charge — now has a unique index + atomic claim), #115 (pickup-code collisions), plus the
+  `RsRsRs`→`₨₨₨` price-band glyph. **Still open / deferred with a plan** (see the issues, all on the board):
+  #119 (P1 — media/KYC served without auth; fix = signed-read tokens, needs an image-render pass),
+  #107 (a11y contrast), #130 RLS read-model, #116/#124 wallet escrow, #117 campaign scoping,
+  #108 search deep-link, #126 dispatch ledger funding.
+- **Observed, not yet filed:** `placeOrder` rejects `contactPhone` unless it's exactly `+92XXXXXXXXXX`
+  (10 digits) — the checkout form may submit a format the server's Zod regex rejects. Worth a look.
+- **Env fragility:** the embedded Postgres died once mid-session and needed a restart
+  (`Get-Process postgres | Stop-Process -Force; rm .pgdata/postmaster.pid; pnpm db`). If the API
+  logs `ECONNREFUSED` / a UI shows "no X for this account", the DB dropped — restart it.
+
+
 ## What this project is
 
 Restaurant-first delivery marketplace. Restaurants own menu/prices/acceptance/riders; the
