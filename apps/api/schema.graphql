@@ -71,6 +71,23 @@ type BranchSearchResult {
   branch: Branch!
   distanceM: Int!
   etaMinutes: Int!
+  priceBand: Int!
+}
+
+input BrowseFilter {
+  cuisineTags: [String!]
+  freeDelivery: Boolean
+  maxPriceBand: Int
+  minRating: Float
+  openNow: Boolean
+}
+
+enum BrowseSort {
+  distance
+  eta
+  popularity
+  rating
+  relevance
 }
 
 input CardInput {
@@ -376,7 +393,7 @@ type Query {
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
-  browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  browseBranches(filter: BrowseFilter, lat: Float!, lng: Float!, sort: BrowseSort): [BranchSearchResult!]!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!

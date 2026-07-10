@@ -1,6 +1,12 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
-import { haversineMeters } from "@fd/shared";
+import {
+  BROWSE_SORTS,
+  type BrowseSort,
+  haversineMeters,
+  median,
+  priceBandFor,
+} from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
 import { branchOpenNow } from "../services/branchHours.js";
@@ -356,11 +362,21 @@ builder.prismaObject("ModifierOption", {
   }),
 });
 
-type BranchSearchHit = { branchId: string; distanceM: number };
+// A ranked browse hit. distanceM comes from haversine; priceBand (1-3) and
+// popularityScore are computed server-side in browseBranches (#51) so sort/filter
+// stay consistent and the client can render the "Rs/Rs Rs/Rs Rs Rs" band cheaply.
+type BranchSearchHit = {
+  branchId: string;
+  distanceM: number;
+  priceBand: number;
+  popularityScore: number;
+};
 const BranchSearchResult = builder.objectRef<BranchSearchHit>("BranchSearchResult");
 BranchSearchResult.implement({
   fields: (t) => ({
     distanceM: t.exposeInt("distanceM"),
+    // Menu-median price band 1-3 (0 = unknown, empty menu). Client maps to "Rs" glyphs.
+    priceBand: t.exposeInt("priceBand"),
     etaMinutes: t.int({
       // Coarse ETA band: prep default 20m + ride time at ~20km/h.
       resolve: (hit) => 20 + Math.round(hit.distanceM / 333),
@@ -404,6 +420,27 @@ SearchMarketplaceResult.implement({
   }),
 });
 
+// ── browse filter + sort inputs (#51) ────────────────────────────────────────
+const BrowseFilterInput = builder.inputType("BrowseFilter", {
+  fields: (t) => ({
+    // Only branches whose delivery fee is 0.
+    freeDelivery: t.boolean({ required: false }),
+    // Minimum approved-rating average (e.g. 4.0 / 4.5). Branches with no rating
+    // are excluded when this is set (they can't be proven to clear the bar).
+    minRating: t.float({ required: false }),
+    // Cap on the 1-3 price band (1 = only budget, 3 = anything).
+    maxPriceBand: t.int({ required: false }),
+    // Only branches open right now (server-evaluated from structured hours / hoursJson).
+    openNow: t.boolean({ required: false }),
+    // Match ANY of these platform cuisine tags (OR semantics, Foodpanda-style chips).
+    cuisineTags: t.stringList({ required: false }),
+  }),
+});
+
+const BrowseSortEnum = builder.enumType("BrowseSort", {
+  values: BROWSE_SORTS,
+});
+
 builder.prismaObject("HomeBanner", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -444,25 +481,156 @@ builder.queryFields((t) => ({
     },
   }),
 
+  // Discovery feed (#51): deliverable branches, optionally filtered (free delivery,
+  // min rating, price band, open-now, cuisine chips) and sorted. Filters that need
+  // server-only data (open-now from hours, priceBand from menu median, popularity from
+  // 30-day delivered orders, rating from approved ratings) are computed here so the
+  // client can't reproduce them from the wire shape.
   browseBranches: t.field({
     type: [BranchSearchResult],
     args: {
       lat: t.arg.float({ required: true }),
       lng: t.arg.float({ required: true }),
+      filter: t.arg({ type: BrowseFilterInput, required: false }),
+      sort: t.arg({ type: BrowseSortEnum, required: false }),
     },
     resolve: async (_root, args) => {
+      const filter = args.filter ?? {};
+      const cuisineTags = (filter.cuisineTags ?? []).filter((c) => c.trim().length > 0);
+
+      // Cheap DB-side filters first (delivery fee, cuisine) to shrink the set before
+      // the per-branch computed work below.
       const branches = await prisma.branch.findMany({
-        where: { restaurant: { status: "approved" }, activeMenuId: { not: null } },
-        select: { id: true, lat: true, lng: true, deliveryRadiusM: true },
+        where: {
+          restaurant: {
+            status: "approved",
+            ...(cuisineTags.length > 0 ? { cuisineTags: { hasSome: cuisineTags } } : {}),
+          },
+          activeMenuId: { not: null },
+          ...(filter.freeDelivery ? { deliveryFeeMinor: 0 } : {}),
+        },
+        select: {
+          id: true,
+          lat: true,
+          lng: true,
+          deliveryRadiusM: true,
+          hoursJson: true,
+          restaurantId: true,
+          activeMenuId: true,
+        },
       });
-      return branches
+
+      // Deliverable-radius gate (haversine) — the original behaviour.
+      const inRange = branches
         .map((b) => ({
-          branchId: b.id,
+          branch: b,
           distanceM: haversineMeters(Number(b.lat), Number(b.lng), args.lat, args.lng),
-          radius: b.deliveryRadiusM,
         }))
-        .filter((b) => b.distanceM <= b.radius)
-        .sort((a, b) => a.distanceM - b.distanceM);
+        .filter(({ distanceM, branch }) => distanceM <= branch.deliveryRadiusM);
+
+      if (inRange.length === 0) return [];
+
+      const branchIds = inRange.map(({ branch }) => branch.id);
+      const restaurantIds = [...new Set(inRange.map(({ branch }) => branch.restaurantId))];
+      const menuIds = inRange
+        .map(({ branch }) => branch.activeMenuId)
+        .filter((id): id is string => Boolean(id));
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      // Batch the computed inputs so we don't fan out per branch.
+      const [ratingRows, priceRows, popularityRows] = await Promise.all([
+        prisma.rating.groupBy({
+          by: ["restaurantId"],
+          where: { restaurantId: { in: restaurantIds }, moderationStatus: "approved" },
+          _avg: { stars: true },
+        }),
+        // All available item prices for each active menu, to compute a per-branch median.
+        prisma.menuItem.findMany({
+          where: {
+            isAvailable: true,
+            category: { menuId: { in: menuIds } },
+          },
+          select: { priceMinor: true, category: { select: { menuId: true } } },
+        }),
+        prisma.order.groupBy({
+          by: ["branchId"],
+          where: { branchId: { in: branchIds }, status: "delivered", placedAt: { gte: since } },
+          _count: { _all: true },
+        }),
+      ]);
+
+      const ratingByRestaurant = new Map(
+        ratingRows.map((r) => [r.restaurantId, r._avg.stars ?? null]),
+      );
+      const pricesByMenu = new Map<string, number[]>();
+      for (const row of priceRows) {
+        const mid = row.category.menuId;
+        const list = pricesByMenu.get(mid) ?? [];
+        list.push(row.priceMinor);
+        pricesByMenu.set(mid, list);
+      }
+      const popularityByBranch = new Map(
+        popularityRows.map((r) => [r.branchId, r._count._all]),
+      );
+
+      // Open-now is evaluated per branch (loads structured hours) only when needed for
+      // the filter or the eta/relevance sort — but it's cheap and we need it for the
+      // openNow filter, so resolve for the whole set in parallel.
+      const openStates = await Promise.all(
+        inRange.map(({ branch }) =>
+          branchOpenNow({ id: branch.id, hoursJson: branch.hoursJson }).then((s) => s.isOpen),
+        ),
+      );
+
+      let hits = inRange.map(({ branch, distanceM }, i) => {
+        const prices = branch.activeMenuId ? pricesByMenu.get(branch.activeMenuId) ?? [] : [];
+        const rating = ratingByRestaurant.get(branch.restaurantId) ?? null;
+        return {
+          branchId: branch.id,
+          distanceM,
+          priceBand: prices.length > 0 ? priceBandFor(median(prices)) : 0,
+          popularityScore: popularityByBranch.get(branch.id) ?? 0,
+          isOpenNow: openStates[i],
+          rating,
+        };
+      });
+
+      // Computed filters.
+      if (filter.openNow) hits = hits.filter((h) => h.isOpenNow);
+      if (typeof filter.minRating === "number") {
+        hits = hits.filter((h) => h.rating != null && h.rating >= filter.minRating!);
+      }
+      if (typeof filter.maxPriceBand === "number") {
+        // priceBand 0 (unknown/empty menu) never satisfies a cap.
+        hits = hits.filter((h) => h.priceBand > 0 && h.priceBand <= filter.maxPriceBand!);
+      }
+
+      const sort: BrowseSort = args.sort ?? "relevance";
+      hits.sort((a, b) => {
+        switch (sort) {
+          case "rating":
+            return (b.rating ?? -1) - (a.rating ?? -1) || a.distanceM - b.distanceM;
+          case "distance":
+            return a.distanceM - b.distanceM;
+          case "eta":
+            // eta is monotonic in distance (prep is constant), so distance ordering matches.
+            return a.distanceM - b.distanceM;
+          case "popularity":
+            return b.popularityScore - a.popularityScore || a.distanceM - b.distanceM;
+          case "relevance":
+          default:
+            // Hybrid default: open branches first, then nearest.
+            if (a.isOpenNow !== b.isOpenNow) return a.isOpenNow ? -1 : 1;
+            return a.distanceM - b.distanceM;
+        }
+      });
+
+      return hits.map((h) => ({
+        branchId: h.branchId,
+        distanceM: h.distanceM,
+        priceBand: h.priceBand,
+        popularityScore: h.popularityScore,
+      }));
     },
   }),
 

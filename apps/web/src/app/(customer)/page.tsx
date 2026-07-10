@@ -4,11 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { Search, WifiOff, X } from "lucide-react";
-import { CUISINE_TAGS } from "@fd/shared";
+import { CUISINE_TAGS, type BrowseSort } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
+import type { BrowseSort as GqlBrowseSort } from "@/graphql/generated/graphql";
 import { useDeliveryLocation } from "@/lib/location";
 import { AddressChip } from "@/components/home/AddressChip";
 import { CuisineRail } from "@/components/home/CuisineRail";
+import {
+  ActiveFilterChips,
+  BrowseControls,
+  EMPTY_FILTER,
+  activeFilterCount,
+  type BrowseFilterState,
+} from "@/components/home/BrowseControls";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { OrderAgainRow, type ReorderTarget } from "@/components/home/OrderAgainRow";
 import { RestaurantCard, RestaurantMiniCard } from "@/components/home/RestaurantCard";
@@ -19,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import type { FeedHit } from "@/components/home/types";
 
 const HomeQuery = graphql(`
-  query Home($lat: Float!, $lng: Float!) {
+  query Home($lat: Float!, $lng: Float!, $filter: BrowseFilter, $sort: BrowseSort) {
     homeBanners {
       id
       title
@@ -34,9 +42,10 @@ const HomeQuery = graphql(`
         id
       }
     }
-    browseBranches(lat: $lat, lng: $lng) {
+    browseBranches(lat: $lat, lng: $lng, filter: $filter, sort: $sort) {
       distanceM
       etaMinutes
+      priceBand
       branch {
         id
         minOrderMinor
@@ -111,13 +120,16 @@ const JoinWaitlistMutation = graphql(`
   }
 `);
 
-// Ranking v1: open & accepting first, then nearest (browseBranches is already
-// distance-sorted). Promoted slots hook in later (#22).
-function rank(a: FeedHit, b: FeedHit): number {
-  const openA = a.isOpenNow && a.isAcceptingOrders;
-  const openB = b.isOpenNow && b.isAcceptingOrders;
-  if (openA !== openB) return openA ? -1 : 1;
-  return a.distanceM - b.distanceM;
+// Map the filter-sheet state onto the browseBranches GraphQL input, omitting the
+// "any"/off facets so the server only applies what the user actually chose.
+function toFilterInput(f: BrowseFilterState) {
+  return {
+    freeDelivery: f.freeDelivery || undefined,
+    openNow: f.openNow || undefined,
+    minRating: f.minRating ?? undefined,
+    maxPriceBand: f.maxPriceBand ?? undefined,
+    cuisineTags: f.cuisineTags.length > 0 ? f.cuisineTags : undefined,
+  };
 }
 
 export default function HomePage() {
@@ -126,9 +138,19 @@ export default function HomePage() {
   const router = useRouter();
   useScrollRestoration("home-feed");
 
+  const [sort, setSort] = useState<BrowseSort>("relevance");
+  const [filter, setFilter] = useState<BrowseFilterState>(EMPTY_FILTER);
+
   const [{ data, fetching, error }, refetch] = useQuery({
     query: HomeQuery,
-    variables: { lat: loc.lat, lng: loc.lng },
+    // The generated BrowseSort enum has the same string values as our shared union;
+    // cast at the wire boundary so the UI can keep the lighter string type.
+    variables: {
+      lat: loc.lat,
+      lng: loc.lng,
+      filter: toFilterInput(filter),
+      sort: sort as GqlBrowseSort,
+    },
   });
   // Revalidate the viewer in the background (cache-and-network) so the logged-in gate
   // for the reorder row reflects the current session — e.g. after a logout on this or
@@ -170,6 +192,7 @@ export default function HomePage() {
         branchId: h.branch.id,
         distanceM: h.distanceM,
         etaMinutes: h.etaMinutes,
+        priceBand: h.priceBand,
         minOrderMinor: h.branch.minOrderMinor,
         deliveryFeeMinor: h.branch.deliveryFeeMinor,
         isAcceptingOrders: h.branch.isAcceptingOrders,
@@ -219,8 +242,13 @@ export default function HomePage() {
       ? activeCuisine
       : null;
 
-  const filtering = effectiveCuisine !== null || search.trim().length > 0;
+  // "Filtering" (hide the rich swimlanes, show the flat result list) whenever any
+  // server filter, the cuisine rail, a non-default sort, or a search term is active.
+  const serverFiltering = activeFilterCount(filter) > 0 || sort !== "relevance";
+  const filtering = serverFiltering || effectiveCuisine !== null || search.trim().length > 0;
 
+  // The server already applied the sheet filters + sort; the cuisine rail and free-text
+  // search refine the returned set client-side (order is preserved from the server).
   const feed = useMemo(() => {
     const q = search.trim().toLowerCase();
     return hits
@@ -232,8 +260,7 @@ export default function HomePage() {
           ? h.restaurant.name.toLowerCase().includes(q) ||
             h.restaurant.cuisineTags.some((c) => c.toLowerCase().includes(q))
           : true,
-      )
-      .sort(rank);
+      );
   }, [hits, effectiveCuisine, search]);
 
   const topRated = useMemo(
@@ -349,12 +376,25 @@ export default function HomePage() {
 
       {data && (
         <>
+          {/* Filter sheet + sort selector + quick chips (#51). Hidden only in a truly
+              empty delivery area with no filters (nothing to filter). */}
+          {(hits.length > 0 || serverFiltering) && (
+            <BrowseControls
+              sort={sort}
+              onSortChange={setSort}
+              filter={filter}
+              onFilterChange={setFilter}
+            />
+          )}
+
           {/* Cuisine rail */}
           <CuisineRail
             cuisines={availableCuisines}
             active={effectiveCuisine}
             onSelect={setActiveCuisine}
           />
+
+          <ActiveFilterChips filter={filter} onFilterChange={setFilter} />
 
           {/* Rich extras only when not filtering/searching AND something delivers here —
               promos/reorder link into restaurants, so they'd dead-end in an empty area. */}
@@ -379,8 +419,9 @@ export default function HomePage() {
             </>
           )}
 
-          {/* Empty */}
-          {hits.length === 0 ? (
+          {/* Empty. A genuinely empty area (no server filters, no results) gets the
+              waitlist; zero results *because of* filters gets a clear-filters prompt. */}
+          {hits.length === 0 && !serverFiltering ? (
             <EmptyState label={loc.label} lat={loc.lat} lng={loc.lng} />
           ) : (
             <section className="space-y-3">
@@ -390,9 +431,26 @@ export default function HomePage() {
                   : "All restaurants"}
               </h2>
               {feed.length === 0 ? (
-                <p className="rounded-xl bg-kd-surface-muted px-4 py-6 text-center text-sm text-kd-fg-muted">
-                  Nothing matches that filter. Try another cuisine or search term.
-                </p>
+                <div className="rounded-2xl border border-kd-border bg-kd-surface px-4 py-10 text-center">
+                  <div className="text-3xl">🔍</div>
+                  <p className="mt-2 text-sm font-medium text-kd-fg">
+                    No restaurants match — try clearing filters.
+                  </p>
+                  {(serverFiltering || effectiveCuisine !== null || search.trim().length > 0) && (
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        setFilter(EMPTY_FILTER);
+                        setSort("relevance");
+                        setActiveCuisine(null);
+                        setSearch("");
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {feed.map((hit) => (

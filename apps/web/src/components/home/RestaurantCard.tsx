@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Clock, Heart, Star, Tag } from "lucide-react";
-import { formatRs } from "@fd/shared";
+import { formatRs, priceBandLabel } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { cn } from "@/lib/utils";
 import type { FeedHit } from "./types";
@@ -126,6 +126,17 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             <span>{(hit.distanceM / 1000).toFixed(1)} km</span>
             <span className="text-kd-fg-subtle">·</span>
             <span>Min {formatRs(hit.minOrderMinor)}</span>
+            {hit.priceBand > 0 && (
+              <>
+                <span className="text-kd-fg-subtle">·</span>
+                <span aria-label={`Price band ${hit.priceBand} of 3`}>
+                  <span className="font-semibold text-kd-fg">{priceBandLabel(hit.priceBand)}</span>
+                  <span className="text-kd-fg-subtle">
+                    {priceBandLabel(3).slice(hit.priceBand * 2)}
+                  </span>
+                </span>
+              </>
+            )}
           </div>
         </div>
       </article>
