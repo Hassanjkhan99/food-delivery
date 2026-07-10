@@ -148,7 +148,11 @@ type BoardOrder = {
   items: BoardItem[];
 };
 
-type ItemSnap = { menuItemId?: string; name?: string; modifiers?: Array<{ name?: string } | string> };
+type ItemSnap = {
+  menuItemId?: string;
+  name?: string;
+  modifiers?: Array<{ name?: string; optionName?: string } | string>;
+};
 
 // Distinct linked menu items on an order, for the "86 an item" picker.
 function eightySixTargets(order: BoardOrder): EightySixTarget[] {
@@ -205,7 +209,7 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
 }
 
 export default function OrdersBoardPage() {
-  const { branch, restaurant } = useConsole();
+  const { branch, restaurant, refetch: refetchConsole } = useConsole();
   const [{ data, fetching }, refetch] = useQuery({
     query: BoardQuery,
     variables: { branchId: branch?.id ?? "" },
@@ -275,6 +279,9 @@ export default function OrdersBoardPage() {
   const setBusy = async (minutes: number) => {
     if (!branch) return;
     await setBusyMode({ branchId: branch.id, bufferMinutes: minutes });
+    // busyBuffer / the accept-sheet ETA come from the console branch, not the board query,
+    // so refetch the console to pull the new prepBufferMinutes; refresh the board too.
+    refetchConsole({ requestPolicy: "network-only" });
     refresh();
   };
 

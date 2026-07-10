@@ -41,7 +41,16 @@ export function useOrderAlarm(count: number, label: string) {
   const ctxRef = useRef<AudioContext | null>(null);
   const baseTitleRef = useRef<string | null>(null);
 
-  const acknowledged = ackedAt === count;
+  // Clear the acknowledgement the moment the backlog empties (adjusting state during render —
+  // React's recommended alternative to a setState-in-effect). Without this, acking a backlog
+  // of N and then working it down to 0 leaves ackedAt === N; a later burst that happens to
+  // return the count to exactly N would be silently suppressed. The common N=1 case (ack one,
+  // accept it, then a fresh single order arrives) would never re-arm. Resetting at zero
+  // guarantees the next order — whatever the count — re-arms every channel.
+  if (count === 0 && ackedAt !== null) setAckedAt(null);
+
+  // Only treat the alarm as acknowledged while there is still a backlog to acknowledge.
+  const acknowledged = count > 0 && ackedAt === count;
   const active = count > 0 && !acknowledged;
 
   // Sound loop.

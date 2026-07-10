@@ -9,7 +9,7 @@ import { formatRs } from "@fd/shared";
 export type TicketItem = {
   qty: number;
   name: string;
-  modifiers?: Array<{ name?: string } | string> | null;
+  modifiers?: Array<{ name?: string; optionName?: string } | string> | null;
   notes?: string | null;
 };
 
@@ -29,8 +29,11 @@ function esc(s: string): string {
   );
 }
 
-function modLabel(m: { name?: string } | string): string {
-  return typeof m === "string" ? m : (m.name ?? "");
+function modLabel(m: { name?: string; optionName?: string } | string): string {
+  // Order snapshots store selected modifiers as ResolvedLine.modifiers, whose option label
+  // lives in `optionName`; older/synthetic shapes may use `name`. Read both so real add-ons
+  // aren't silently dropped from the kitchen ticket.
+  return typeof m === "string" ? m : (m.optionName ?? m.name ?? "");
 }
 
 export function printKitchenTicket(order: TicketOrder) {

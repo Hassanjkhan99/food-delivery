@@ -200,28 +200,25 @@ builder.queryFields((t) => ({
         where: { branchId: args.branchId, placedAt: { gte: since } },
         select: {
           status: true,
+          acceptedAt: true,
           grandTotalMinor: true,
           items: { select: { qty: true, lineTotalMinor: true, menuSnapshotJson: true } },
         },
       });
 
-      // Revenue counts orders that were at least accepted (excludes rejected/expired/cancelled
-      // and still-pending). Statuses that never reached the kitchen.
-      const NOT_REVENUE = new Set([
-        "pending_acceptance",
-        "rejected",
-        "cancelled",
-        "auto_expired",
-      ]);
+      // An order "was accepted" if the kitchen ever accepted it, even if the customer later
+      // cancelled — the final status alone can't tell those apart (cancellation is allowed
+      // after `accepted`). Use the acceptedAt timestamp as the source of truth.
+      const wasAccepted = (o: { acceptedAt: Date | null }) => o.acceptedAt !== null;
+      // Revenue counts orders the kitchen accepted (mirrors wasAccepted) — never rejected,
+      // expired, or still-pending orders that never reached the kitchen.
       const DECIDED = orders.filter((o) => o.status !== "pending_acceptance");
-      const ACCEPTED = DECIDED.filter(
-        (o) => !["rejected", "cancelled", "auto_expired"].includes(o.status),
-      );
+      const ACCEPTED = orders.filter(wasAccepted);
 
       let revenueMinor = 0;
       const tally = new Map<string, { qty: number; revenueMinor: number }>();
-      for (const o of orders) {
-        if (!NOT_REVENUE.has(o.status)) revenueMinor += o.grandTotalMinor;
+      for (const o of ACCEPTED) {
+        revenueMinor += o.grandTotalMinor;
         for (const it of o.items) {
           const snap = it.menuSnapshotJson as { name?: string } | null;
           const name = snap?.name;
