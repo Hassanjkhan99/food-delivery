@@ -8,6 +8,7 @@
 // synced category rail, a collapsing hero, one-tap quick-add, and a floating cart bar.
 import { Suspense, use, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "urql";
 import { motion, useReducedMotion } from "framer-motion";
@@ -297,10 +298,14 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
       >
         <div>
           {theme.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={theme.logoUrl}
               alt=""
+              width={48}
+              height={48}
+              // Owner-supplied logo host isn't guaranteed to be in the image
+              // allowlist; skip the optimizer so any uploaded/CDN URL renders.
+              unoptimized
               className="mb-2 h-12 w-12 rounded-xl object-cover shadow"
             />
           )}

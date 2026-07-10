@@ -2,6 +2,7 @@ export * from "./constants";
 export * from "./cuisine";
 export * from "./hours";
 export * from "./money";
+export * from "./contrast";
 export * from "./geo";
 export * from "./roles";
 export * from "./orderStateMachine";

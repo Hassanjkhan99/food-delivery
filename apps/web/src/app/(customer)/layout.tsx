@@ -5,6 +5,8 @@ import { useQuery } from "urql";
 import { Search, ShoppingBag, User } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
+import { useI18n } from "@/i18n/provider";
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -23,6 +25,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const lines = useCart((s) => s.lines);
   const [{ data }] = useQuery({ query: ViewerQuery });
   const viewer = data?.viewer;
+  const { t } = useI18n();
 
   return (
     <div className="flex min-h-screen flex-col bg-kd-bg">
@@ -31,27 +34,36 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <Link href="/" className="text-lg font-bold tracking-tight text-kd-fg">
             🍜 Khaana<span className="text-kd-primary">Do</span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-3 text-sm sm:gap-4">
+            <LocaleSwitcher />
             <Link
               href="/search"
-              aria-label="Search"
-              className="text-kd-fg-muted hover:text-kd-fg"
+              aria-label={t("nav.search")}
+              className="rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
             >
-              <Search className="h-5 w-5" />
+              <Search className="h-5 w-5" aria-hidden />
             </Link>
-            <Link href="/orders" className="text-kd-fg-muted hover:text-kd-fg">
-              Orders
+            <Link
+              href="/orders"
+              className="rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+            >
+              {t("nav.orders")}
             </Link>
             <Link href="/help" className="hidden text-kd-fg-muted hover:text-kd-fg sm:inline">
               Help
             </Link>
             <Link
               href="/cart"
-              className="relative flex items-center gap-1 text-kd-fg-muted hover:text-kd-fg"
+              aria-label={
+                lines.length > 0
+                  ? `${t("a11y.viewCartItems")}, ${lines.length}`
+                  : t("a11y.viewCartItems")
+              }
+              className="relative flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
             >
-              <ShoppingBag className="h-5 w-5" />
+              <ShoppingBag className="h-5 w-5" aria-hidden />
               {lines.length > 0 && (
-                <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-kd-primary text-[10px] font-bold text-white">
+                <span className="absolute -end-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-kd-primary text-[10px] font-bold text-white">
                   {lines.length}
                 </span>
               )}
@@ -59,17 +71,18 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             {viewer ? (
               <Link
                 href="/account"
-                className="flex items-center gap-1 text-kd-fg-muted hover:text-kd-fg"
+                aria-label={t("a11y.account")}
+                className="flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
               >
-                <User className="h-5 w-5" />
-                <span className="hidden sm:inline">{viewer.user?.name ?? "Account"}</span>
+                <User className="h-5 w-5" aria-hidden />
+                <span className="hidden sm:inline">{viewer.user?.name ?? t("nav.account")}</span>
               </Link>
             ) : (
               <Link
                 href="/login"
-                className="rounded-lg bg-kd-primary px-3 py-1.5 font-medium text-white hover:bg-kd-primary-hover"
+                className="rounded-lg bg-kd-primary px-3 py-1.5 font-medium text-white hover:bg-kd-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
               >
-                Sign in
+                {t("nav.signIn")}
               </Link>
             )}
           </nav>
