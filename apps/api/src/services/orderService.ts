@@ -16,6 +16,7 @@ import { logger } from "../logger.js";
 import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
+import { onRefereeOrderDelivered } from "./referralService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
@@ -268,6 +269,8 @@ export async function transition(
     // Money side-effects live in the same transaction as the status change.
     if (to === "delivered") {
       await onOrderDelivered(tx, order);
+      // Referral (#58): the referee's first delivered order credits both wallets.
+      await onRefereeOrderDelivered(tx, order.customerId, order.id);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
       await onOrderMoneyReversal(tx, order, to);
     }

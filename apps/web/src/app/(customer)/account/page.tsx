@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Gift } from "lucide-react";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,13 @@ export default function AccountPage() {
           Roles: {viewer.roles?.map((r) => r?.role).join(", ") || "customer"}
         </p>
       </div>
+      <Link
+        href="/referrals"
+        className="mt-4 flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm hover:border-kd-primary"
+      >
+        <Gift className="h-5 w-5 text-kd-primary" />
+        <span className="font-medium text-kd-fg">Invite friends, earn credit</span>
+      </Link>
       <Button
         variant="outline"
         className="mt-6 w-full"

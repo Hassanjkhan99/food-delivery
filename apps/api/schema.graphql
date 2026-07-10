@@ -215,6 +215,7 @@ type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   acceptTask(taskId: String!): DeliveryTask!
   addPaymentMethod(card: CardInput!): PaymentMethod!
+  applyReferralCode(code: String!): ReferralSummary!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
@@ -384,6 +385,7 @@ type Query {
   myJobs: [DeliveryTask!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
+  myReferral: ReferralSummary!
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
@@ -435,6 +437,14 @@ type Rating {
   id: ID!
   stars: Int!
   tags: [String!]!
+}
+
+type ReferralSummary {
+  code: String!
+  earnedMinor: Int!
+  invited: Int!
+  qualified: Int!
+  walletBalanceMinor: Int!
 }
 
 type Refund {

@@ -25,3 +25,15 @@ export type ReviewTagValue = (typeof REVIEW_TAGS)[number]["value"];
 /** Map a stored tag value back to its display label (falls back to the raw value). */
 export const reviewTagLabel = (value: string): string =>
   REVIEW_TAGS.find((t) => t.value === value)?.label ?? value;
+
+/**
+ * Referral rewards (#58), in minor units (paisa). Both sides are credited to their
+ * customer wallet when the referee's first order is delivered (the qualifying event).
+ * Product policy, not legal facts — tune freely.
+ */
+export const REFERRAL_REFERRER_REWARD_MINOR = 15_000; // PKR 150 to the inviter
+export const REFERRAL_REFEREE_REWARD_MINOR = 10_000; // PKR 100 to the new friend
+
+/** Human-readable share code: 6 chars, unambiguous alphabet (no 0/O/1/I). */
+export const REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const REFERRAL_CODE_LENGTH = 6;
