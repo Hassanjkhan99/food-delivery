@@ -1,0 +1,51 @@
+name: Merchant feedback
+description: Feedback from a restaurant partner or their staff (console UX, onboarding, payouts, menu tooling).
+title: "merchant: <short summary>"
+labels: ["merchant-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For feedback from restaurant partners using the **restaurant console** — usability,
+        onboarding, menu upload, order handling, payouts, or feature gaps you hit while
+        running your business on KhaanaDo.
+  - type: input
+    id: restaurant
+    attributes:
+      label: Restaurant / brand
+      description: Which restaurant is this about? (Optional — omit if you prefer.)
+    validations:
+      required: false
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: What worked, what didn't, what's missing? Be as concrete as you can.
+    validations:
+      required: true
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - onboarding / setup
+        - menu upload / editing
+        - receiving & managing orders
+        - riders / dispatch
+        - payouts / money
+        - pricing / fees
+        - reporting / analytics
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How much does this hurt?
+      options:
+        - blocking — I can't run my business
+        - painful — costs me time/money daily
+        - annoyance — I have a workaround
+        - nice-to-have
+    validations:
+      required: true
