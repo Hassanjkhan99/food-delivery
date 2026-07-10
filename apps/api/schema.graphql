@@ -72,26 +72,6 @@ type BranchSearchResult {
   etaMinutes: Int!
 }
 
-type CancellationPolicy {
-  config: CancellationPolicyConfig!
-  rows: [CancellationPolicyRow!]!
-}
-
-type CancellationPolicyConfig {
-  afterPreparedSubtotalBps: Int!
-  gracePeriodSeconds: Int!
-  postAcceptFeeMinor: Int!
-  unreachableChargesDeliveryFee: Boolean!
-  unreachableWaitSeconds: Int!
-}
-
-type CancellationPolicyRow {
-  customerPays: String!
-  label: String!
-  outcome: String!
-  scenario: String!
-}
-
 input CardInput {
   cvc: String!
   expMonth: Int!
@@ -160,6 +140,12 @@ type HomeBanner {
   imageUrl: String!
   linkHref: String
   title: String!
+}
+
+type ItemSearchResult {
+  branch: Branch!
+  distanceM: Int!
+  item: MenuItem!
 }
 
 scalar JSON
@@ -387,18 +373,15 @@ type PresignResult {
 }
 
 type Query {
-  adminMetricsCsv(from: DateTime, granularity: String, to: DateTime): String!
   allRestaurants: [Restaurant!]!
   auditLogs(take: Int): [AuditLog!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
-  cancellationPolicyMatrix: CancellationPolicy!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
-  eimsInvoiceCsv(branchId: String!, from: DateTime, to: DateTime): String!
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
@@ -416,7 +399,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
-  settlementReportCsv(from: DateTime, restaurantId: String!, to: DateTime): String!
+  searchMarketplace(lat: Float!, lng: Float!, query: String!): SearchMarketplaceResult!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -569,6 +552,11 @@ input SaveAddressInput {
   notes: String
   phone: String
   text: String!
+}
+
+type SearchMarketplaceResult {
+  items: [ItemSearchResult!]!
+  restaurants: [BranchSearchResult!]!
 }
 
 type Subscription {
