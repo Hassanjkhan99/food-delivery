@@ -1,0 +1,464 @@
+// Shared-rider dispatch domain (#21): lender policy, offer generation, accept-locks-task,
+// ledger-split hook. Foundation building on the #67 offer→accept flow. See
+// services/dispatchService.ts for the scoring + constraint + split math (pure, testable).
+//
+// The engine is opt-in everywhere: a rider must set sharedOptIn, and a lender restaurant must
+// enable a SharedRiderPolicy (and not have the per-shift veto on) before its riders are lent.
+// The lender's own orders always win — enforced by the active-job ceiling in the scorer.
+import { prisma } from "@fd/db";
+import { GraphQLError } from "graphql";
+import type { AppContext } from "../context.js";
+import {
+  OFFER_TTL_SECONDS,
+  rankCandidates,
+  scoreCandidate,
+  postDispatchSplit,
+  type RiderCandidate,
+  type ScoredCandidate,
+} from "../services/dispatchService.js";
+import { builder } from "./builder.js";
+
+// Same membership guard used across the restaurant console.
+async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { branch: true },
+  });
+  if (!order) throw new GraphQLError("Order not found");
+  if (!ctx.restaurantIds.includes(order.branch.restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Not a member of this restaurant");
+  }
+  return order;
+}
+
+async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
+  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Not a member of this restaurant");
+  }
+}
+
+// ─────────────────────────── types ───────────────────────────
+
+builder.prismaObject("SharedRiderPolicy", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    restaurantId: t.exposeString("restaurantId"),
+    sharingEnabled: t.exposeBoolean("sharingEnabled"),
+    vetoActive: t.exposeBoolean("vetoActive"),
+    maxActiveJobs: t.exposeInt("maxActiveJobs"),
+    maxPickupMeters: t.exposeInt("maxPickupMeters"),
+    maxIncrementalDelaySec: t.exposeInt("maxIncrementalDelaySec"),
+    codTrustThreshold: t.exposeInt("codTrustThreshold"),
+  }),
+});
+
+builder.prismaObject("DeliveryOffer", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    taskId: t.exposeString("taskId"),
+    riderId: t.exposeString("riderId"),
+    status: t.exposeString("status"),
+    matchedScore: t.exposeFloat("matchedScore"),
+    rank: t.exposeInt("rank"),
+    pickupMeters: t.exposeInt("pickupMeters", { nullable: true }),
+    incrementalDelaySec: t.exposeInt("incrementalDelaySec", { nullable: true }),
+    isSharedRider: t.exposeBoolean("isSharedRider"),
+    expiresAt: t.field({ type: "DateTime", resolve: (o) => o.expiresAt }),
+    offeredAt: t.field({ type: "DateTime", resolve: (o) => o.offeredAt }),
+    respondedAt: t.field({ type: "DateTime", nullable: true, resolve: (o) => o.respondedAt }),
+    declineReason: t.exposeString("declineReason", { nullable: true }),
+    rider: t.relation("rider"),
+    task: t.relation("task"),
+  }),
+});
+
+// A scored candidate preview (no offer persisted) — surfaced so the restaurant console can
+// show the shortlist + why riders were excluded before committing to generate offers.
+const ScoredCandidateType = builder.objectRef<ScoredCandidate>("ScoredRiderCandidate");
+ScoredCandidateType.implement({
+  fields: (t) => ({
+    riderId: t.exposeString("riderId"),
+    isSharedRider: t.exposeBoolean("isSharedRider"),
+    score: t.exposeFloat("score"),
+    pickupMeters: t.exposeInt("pickupMeters"),
+    etaToPickupSec: t.exposeInt("etaToPickupSec"),
+    diversionMeters: t.exposeInt("diversionMeters"),
+    incrementalDelaySec: t.exposeInt("incrementalDelaySec"),
+    cashRiskScore: t.exposeFloat("cashRiskScore"),
+    eligible: t.exposeBoolean("eligible"),
+    rejectReason: t.exposeString("rejectReason", { nullable: true }),
+  }),
+});
+
+// ─────────────────────────── candidate loading + scoring ───────────────────────────
+
+type OrderForDispatch = Awaited<ReturnType<typeof loadOrderForDispatch>>;
+
+async function loadOrderForDispatch(orderId: string) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { branch: true },
+  });
+  if (!order) throw new GraphQLError("Order not found");
+  return order;
+}
+
+function dropoffOf(order: NonNullable<OrderForDispatch>): { lat: number; lng: number } | null {
+  const snap = order.addressSnapshotJson as { lat?: unknown; lng?: unknown } | null;
+  if (snap && typeof snap.lat === "number" && typeof snap.lng === "number") {
+    return { lat: snap.lat, lng: snap.lng };
+  }
+  return null;
+}
+
+/**
+ * Build the scored shortlist for an order. Candidate pool = the source restaurant's own
+ * riders PLUS any shared-eligible riders from OTHER restaurants (their lender policy is
+ * loaded so the scorer can apply the right guards). Cheap haversine scoring is applied to
+ * everyone; a production build would call a route matrix only for the top SHORTLIST_SIZE.
+ */
+async function buildScoredShortlist(order: NonNullable<OrderForDispatch>): Promise<ScoredCandidate[]> {
+  const sourceRestaurantId = order.branch.restaurantId;
+  const pickup = { lat: Number(order.branch.lat), lng: Number(order.branch.lng) };
+  const dropoff = dropoffOf(order);
+  const isCod = order.paymentMode === "cod";
+
+  // Own riders + shared-opted-in riders from other restaurants that are online.
+  const riders = await prisma.rider.findMany({
+    where: {
+      verificationStatus: "verified",
+      OR: [{ restaurantId: sourceRestaurantId }, { sharedOptIn: true }],
+      availability: { isOnline: true },
+    },
+    include: { availability: true },
+  });
+
+  // Active pre-pickup job counts, in one query.
+  const activeByRider = new Map<string, number>();
+  const active = await prisma.deliveryTask.groupBy({
+    by: ["riderId"],
+    where: {
+      riderId: { in: riders.map((r) => r.id) },
+      status: { in: ["offered", "assigned", "arrived_pickup"] },
+    },
+    _count: { _all: true },
+  });
+  for (const row of active) {
+    if (row.riderId) activeByRider.set(row.riderId, row._count._all);
+  }
+
+  // Lender policies for the restaurants owning shared candidates.
+  const policyByRestaurant = new Map<string, Awaited<ReturnType<typeof prisma.sharedRiderPolicy.findMany>>[number]>();
+  const otherRestaurantIds = [
+    ...new Set(
+      riders
+        .filter((r) => r.restaurantId && r.restaurantId !== sourceRestaurantId)
+        .map((r) => r.restaurantId as string),
+    ),
+  ];
+  if (otherRestaurantIds.length > 0) {
+    const policies = await prisma.sharedRiderPolicy.findMany({
+      where: { restaurantId: { in: otherRestaurantIds } },
+    });
+    for (const p of policies) policyByRestaurant.set(p.restaurantId, p);
+  }
+
+  return riders.map((rider) => {
+    const isShared = rider.restaurantId !== sourceRestaurantId;
+    const cand: RiderCandidate = {
+      rider,
+      isSharedRider: isShared,
+      activeJobCount: activeByRider.get(rider.id) ?? 0,
+    };
+    // The governing policy for a shared rider is their HOME restaurant's lender policy.
+    const policy = isShared && rider.restaurantId
+      ? policyByRestaurant.get(rider.restaurantId) ?? null
+      : null;
+    return scoreCandidate(cand, {
+      pickup,
+      dropoff,
+      sourceRestaurantId,
+      isCod,
+      policy,
+    });
+  });
+}
+
+// ─────────────────────────── queries ───────────────────────────
+
+builder.queryFields((t) => ({
+  // Lender policy for a restaurant (null until configured). Restaurant-scoped.
+  sharedRiderPolicy: t.prismaField({
+    type: "SharedRiderPolicy",
+    nullable: true,
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertRestaurantMember(ctx, args.restaurantId);
+      return prisma.sharedRiderPolicy.findUnique({
+        ...query,
+        where: { restaurantId: args.restaurantId },
+      });
+    },
+  }),
+
+  // Preview the scored dispatch shortlist for an order without persisting offers. Includes
+  // ineligible riders (with rejectReason) so the console can explain the shortlist.
+  sharedRiderCandidates: t.field({
+    type: [ScoredCandidateType],
+    authScopes: { restaurantMember: true },
+    args: { orderId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.orderId);
+      const full = await loadOrderForDispatch(order.id);
+      const scored = await buildScoredShortlist(full!);
+      // Best score first; eligible ranked ahead of rejected.
+      return scored.sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.score - a.score);
+    },
+  }),
+
+  // Offers already generated for an order's task (audit / live board).
+  offersForOrder: t.prismaField({
+    type: ["DeliveryOffer"],
+    authScopes: { restaurantMember: true },
+    args: { orderId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertOrderBranchMember(ctx, args.orderId);
+      const task = await prisma.deliveryTask.findUnique({ where: { orderId: args.orderId } });
+      if (!task) return [];
+      return prisma.deliveryOffer.findMany({
+        ...query,
+        where: { taskId: task.id },
+        orderBy: { rank: "asc" },
+      });
+    },
+  }),
+
+  // A rider's live (pending, unexpired) shared offers — the rider app polls/subscribes this.
+  mySharedOffers: t.prismaField({
+    type: ["DeliveryOffer"],
+    authScopes: { rider: true },
+    resolve: (query, _root, _args, ctx) =>
+      prisma.deliveryOffer.findMany({
+        ...query,
+        where: { riderId: ctx.riderId!, status: "pending", expiresAt: { gt: new Date() } },
+        orderBy: { offeredAt: "desc" },
+      }),
+  }),
+}));
+
+// ─────────────────────────── mutations ───────────────────────────
+
+builder.mutationFields((t) => ({
+  // Upsert a restaurant's lender policy (opt-in + limits + per-shift veto). Restaurant-scoped.
+  setSharedRiderPolicy: t.prismaField({
+    type: "SharedRiderPolicy",
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      sharingEnabled: t.arg.boolean({ required: false }),
+      vetoActive: t.arg.boolean({ required: false }),
+      maxActiveJobs: t.arg.int({ required: false }),
+      maxPickupMeters: t.arg.int({ required: false }),
+      maxIncrementalDelaySec: t.arg.int({ required: false }),
+      codTrustThreshold: t.arg.int({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      await assertRestaurantMember(ctx, args.restaurantId);
+      const patch = {
+        ...(args.sharingEnabled != null ? { sharingEnabled: args.sharingEnabled } : {}),
+        ...(args.vetoActive != null ? { vetoActive: args.vetoActive } : {}),
+        ...(args.maxActiveJobs != null ? { maxActiveJobs: args.maxActiveJobs } : {}),
+        ...(args.maxPickupMeters != null ? { maxPickupMeters: args.maxPickupMeters } : {}),
+        ...(args.maxIncrementalDelaySec != null
+          ? { maxIncrementalDelaySec: args.maxIncrementalDelaySec }
+          : {}),
+        ...(args.codTrustThreshold != null ? { codTrustThreshold: args.codTrustThreshold } : {}),
+      };
+      return prisma.sharedRiderPolicy.upsert({
+        ...query,
+        where: { restaurantId: args.restaurantId },
+        update: patch,
+        create: { restaurantId: args.restaurantId, ...patch },
+      });
+    },
+  }),
+
+  // Rider consent to receive shared-work offers from other restaurants (opt-in everywhere).
+  setRiderSharedOptIn: t.field({
+    type: "Boolean",
+    authScopes: { rider: true },
+    args: { optIn: t.arg.boolean({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      await prisma.rider.update({
+        where: { id: ctx.riderId! },
+        data: { sharedOptIn: args.optIn },
+      });
+      return args.optIn;
+    },
+  }),
+
+  // Generate offers to the top shortlisted riders for an order's delivery task. Creates the
+  // task in `offered` state if needed (mirrors offerTask) and writes one DeliveryOffer per
+  // shortlisted rider with a short (OFFER_TTL_SECONDS) expiry. Every offer is recorded for
+  // fairness analytics. The first valid accept locks the task (acceptSharedOffer).
+  generateSharedOffers: t.field({
+    type: [ScoredCandidateType],
+    authScopes: { restaurantMember: true },
+    args: {
+      orderId: t.arg.string({ required: true }),
+      // Cap how many top candidates actually receive an offer (defaults to the shortlist).
+      limit: t.arg.int({ required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.orderId);
+      const full = (await loadOrderForDispatch(order.id))!;
+      const scored = await buildScoredShortlist(full);
+      const shortlist = rankCandidates(scored);
+      const take = args.limit != null ? Math.max(0, Math.min(args.limit, shortlist.length)) : shortlist.length;
+      const winners = shortlist.slice(0, take);
+      if (winners.length === 0) return scored;
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + OFFER_TTL_SECONDS * 1000);
+
+      await prisma.$transaction(async (tx) => {
+        // Ensure a DeliveryTask exists in `offered` state (idempotent-ish upsert).
+        const task = await tx.deliveryTask.upsert({
+          where: { orderId: order.id },
+          update: {},
+          create: {
+            orderId: order.id,
+            status: "offered",
+            offeredAt: now,
+            codAmountMinor: order.paymentMode === "cod" ? order.grandTotalMinor : 0,
+          },
+        });
+        // Supersede any still-pending offers for this task before re-offering.
+        await tx.deliveryOffer.updateMany({
+          where: { taskId: task.id, status: "pending" },
+          data: { status: "withdrawn", respondedAt: now },
+        });
+        for (const [i, w] of winners.entries()) {
+          await tx.deliveryOffer.create({
+            data: {
+              taskId: task.id,
+              riderId: w.riderId,
+              status: "pending",
+              matchedScore: w.score,
+              rank: i,
+              pickupMeters: w.pickupMeters >= 0 ? w.pickupMeters : null,
+              incrementalDelaySec: w.incrementalDelaySec >= 0 ? w.incrementalDelaySec : null,
+              isSharedRider: w.isSharedRider,
+              expiresAt,
+            },
+          });
+        }
+      });
+
+      return winners;
+    },
+  }),
+
+  // Rider accepts a shared offer. The FIRST valid accept for a task wins and LOCKS the task
+  // to that rider (task → assigned, offer → accepted, sibling pending offers → withdrawn). The
+  // conditional updateMany guards make this race-safe: a second accept, an expired offer, or an
+  // already-locked task all fail cleanly.
+  acceptSharedOffer: t.prismaField({
+    type: "DeliveryOffer",
+    authScopes: { rider: true },
+    args: { offerId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const offer = await prisma.deliveryOffer.findUnique({
+        where: { id: args.offerId },
+        include: { task: true },
+      });
+      if (!offer) throw new GraphQLError("Offer not found");
+      if (offer.riderId !== ctx.riderId) throw new GraphQLError("Not your offer");
+      if (offer.status !== "pending") throw new GraphQLError("Offer is no longer available");
+      if (offer.expiresAt.getTime() <= Date.now()) throw new GraphQLError("Offer has expired");
+
+      const now = new Date();
+      await prisma.$transaction(async (tx) => {
+        // Lock the task to this rider ONLY if it is still open (offered + no rider committed).
+        const locked = await tx.deliveryTask.updateMany({
+          where: { id: offer.taskId, status: "offered", riderId: null },
+          data: { status: "assigned", riderId: offer.riderId, acceptedAt: now, assignedAt: now },
+        });
+        if (locked.count === 0) throw new GraphQLError("Task is no longer available");
+        // Accept THIS offer only if still pending (loses a concurrent accept cleanly).
+        const won = await tx.deliveryOffer.updateMany({
+          where: { id: offer.id, status: "pending" },
+          data: { status: "accepted", respondedAt: now },
+        });
+        if (won.count === 0) throw new GraphQLError("Offer is no longer available");
+        // Withdraw sibling pending offers for the same task.
+        await tx.deliveryOffer.updateMany({
+          where: { taskId: offer.taskId, status: "pending", id: { not: offer.id } },
+          data: { status: "withdrawn", respondedAt: now },
+        });
+        await tx.deliveryEvent.create({
+          data: { taskId: offer.taskId, type: "accepted", actorUserId: ctx.userId },
+        });
+      });
+
+      return prisma.deliveryOffer.findUniqueOrThrow({ ...query, where: { id: offer.id } });
+    },
+  }),
+
+  // Rider declines a shared offer (recorded for fairness analytics; does not touch the task).
+  declineSharedOffer: t.field({
+    type: "Boolean",
+    authScopes: { rider: true },
+    args: { offerId: t.arg.string({ required: true }), reason: t.arg.string({ required: false }) },
+    resolve: async (_root, args, ctx) => {
+      const res = await prisma.deliveryOffer.updateMany({
+        where: { id: args.offerId, riderId: ctx.riderId!, status: "pending" },
+        data: { status: "declined", respondedAt: new Date(), declineReason: args.reason ?? null },
+      });
+      if (res.count === 0) throw new GraphQLError("Offer is no longer available");
+      return true;
+    },
+  }),
+
+  // Ledger-split hook for a DELIVERED shared job. Posts the platform dispatch fee, lender
+  // share (when the rider belongs to another restaurant), and rider bonus as double-entry
+  // legs. Additive: leaves the normal settlement (onOrderDelivered) untouched, and is a
+  // no-op when the accepted rider is the seller's own. Idempotency is the caller's concern
+  // (a real build fires this from the delivered transition once); exposed as a mutation here
+  // so the foundation is exercisable end-to-end. Restaurant-scoped to the seller.
+  postSharedDispatchSplit: t.field({
+    type: "String",
+    nullable: true,
+    authScopes: { restaurantMember: true },
+    args: { orderId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.orderId);
+      const task = await prisma.deliveryTask.findUnique({
+        where: { orderId: order.id },
+        include: { rider: true },
+      });
+      if (!task || task.status !== "delivered") {
+        throw new GraphQLError("Order has no delivered task");
+      }
+      if (!task.rider) throw new GraphQLError("Task has no rider");
+
+      const sourceRestaurantId = order.branch.restaurantId;
+      const lenderRestaurantId =
+        task.rider.restaurantId && task.rider.restaurantId !== sourceRestaurantId
+          ? task.rider.restaurantId
+          : null;
+
+      return prisma.$transaction((tx) =>
+        postDispatchSplit(tx, {
+          orderId: order.id,
+          orderCode: order.code,
+          deliveryFeeMinor: order.deliveryFeeMinor,
+          sourceRestaurantId,
+          lenderRestaurantId,
+          riderId: task.rider!.id,
+        }),
+      );
+    },
+  }),
+}));

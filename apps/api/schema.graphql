@@ -114,6 +114,24 @@ type DashboardStats {
 
 scalar DateTime
 
+type DeliveryOffer {
+  declineReason: String
+  expiresAt: DateTime!
+  id: ID!
+  incrementalDelaySec: Int
+  isSharedRider: Boolean!
+  matchedScore: Float!
+  offeredAt: DateTime!
+  pickupMeters: Int
+  rank: Int!
+  respondedAt: DateTime
+  rider: Rider!
+  riderId: String!
+  status: String!
+  task: DeliveryTask!
+  taskId: String!
+}
+
 type DeliveryTask {
   acceptedAt: DateTime
   assignedAt: DateTime
@@ -213,18 +231,21 @@ type ModifierOption {
 
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
+  acceptSharedOffer(offerId: String!): DeliveryOffer!
   acceptTask(taskId: String!): DeliveryTask!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
+  declineSharedOffer(offerId: String!, reason: String): Boolean!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
   deleteModifierOption(id: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
+  generateSharedOffers(limit: Int, orderId: String!): [ScoredRiderCandidate!]!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
@@ -233,6 +254,7 @@ type Mutation {
   offerTask(orderId: String!, riderId: String!): DeliveryTask!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
+  postSharedDispatchSplit(orderId: String!): String
   presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
   previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
   publishMenu(branchId: String!): Menu!
@@ -254,6 +276,8 @@ type Mutation {
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
+  setRiderSharedOptIn(optIn: Boolean!): Boolean!
+  setSharedRiderPolicy(codTrustThreshold: Int, maxActiveJobs: Int, maxIncrementalDelaySec: Int, maxPickupMeters: Int, restaurantId: String!, sharingEnabled: Boolean, vetoActive: Boolean): SharedRiderPolicy!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
@@ -387,12 +411,16 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
+  mySharedOffers: [DeliveryOffer!]!
+  offersForOrder(orderId: String!): [DeliveryOffer!]!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  sharedRiderCandidates(orderId: String!): [ScoredRiderCandidate!]!
+  sharedRiderPolicy(restaurantId: String!): SharedRiderPolicy
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -545,6 +573,30 @@ input SaveAddressInput {
   notes: String
   phone: String
   text: String!
+}
+
+type ScoredRiderCandidate {
+  cashRiskScore: Float!
+  diversionMeters: Int!
+  eligible: Boolean!
+  etaToPickupSec: Int!
+  incrementalDelaySec: Int!
+  isSharedRider: Boolean!
+  pickupMeters: Int!
+  rejectReason: String
+  riderId: String!
+  score: Float!
+}
+
+type SharedRiderPolicy {
+  codTrustThreshold: Int!
+  id: ID!
+  maxActiveJobs: Int!
+  maxIncrementalDelaySec: Int!
+  maxPickupMeters: Int!
+  restaurantId: String!
+  sharingEnabled: Boolean!
+  vetoActive: Boolean!
 }
 
 type Subscription {

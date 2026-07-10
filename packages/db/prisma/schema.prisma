@@ -123,6 +123,19 @@ enum DeliveryEventType {
   incident
 }
 
+// Lifecycle of a shared-rider DeliveryOffer (#21). An offer is the artifact the dispatch
+// engine emits to a candidate rider (separate from the DeliveryTask/Order). It is `pending`
+// until the rider accepts (`accepted` — which locks the task) or lets it lapse (`declined`
+// on explicit reject, `expired` once expiresAt passes). Only one offer per task may reach
+// `accepted`; the accept path enforces the lock. Additive.
+enum DeliveryOfferStatus {
+  pending
+  accepted
+  declined
+  expired
+  withdrawn
+}
+
 enum PaymentMode {
   cod
   card
@@ -301,6 +314,7 @@ model Restaurant {
   payouts   Payout[]
   campaigns Campaign[]
   ratings   Rating[]
+  sharedRiderPolicy SharedRiderPolicy?
 
   @@map("restaurants")
 }
@@ -528,12 +542,20 @@ model Rider {
   vehicleType        String?
   verificationStatus RiderVerification @default(pending)
   cashLimitMinor     Int               @default(1000000)
+  // Shared-rider dispatch (#21). `sharedOptIn` is the per-rider consent to receive
+  // shared-work offers from OTHER restaurants (defaults off — opt-in everywhere). In a
+  // full build this is toggled per shift; the beta treats it as a persistent flag.
+  // `trustScore` (0–100) feeds the dispatch scoring function and the COD cash rule:
+  // shared riders may only carry COD above a trust threshold. Additive.
+  sharedOptIn        Boolean           @default(false)
+  trustScore         Int               @default(50)
   createdAt          DateTime          @default(now()) @db.Timestamptz()
 
   user         User               @relation(fields: [userId], references: [id])
   restaurant   Restaurant?        @relation(fields: [restaurantId], references: [id])
   availability RiderAvailability?
   tasks        DeliveryTask[]
+  offers       DeliveryOffer[]
 
   @@index([restaurantId])
   @@map("riders")
@@ -659,9 +681,69 @@ model DeliveryTask {
   rider    Rider?          @relation(fields: [riderId], references: [id])
   podMedia MediaAsset?     @relation("PodMedia", fields: [podMediaId], references: [id])
   events   DeliveryEvent[]
+  offers   DeliveryOffer[]
 
   @@index([riderId, status])
   @@map("delivery_tasks")
+}
+
+// ───────────────────────────── shared-rider dispatch (#21) ─────────────────────────────
+
+// Per-restaurant opt-in + guard-rails for lending idle rider capacity to nearby
+// restaurants (the "lender" side). A branch with no policy row is treated as NOT sharing
+// (opt-in everywhere). `vetoActive` is the per-shift kill switch the lender can flip to
+// pause sharing without losing their configured limits. Additive; the lender's own orders
+// always win, enforced in dispatchService, not here.
+model SharedRiderPolicy {
+  id                 String   @id @default(cuid())
+  restaurantId       String   @unique
+  sharingEnabled     Boolean  @default(false)
+  vetoActive         Boolean  @default(false)
+  // Max committed pre-pickup jobs a shared rider may hold (beta default 1; 2 only after
+  // trust proven — enforced in the dispatch constraints, this is the ceiling).
+  maxActiveJobs      Int      @default(1)
+  // Pickup-distance ceiling to a new shared job, metres (dense-zone beta default 1.5 km).
+  maxPickupMeters    Int      @default(1500)
+  // Incremental delay a shared job may add to the committed customer, seconds (beta 5 min).
+  maxIncrementalDelaySec Int  @default(300)
+  // Minimum rider trustScore required before a shared rider may carry COD for this lender.
+  codTrustThreshold  Int      @default(70)
+  createdAt          DateTime @default(now()) @db.Timestamptz()
+  updatedAt          DateTime @updatedAt @db.Timestamptz()
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@map("shared_rider_policies")
+}
+
+// A dispatch offer emitted to one candidate rider for one delivery task. Distinct from the
+// DeliveryTask (which is the order's fulfilment record): several offers may be generated
+// for a task — one per shortlisted rider — but at most one reaches `accepted`, and accepting
+// locks the task to that rider. `matchedScore` is the dispatch score at generation time;
+// `expiresAt` gives the 15–20s accept window; `rank` is the position in the shortlist.
+// Every offer/accept/decline is recorded here for fairness analytics. Additive.
+model DeliveryOffer {
+  id           String              @id @default(cuid())
+  taskId       String
+  riderId      String
+  status       DeliveryOfferStatus @default(pending)
+  matchedScore Float
+  rank         Int                 @default(0)
+  // Constraint snapshot at generation (metres / seconds) — kept for analytics + audit.
+  pickupMeters Int?
+  incrementalDelaySec Int?
+  isSharedRider Boolean            @default(false)
+  expiresAt    DateTime            @db.Timestamptz()
+  offeredAt    DateTime            @default(now()) @db.Timestamptz()
+  respondedAt  DateTime?           @db.Timestamptz()
+  declineReason String?
+
+  task  DeliveryTask @relation(fields: [taskId], references: [id])
+  rider Rider        @relation(fields: [riderId], references: [id])
+
+  @@index([taskId, status])
+  @@index([riderId, status])
+  @@map("delivery_offers")
 }
 
 model DeliveryEvent {
