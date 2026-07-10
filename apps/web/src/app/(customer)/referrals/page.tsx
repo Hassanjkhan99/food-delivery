@@ -46,12 +46,15 @@ export default function ReferralsPage() {
 
   async function onCopy() {
     if (!summary?.code) return;
+    // Optional chaining would swallow a missing Clipboard API and still flip the
+    // checkmark, so bail early when it's unavailable (e.g. insecure context).
+    if (!navigator.clipboard) return;
     try {
-      await navigator.clipboard?.writeText(summary.code);
+      await navigator.clipboard.writeText(summary.code);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard unavailable (e.g. insecure context) — the code is still visible.
+      // Write rejected (permissions/insecure context) — the code is still visible.
     }
   }
 

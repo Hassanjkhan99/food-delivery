@@ -15,6 +15,22 @@ type ReferralSummaryShape = {
   walletBalanceMinor: number;
 };
 
+/** Compute the caller's live referral summary (shared by the query + mutation). */
+async function getReferralSummary(userId: string): Promise<ReferralSummaryShape> {
+  const code = await getOrCreateReferralCode(userId);
+  const made = await prisma.referral.findMany({ where: { referrerId: userId } });
+  const qualified = made.filter((r) => r.status === "qualified");
+  const earnedMinor = qualified.reduce((s, r) => s + r.referrerRewardMinor, 0);
+  const walletBalanceMinor = await accountBalance(prisma, `customer:${userId}:prepaid`);
+  return {
+    code,
+    invited: made.length,
+    qualified: qualified.length,
+    earnedMinor,
+    walletBalanceMinor,
+  };
+}
+
 const ReferralSummaryType = builder.objectRef<ReferralSummaryShape>("ReferralSummary");
 ReferralSummaryType.implement({
   fields: (t) => ({
@@ -35,21 +51,7 @@ builder.queryFields((t) => ({
   myReferral: t.field({
     type: ReferralSummaryType,
     authScopes: { loggedIn: true },
-    resolve: async (_root, _args, ctx) => {
-      const userId = ctx.userId!;
-      const code = await getOrCreateReferralCode(userId);
-      const made = await prisma.referral.findMany({ where: { referrerId: userId } });
-      const qualified = made.filter((r) => r.status === "qualified");
-      const earnedMinor = qualified.reduce((s, r) => s + r.referrerRewardMinor, 0);
-      const walletBalanceMinor = await accountBalance(prisma, `customer:${userId}:prepaid`);
-      return {
-        code,
-        invited: made.length,
-        qualified: qualified.length,
-        earnedMinor,
-        walletBalanceMinor,
-      };
-    },
+    resolve: async (_root, _args, ctx) => getReferralSummary(ctx.userId!),
   }),
 }));
 
@@ -62,16 +64,9 @@ builder.mutationFields((t) => ({
       const userId = ctx.userId!;
       const { code } = codeInputSchema.parse({ code: args.code });
       await applyReferralCode(userId, code);
-      // Return the caller's own summary so the UI can refresh in one round-trip.
-      const myCode = await getOrCreateReferralCode(userId);
-      const walletBalanceMinor = await accountBalance(prisma, `customer:${userId}:prepaid`);
-      return {
-        code: myCode,
-        invited: 0,
-        qualified: 0,
-        earnedMinor: 0,
-        walletBalanceMinor,
-      };
+      // Return the caller's own live summary so the UI refreshes in one round-trip
+      // (a user may already have made invites of their own before applying a code).
+      return getReferralSummary(userId);
     },
   }),
 }));

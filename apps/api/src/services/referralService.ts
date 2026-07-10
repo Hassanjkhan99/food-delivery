@@ -95,6 +95,21 @@ export async function onRefereeOrderDelivered(
   const referral = await tx.referral.findUnique({ where: { refereeId: customerId } });
   if (!referral || referral.status !== "pending") return;
 
+  // Atomically claim the referral before paying so two concurrent delivery
+  // transitions for the same referee can't both post rewards (double credit).
+  // The `status: "pending"` guard means only one transaction flips the row
+  // (count 1) and proceeds; the loser sees count 0 and bails. If the ledger
+  // post below throws, the whole `tx` rolls back — including this claim.
+  const claimed = await tx.referral.updateMany({
+    where: { id: referral.id, status: "pending" },
+    data: {
+      status: "qualified",
+      qualifiedAt: new Date(),
+      qualifyingOrderId: orderId,
+    },
+  });
+  if (claimed.count === 0) return;
+
   const total = referral.refereeRewardMinor + referral.referrerRewardMinor;
   const txId = await postLedgerTx(
     tx,
@@ -116,13 +131,9 @@ export async function onRefereeOrderDelivered(
     ],
   );
 
+  // Record the balanced ledger tx on the now-qualified referral.
   await tx.referral.update({
     where: { id: referral.id },
-    data: {
-      status: "qualified",
-      qualifiedAt: new Date(),
-      ledgerTxId: txId,
-      qualifyingOrderId: orderId,
-    },
+    data: { ledgerTxId: txId },
   });
 }
