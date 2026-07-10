@@ -39,8 +39,14 @@ async function chargePlan(userId: string, planPriceMinor: number, paymentMethodI
   return result.providerRef;
 }
 
-// Subscribe to a plan (or renew/reactivate an existing subscription). Idempotent-ish:
-// an already-active subscription is returned untouched rather than double-charged.
+// Subscribe to a plan (or renew/reactivate an existing subscription).
+//
+// Concurrency-safe (follow-up #123): a naive check-then-charge lets two concurrent calls
+// (double-click / two tabs / retry) both pass the "already active?" check and both run the
+// card charge — double-charging for one membership. Instead we *claim* the single
+// subscription slot atomically (guarded by the @@unique([userId]) index and a conditional
+// status flip) BEFORE charging, so exactly one caller reaches chargePlan. On charge failure
+// the claim is rolled back so the user isn't left with an unpaid "active" membership.
 export async function subscribe(userId: string, planId: string, paymentMethodId: string) {
   const plan = await prisma.membershipPlan.findFirst({ where: { id: planId, isActive: true } });
   if (!plan) throw new GraphQLError("Membership plan not available");
@@ -50,11 +56,9 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
     return existing;
   }
 
-  const chargeRef = await chargePlan(userId, plan.priceMinor, paymentMethodId);
   const now = new Date();
   const periodEnd = new Date(now.getTime() + plan.billingPeriodDays * DAY_MS);
-
-  const data: Prisma.SubscriptionUncheckedCreateInput = {
+  const claim: Prisma.SubscriptionUncheckedCreateInput = {
     userId,
     planId: plan.id,
     status: "active",
@@ -62,18 +66,55 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
     currentPeriodEnd: periodEnd,
     autoRenew: true,
     paymentMethodId,
-    lastChargeRef: chargeRef,
+    // lastChargeRef is filled in only after the charge succeeds below.
   };
 
-  // Reuse the row if the user had a lapsed/cancelled subscription, else create one.
+  // Step 1 — atomically claim the slot. Whichever caller wins gets a row id and proceeds
+  // to charge; losers see no claim and return the now-active membership without charging.
+  let claimedId: string | null = null;
   if (existing) {
-    return prisma.subscription.update({
-      where: { id: existing.id },
-      data: { ...data, cancelledAt: null },
+    // Reactivate a lapsed/cancelled row, but only if it isn't already active — the
+    // `status: { not: "active" }` guard means exactly one concurrent caller flips it.
+    const flipped = await prisma.subscription.updateMany({
+      where: { id: existing.id, status: { not: "active" } },
+      data: { ...claim, cancelledAt: null },
+    });
+    if (flipped.count === 1) claimedId = existing.id;
+  } else {
+    // First-time subscribe: the @@unique([userId]) index rejects the loser's create.
+    try {
+      const created = await prisma.subscription.create({ data: claim });
+      claimedId = created.id;
+    } catch (err) {
+      if ((err as { code?: string }).code !== "P2002") throw err;
+    }
+  }
+
+  if (claimedId === null) {
+    // Lost the race — another concurrent call already claimed & is charging. Return the
+    // active membership rather than charging a second time.
+    const active = await currentMembership(userId);
+    if (active) return active;
+    throw new GraphQLError("Could not create membership, please retry");
+  }
+
+  // Step 2 — charge exactly once. Roll the claim back if the card is declined.
+  try {
+    const chargeRef = await chargePlan(userId, plan.priceMinor, paymentMethodId);
+    return await prisma.subscription.update({
+      where: { id: claimedId },
+      data: { lastChargeRef: chargeRef },
       include: { plan: true },
     });
+  } catch (err) {
+    await prisma.subscription
+      .update({
+        where: { id: claimedId },
+        data: { status: "cancelled", cancelledAt: new Date() },
+      })
+      .catch(() => {});
+    throw err;
   }
-  return prisma.subscription.create({ data, include: { plan: true } });
 }
 
 // Cancel: stop auto-renew. The member keeps the benefit until currentPeriodEnd
