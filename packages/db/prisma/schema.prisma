@@ -871,11 +871,29 @@ model Rating {
   moderationStatus ModerationStatus @default(approved)
   createdAt        DateTime         @default(now()) @db.Timestamptz()
 
-  order      Order      @relation(fields: [orderId], references: [id])
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  order      Order           @relation(fields: [orderId], references: [id])
+  restaurant Restaurant      @relation(fields: [restaurantId], references: [id])
+  response   RatingResponse?
 
   @@index([restaurantId])
   @@map("ratings")
+}
+
+// Vendor (restaurant) reply to a customer review (#61). One reply per rating
+// (ratingId unique). Auto-published — shown on the public reviews page (#38).
+// Additive: no changes to existing Rating columns.
+model RatingResponse {
+  id           String   @id @default(cuid())
+  ratingId     String   @unique
+  restaurantId String
+  body         String
+  createdAt    DateTime @default(now()) @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @db.Timestamptz()
+
+  rating Rating @relation(fields: [ratingId], references: [id])
+
+  @@index([restaurantId])
+  @@map("rating_responses")
 }
 
 // Append-only audit trail for privileged actions.
