@@ -72,6 +72,26 @@ type BranchSearchResult {
   etaMinutes: Int!
 }
 
+type CancellationPolicy {
+  config: CancellationPolicyConfig!
+  rows: [CancellationPolicyRow!]!
+}
+
+type CancellationPolicyConfig {
+  afterPreparedSubtotalBps: Int!
+  gracePeriodSeconds: Int!
+  postAcceptFeeMinor: Int!
+  unreachableChargesDeliveryFee: Boolean!
+  unreachableWaitSeconds: Int!
+}
+
+type CancellationPolicyRow {
+  customerPays: String!
+  label: String!
+  outcome: String!
+  scenario: String!
+}
+
 input CardInput {
   cvc: String!
   expMonth: Int!
@@ -374,6 +394,7 @@ type Query {
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  cancellationPolicyMatrix: CancellationPolicy!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!

@@ -4,6 +4,7 @@ import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
+import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { accountBalance } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
@@ -405,7 +406,20 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       await assertOrderBranchMember(ctx, args.id);
       if (!args.reason.trim()) throw new GraphQLError("A rejection reason is required");
-      return transition(args.id, "rejected", restaurantActor(ctx), { reason: args.reason });
+      // #30: restaurant-fault cancellation (full refund + ranking penalty). Evaluate
+      // pre-transition, persist the policy row only after the transition succeeds.
+      const order = await prisma.order.findUniqueOrThrow({ where: { id: args.id } });
+      const decision = evaluateOrderCancellation(order, "restaurant");
+      const updated = await transition(args.id, "rejected", restaurantActor(ctx), {
+        reason: args.reason,
+        meta: {
+          policyScenario: decision.scenario,
+          policyOutcome: decision.outcome,
+          faultParty: decision.faultParty,
+        },
+      });
+      await recordCancellation(order, "restaurant");
+      return updated;
     },
   }),
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Ban,
   BadgeDollarSign,
   Bike,
   FileClock,
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },
   { href: "/admin/metrics/export", label: "Metrics export", icon: FileSpreadsheet },
+  { href: "/admin/cancellations", label: "Cancellations", icon: Ban },
   { href: "/admin/audit", label: "Audit", icon: FileClock },
 ];
 

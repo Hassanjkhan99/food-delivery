@@ -358,6 +358,7 @@ model Branch {
   orders     Order[]
   sourceDocs MenuSourceDoc[]
   hours      BranchHours[]
+  cancellationStat BranchCancellationStat?
 
   @@index([restaurantId])
   @@map("branches")
@@ -924,11 +925,34 @@ model Cancellation {
   cancelledBy      String
   reasonCode       String
   feeAssessedMinor Int      @default(0)
+  // #30 cancellation & refund policy engine. Populated by policyService.evaluateCancellation.
+  policyOutcome    String? // full_refund | partial_refund | fee_charged | no_charge | support_review
+  faultParty       String? // customer | restaurant | rider | dispatch | platform | none
+  refundMinor      Int? // amount refunded to customer (minor units); null on legacy rows
+  policyNote       String? // human-readable rationale from the policy engine
   createdAt        DateTime @default(now()) @db.Timestamptz()
 
   order Order @relation(fields: [orderId], references: [id])
 
   @@map("cancellations")
+}
+
+// #30 ranking-penalty counters, keyed per branch. Incremented whenever a cancellation
+// scenario carries fault against the branch (rejects, auto-expiry, wrong/missing item).
+// Feeds browse ordering later; kept as a simple running tally for now.
+model BranchCancellationStat {
+  id            String   @id @default(cuid())
+  branchId      String   @unique
+  penaltyPoints Int      @default(0)
+  rejectCount   Int      @default(0)
+  expiredCount  Int      @default(0)
+  faultCount    Int      @default(0)
+  updatedAt     DateTime @updatedAt @db.Timestamptz()
+  createdAt     DateTime @default(now()) @db.Timestamptz()
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("branch_cancellation_stats")
 }
 
 // Double-entry ledger. Legs of one txId must balance (SUM(debit) == SUM(credit)),
