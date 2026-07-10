@@ -151,7 +151,38 @@ RestaurantAnalytics.implement({
   }),
 });
 
+// Vendor "Today" tab (#46): live operational snapshot for the current PKT calendar day,
+// computed from this branch's orders since local midnight. acceptanceSlaPct is the share
+// of orders that reached the kitchen (accepted or beyond) vs. all decided orders (i.e.
+// excluding those still pending) — a rough on-time/accepted proxy, not a timing SLA.
+type TodaySummaryResult = {
+  orders: number;
+  revenueMinor: number;
+  acceptanceSlaPct: number;
+  topItems: Array<{ name: string; qty: number; revenueMinor: number }>;
+};
+const TodaySummary = builder.objectRef<TodaySummaryResult>("TodaySummary");
+TodaySummary.implement({
+  fields: (t) => ({
+    orders: t.exposeInt("orders"),
+    revenueMinor: t.exposeInt("revenueMinor"),
+    acceptanceSlaPct: t.exposeInt("acceptanceSlaPct"),
+    topItems: t.field({ type: [AnalyticsTopItem], resolve: (a) => a.topItems }),
+  }),
+});
+
 const PKT_OFFSET_MS = 5 * 60 * 60_000;
+
+// Start of the current PKT calendar day as a UTC instant.
+function pktStartOfToday(): Date {
+  const nowPkt = new Date(Date.now() + PKT_OFFSET_MS);
+  const midnightPkt = Date.UTC(
+    nowPkt.getUTCFullYear(),
+    nowPkt.getUTCMonth(),
+    nowPkt.getUTCDate(),
+  );
+  return new Date(midnightPkt - PKT_OFFSET_MS);
+}
 
 // ── queries ─────────────────────────────────────────────────────────────────
 
@@ -183,6 +214,63 @@ builder.queryFields((t) => ({
         orderBy: { placedAt: "desc" },
         take: 100,
       });
+    },
+  }),
+
+  // Vendor "Today" tab (#46): revenue + acceptance snapshot for the current PKT day.
+  todaySummary: t.field({
+    type: TodaySummary,
+    authScopes: { restaurantMember: true },
+    args: { branchId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const since = pktStartOfToday();
+      const orders = await prisma.order.findMany({
+        where: { branchId: args.branchId, placedAt: { gte: since } },
+        select: {
+          status: true,
+          acceptedAt: true,
+          grandTotalMinor: true,
+          items: { select: { qty: true, lineTotalMinor: true, menuSnapshotJson: true } },
+        },
+      });
+
+      // An order "was accepted" if the kitchen ever accepted it, even if the customer later
+      // cancelled — the final status alone can't tell those apart (cancellation is allowed
+      // after `accepted`). Use the acceptedAt timestamp as the source of truth.
+      const wasAccepted = (o: { acceptedAt: Date | null }) => o.acceptedAt !== null;
+      // Revenue counts orders the kitchen accepted (mirrors wasAccepted) — never rejected,
+      // expired, or still-pending orders that never reached the kitchen.
+      const DECIDED = orders.filter((o) => o.status !== "pending_acceptance");
+      const ACCEPTED = orders.filter(wasAccepted);
+
+      let revenueMinor = 0;
+      const tally = new Map<string, { qty: number; revenueMinor: number }>();
+      for (const o of ACCEPTED) {
+        revenueMinor += o.grandTotalMinor;
+        for (const it of o.items) {
+          const snap = it.menuSnapshotJson as { name?: string } | null;
+          const name = snap?.name;
+          if (!name) continue;
+          const agg = tally.get(name) ?? { qty: 0, revenueMinor: 0 };
+          agg.qty += it.qty;
+          agg.revenueMinor += it.lineTotalMinor;
+          tally.set(name, agg);
+        }
+      }
+      const topItems = [...tally.entries()]
+        .map(([name, v]) => ({ name, qty: v.qty, revenueMinor: v.revenueMinor }))
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 5);
+
+      return {
+        orders: orders.length,
+        revenueMinor,
+        acceptanceSlaPct: DECIDED.length
+          ? Math.round((ACCEPTED.length / DECIDED.length) * 100)
+          : 100,
+        topItems,
+      };
     },
   }),
 
@@ -597,6 +685,26 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Busy mode (#46): add extra minutes to every prep ETA instead of pausing. The buffer
+  // pre-fills the vendor accept sheet and is surfaced to customers on the quote side.
+  // Pass 0 to clear. Clamped to a sane 0..60 range.
+  setBusyMode: t.prismaField({
+    type: "Branch",
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      bufferMinutes: t.arg.int({ required: true }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const buffer = Math.min(Math.max(args.bufferMinutes, 0), 60);
+      return prisma.branch.update({
+        where: { id: args.branchId },
+        data: { prepBufferMinutes: buffer },
+      });
+    },
+  }),
+
   // Replace a branch's structured opening hours (#19) with the provided set (a full
   // overwrite — pass [] to clear, which reverts isOpenNow to the always-open fallback).
   // Once any rows exist they take precedence over the legacy hoursJson everywhere.
@@ -750,6 +858,10 @@ builder.mutationFields((t) => ({
     args: {
       itemId: t.arg.string({ required: true }),
       available: t.arg.boolean({ required: true }),
+      // Timed 86 (#46): when marking unavailable, record when it should return so the
+      // board can show "back tomorrow". "today" -> end of the current PKT day; omitted
+      // (or when re-enabling) -> cleared. Purely informational for now (no auto-sweep).
+      until: t.arg.string({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
       const item = await prisma.menuItem.findUnique({
@@ -760,9 +872,18 @@ builder.mutationFields((t) => ({
       await assertBranchMember(ctx, item.category.menu.branchId);
       // Availability applies to BOTH the live menu item and the draft twin (by name) —
       // stock-outs must hit customers immediately, not on next publish.
+      let unavailableUntil: Date | null = null;
+      if (!args.available && args.until === "today") {
+        // End of the current PKT calendar day.
+        const nowPkt = new Date(Date.now() + PKT_OFFSET_MS);
+        unavailableUntil = new Date(
+          Date.UTC(nowPkt.getUTCFullYear(), nowPkt.getUTCMonth(), nowPkt.getUTCDate() + 1) -
+            PKT_OFFSET_MS,
+        );
+      }
       return prisma.menuItem.update({
         where: { id: args.itemId },
-        data: { isAvailable: args.available },
+        data: { isAvailable: args.available, unavailableUntil },
       });
     },
   }),

@@ -44,6 +44,7 @@ type Branch {
   opensAtLabel: String
   photo: BranchPhoto
   popularItems(limit: Int): [MenuItem!]!
+  prepBufferMinutes: Int!
   restaurant: Restaurant!
 }
 
@@ -135,10 +136,6 @@ type FeeConfig {
   smallBusinessPlatformFeeMinor: Int!
 }
 
-input HelpItemSelectionInput {
-  orderItemId: String!
-}
-
 type HomeBanner {
   id: ID!
   imageUrl: String!
@@ -189,6 +186,7 @@ type MenuItem {
   modifierGroups: [ModifierGroup!]!
   name: String!
   priceMinor: Int!
+  unavailableUntil: DateTime
 }
 
 type MenuSourceDoc {
@@ -222,7 +220,6 @@ type Mutation {
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
-  createHelpTicket(category: String!, items: [HelpItemSelectionInput!], note: String, orderId: String!): SupportTicket!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
@@ -248,7 +245,6 @@ type Mutation {
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
-  revokeSession(sessionId: String!): Boolean!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
@@ -257,7 +253,8 @@ type Mutation {
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
-  setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  setBusyMode(branchId: String!, bufferMinutes: Int!): Branch!
+  setItemAvailability(available: Boolean!, itemId: String!, until: String): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
@@ -267,7 +264,6 @@ type Mutation {
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
-  updateProfile(email: String, name: String): User!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
   upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
@@ -282,7 +278,6 @@ type Order {
   branch: Branch!
   code: String!
   contactPhone: String!
-  customerName: String
   customerNote: String
   cutleryRequested: Boolean!
   deliveredAt: DateTime
@@ -395,14 +390,13 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
-  mySessions: [Session!]!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
-  ticketsForOrder(orderId: String!): [SupportTicket!]!
+  todaySummary(branchId: String!): TodaySummary!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -455,7 +449,6 @@ type Refund {
   order: Order!
   reason: String!
   status: String!
-  tickets: [SupportTicket!]!
 }
 
 type Restaurant {
@@ -558,32 +551,17 @@ input SaveAddressInput {
   text: String!
 }
 
-type Session {
-  createdAt: DateTime!
-  expiresAt: DateTime!
-  id: ID!
-  isCurrent: Boolean!
-  userAgent: String
-}
-
 type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
 }
 
-type SupportTicket {
-  body: String!
-  category: String!
-  contextJson: JSON
-  createdAt: DateTime!
-  id: ID!
-  order: Order
-  refund: Refund
-  resolutionNote: String
-  status: String!
-  subject: String!
-  updatedAt: DateTime!
+type TodaySummary {
+  acceptanceSlaPct: Int!
+  orders: Int!
+  revenueMinor: Int!
+  topItems: [AnalyticsTopItem!]!
 }
 
 input UpdateAddressInput {

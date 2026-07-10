@@ -10,12 +10,14 @@ import {
   Megaphone,
   Palette,
   Settings,
+  Sun,
   Users,
   Wallet,
 } from "lucide-react";
 
 const NAV = [
   { href: "/restaurant/orders", label: "Orders", icon: ClipboardList },
+  { href: "/restaurant/today", label: "Today", icon: Sun },
   { href: "/restaurant/menu", label: "Menu", icon: CookingPot },
   { href: "/restaurant/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/restaurant/branding", label: "Branding", icon: Palette },
