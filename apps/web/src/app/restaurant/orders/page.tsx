@@ -119,6 +119,7 @@ type BoardOrder = {
   paymentMode: string;
   grandTotalMinor: number;
   customerNote?: string | null;
+  contactPhone?: string | null;
   acceptDeadlineAt: unknown;
   prepEtaMinutes?: number | null;
   items: Array<{ id: string; qty: number; menuSnapshotJson: unknown }>;
@@ -147,7 +148,16 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
               {i.qty} × {snap.name}
               {pref !== DEFAULT_UNAVAILABILITY_PREFERENCE && (
                 <span className="ml-1 text-xs font-medium text-kd-warning">
-                  (if out: {unavailabilityPreferenceLabel(pref)})
+                  (if out: {unavailabilityPreferenceLabel(pref)}
+                  {pref === "contact_me" && order.contactPhone && (
+                    <>
+                      {" · "}
+                      <a href={`tel:${order.contactPhone}`} className="underline">
+                        {order.contactPhone}
+                      </a>
+                    </>
+                  )}
+                  )
                 </span>
               )}
             </li>

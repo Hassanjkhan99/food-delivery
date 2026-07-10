@@ -7,6 +7,9 @@ export const OTP_RATE_LIMIT_PER_HOUR = 5;
 export const SESSION_TTL_DAYS = 30;
 export const SESSION_COOKIE_NAME = "fd_session";
 
+/** Max quantity for a single cart line. Enforced client-side (merge cap) and by the server schema. */
+export const MAX_CART_LINE_QTY = 50;
+
 /**
  * Canonical post-delivery review tags (Foodpanda-style quick chips). Shown on the
  * rating form and rendered as pills on the reviews page. `value` is what's stored

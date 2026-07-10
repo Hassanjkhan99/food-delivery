@@ -239,7 +239,11 @@ export function ItemModal({
                           <input
                             type={g.maxSelect === 1 ? "radio" : "checkbox"}
                             checked={checked}
-                            disabled={!o.isAvailable}
+                            // A stale option that's since gone unavailable can't be
+                            // newly selected, but if it's already checked (e.g. an
+                            // edited cart line) the customer must be able to remove
+                            // it — otherwise quoteCart rejects and the cart is stuck.
+                            disabled={!o.isAvailable && !checked}
                             onChange={() => toggle(g, o.id)}
                             name={g.id}
                             className="accent-kd-primary"

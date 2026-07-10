@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   DEFAULT_UNAVAILABILITY_PREFERENCE,
+  MAX_CART_LINE_QTY,
   type UnavailabilityPreference,
 } from "@fd/shared";
 
@@ -69,8 +70,14 @@ export const useCart = create<CartState>()(
         // Per-line duplicate merge: an identical config bumps qty instead of
         // creating a new line (#39).
         const dupe = s.lines.find((l) => sameConfig(line, l));
+        // Cap the merged qty at the server's per-line max so two individually
+        // valid adds (e.g. 30 + 30) can't fold into a line quote/placeOrder rejects.
         const lines = dupe
-          ? s.lines.map((l) => (l.lineId === dupe.lineId ? { ...l, qty: l.qty + line.qty } : l))
+          ? s.lines.map((l) =>
+              l.lineId === dupe.lineId
+                ? { ...l, qty: Math.min(MAX_CART_LINE_QTY, l.qty + line.qty) }
+                : l,
+            )
           : [...s.lines, { ...line, lineId: crypto.randomUUID() }];
         set({
           branchId: branch.id,
@@ -90,7 +97,11 @@ export const useCart = create<CartState>()(
           return {
             lines: edited
               .filter((l) => l.lineId !== lineId)
-              .map((l) => (l.lineId === twin.lineId ? { ...l, qty: l.qty + target.qty } : l)),
+              .map((l) =>
+                l.lineId === twin.lineId
+                  ? { ...l, qty: Math.min(MAX_CART_LINE_QTY, l.qty + target.qty) }
+                  : l,
+              ),
           };
         }),
       removeLine: (lineId) =>
