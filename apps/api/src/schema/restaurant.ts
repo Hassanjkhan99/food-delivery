@@ -6,7 +6,14 @@ import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
 import { accountBalance } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
+import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
 import { builder } from "./builder.js";
+
+// Build a Prisma date-range filter for a timestamp column, omitting unset bounds.
+function dateRangeWhere(field: string, from?: Date | null, to?: Date | null) {
+  if (!from && !to) return {};
+  return { [field]: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } };
+}
 
 async function assertBranchMember(ctx: AppContext, branchId: string) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
@@ -308,6 +315,60 @@ builder.queryFields((t) => ({
         ordersByHour,
         topItems,
       };
+    },
+  }),
+
+  // Settlement report CSV (#29): per-order money breakdown for a restaurant over a
+  // period. The net_to_restaurant column reconciles against the ledger movement for
+  // the same window (net = subtotal + tax + delivery − commission − platform fee, the
+  // exact restaurant:{id}:payable position posted on delivery). Delivered orders only.
+  settlementReportCsv: t.string({
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      from: t.arg({ type: "DateTime", required: false }),
+      to: t.arg({ type: "DateTime", required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
+        throw new GraphQLError("Not a member of this restaurant");
+      }
+      const orders = await prisma.order.findMany({
+        where: {
+          branch: { restaurantId: args.restaurantId },
+          status: "delivered",
+          ...dateRangeWhere("deliveredAt", args.from, args.to),
+        },
+        include: { branch: { select: { name: true } } },
+        orderBy: { deliveredAt: "asc" },
+      });
+      return settlementReportCsv(orders);
+    },
+  }),
+
+  // eIMS-aligned invoice export CSV (#29 / #18): one row per invoice line for a branch
+  // over a period. Fields follow the PRA eIMS lookup primitives (invoice number, line
+  // items, qty, sale price, ST charge, inclusive total). Order tax is apportioned to
+  // lines pro-rata; see csvExport.eimsInvoiceCsv.
+  eimsInvoiceCsv: t.string({
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      from: t.arg({ type: "DateTime", required: false }),
+      to: t.arg({ type: "DateTime", required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const orders = await prisma.order.findMany({
+        where: {
+          branchId: args.branchId,
+          status: "delivered",
+          ...dateRangeWhere("deliveredAt", args.from, args.to),
+        },
+        include: { items: true, branch: { select: { name: true } } },
+        orderBy: { deliveredAt: "asc" },
+      });
+      return eimsInvoiceCsv(orders);
     },
   }),
 }));

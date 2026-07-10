@@ -8,6 +8,7 @@ import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
 import { recomputeTrustScore } from "../services/riderTrustService.js";
 import { missingRequirements } from "../services/riderVerificationService.js";
+import { adminMetricsCsv, bucketMetrics } from "../services/csvExport.js";
 import { builder } from "./builder.js";
 
 async function audit(
@@ -254,6 +255,45 @@ builder.queryFields((t) => ({
         if (balance !== 0) out.push({ restaurantId: r.id, name: r.name, balanceMinor: balance });
       }
       return out.sort((a, b) => b.balanceMinor - a.balanceMinor);
+    },
+  }),
+
+  // Platform metrics export CSV (#29): orders / GMV / take-rate bucketed per period.
+  // GMV = subtotal + tax + delivery over delivered orders; take rate = platform revenue
+  // (commission + platform fee) / GMV. Computed live — no stored aggregates.
+  adminMetricsCsv: t.string({
+    authScopes: { admin: true },
+    args: {
+      from: t.arg({ type: "DateTime", required: false }),
+      to: t.arg({ type: "DateTime", required: false }),
+      granularity: t.arg.string({ required: false }),
+    },
+    resolve: async (_root, args) => {
+      const g = (["day", "week", "month"] as const).includes(args.granularity as never)
+        ? (args.granularity as "day" | "week" | "month")
+        : "day";
+      const orders = await prisma.order.findMany({
+        where: {
+          status: "delivered",
+          ...(args.from || args.to
+            ? {
+                deliveredAt: {
+                  ...(args.from ? { gte: args.from } : {}),
+                  ...(args.to ? { lte: args.to } : {}),
+                },
+              }
+            : {}),
+        },
+        select: {
+          deliveredAt: true,
+          subtotalMinor: true,
+          taxTotalMinor: true,
+          deliveryFeeMinor: true,
+          commissionMinor: true,
+          platformFeeMinor: true,
+        },
+      });
+      return adminMetricsCsv(bucketMetrics(orders, g));
     },
   }),
 }));

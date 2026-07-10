@@ -6,6 +6,7 @@ import {
   BadgeDollarSign,
   Bike,
   FileClock,
+  FileSpreadsheet,
   Gauge,
   HandCoins,
   LifeBuoy,
@@ -23,6 +24,7 @@ const NAV = [
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },
+  { href: "/admin/metrics/export", label: "Metrics export", icon: FileSpreadsheet },
   { href: "/admin/audit", label: "Audit", icon: FileClock },
 ];
 
