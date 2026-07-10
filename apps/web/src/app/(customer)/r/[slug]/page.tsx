@@ -172,13 +172,15 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   // per React's "adjust state on prop change" guidance — so it fires exactly once per
   // id and closing the sheet doesn't reopen it. Search the real categories (source of
   // truth) so it works even when the item isn't in the computed "Popular" section; a
-  // missing/stale id simply no-ops.
+  // missing/stale id simply no-ops. Unavailable items are skipped — a stale/direct
+  // deep-link must never surface an orderable sheet the normal ItemCard would disable
+  // (branch closed/paused is handled separately by passing `orderable` to the modal).
   if (deepLinkItemId && branch && openedDeepLink !== deepLinkItemId) {
     setOpenedDeepLink(deepLinkItemId);
     for (const cat of branch.activeMenu?.categories ?? []) {
       const found = cat.items.find((i) => i.id === deepLinkItemId);
       if (found) {
-        setOpenItem(found as MenuItemForModal);
+        if (found.isAvailable) setOpenItem(found as MenuItemForModal);
         break;
       }
     }
@@ -386,6 +388,8 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
         <ItemModal
           item={openItem}
           branch={{ id: branch.id, slug: r.slug, name: r.name }}
+          orderable={orderable}
+          disabledLabel={closedLabel}
           onClose={() => setOpenItem(null)}
         />
       )}

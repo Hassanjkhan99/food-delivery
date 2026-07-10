@@ -36,10 +36,17 @@ export type MenuItemForModal = {
 export function ItemModal({
   item,
   branch,
+  orderable = true,
+  disabledLabel,
   onClose,
 }: {
   item: MenuItemForModal;
   branch: { id: string; slug: string; name: string };
+  // When the branch is closed-by-hours or paused, the sheet stays browsable but the
+  // add button is disabled so a deep-link (?item=) can never write to the cart — this
+  // is the same guard `orderable` applies to ItemCard on the page.
+  orderable?: boolean;
+  disabledLabel?: string;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -90,6 +97,8 @@ export function ItemModal({
   const unitPrice = item.priceMinor + delta.amount;
 
   function addToCart(clearFirst = false) {
+    // Hard guard: a closed/paused branch must never build a cart, even via a stale deep-link.
+    if (!orderable) return;
     if (clearFirst) clearCart();
     const result = addLine(branch, {
       menuItemId: item.id,
@@ -171,14 +180,14 @@ export function ItemModal({
           </div>
           <Button
             className="flex-1"
-            disabled={validation !== null}
+            disabled={!orderable || validation !== null}
             onClick={() => addToCart()}
-            title={validation ?? undefined}
+            title={(!orderable ? disabledLabel : validation) ?? undefined}
           >
-            Add {qty} · {formatRs(unitPrice * qty)}
+            {orderable ? `Add ${qty} · ${formatRs(unitPrice * qty)}` : (disabledLabel ?? "Unavailable")}
           </Button>
         </div>
-        {validation && <p className="text-xs text-kd-warning">{validation}</p>}
+        {orderable && validation && <p className="text-xs text-kd-warning">{validation}</p>}
 
         {conflict && (
           <div className="rounded-lg bg-kd-warning-soft p-3 text-sm text-kd-fg">

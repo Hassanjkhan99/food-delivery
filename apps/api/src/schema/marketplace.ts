@@ -509,6 +509,10 @@ builder.queryFields((t) => ({
       restaurantHits.sort((a, b) => a.distanceM - b.distanceM);
 
       // Dish hits: available items in an in-range active menu whose name matches.
+      // No DB-side `take` here: Prisma would slice an arbitrary first N rows *before*
+      // branch distances are known, dropping closer matches beyond the cutoff. Instead
+      // we fetch all in-range matches (the query is already bounded to nearby menus),
+      // attach distances, sort, then cap — so the cap keeps the nearest results.
       const menuIds = [...menuIdToBranch.keys()];
       const items = menuIds.length
         ? await prisma.menuItem.findMany({
@@ -518,7 +522,6 @@ builder.queryFields((t) => ({
               category: { menuId: { in: menuIds } },
             },
             select: { id: true, category: { select: { menuId: true } } },
-            take: 50,
           })
         : [];
       const itemHits: ItemSearchHit[] = [];
@@ -529,7 +532,7 @@ builder.queryFields((t) => ({
       }
       itemHits.sort((a, b) => a.distanceM - b.distanceM);
 
-      return { restaurants: restaurantHits, items: itemHits };
+      return { restaurants: restaurantHits, items: itemHits.slice(0, 50) };
     },
   }),
 }));

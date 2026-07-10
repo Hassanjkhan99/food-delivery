@@ -19,7 +19,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRecentSearches } from "./use-recent-searches";
 
 // Editorial defaults — no analytics backing yet, so a curated list of common cravings.
-const POPULAR_SEARCHES = ["Biryani", "Pizza", "Burger", "Karahi", "BBQ", "Desserts", "Chinese"];
+// Terms must match real data: cuisine tags are matched exactly (e.g. the seed uses the
+// "BBQ/Karahi" tag), and dish names match via `contains`, so a bare "BBQ" chip would
+// land on a zero-result state.
+const POPULAR_SEARCHES = ["Biryani", "Pizza", "Burger", "Karahi", "BBQ/Karahi", "Desserts", "Chinese"];
 
 const SearchQuery = graphql(`
   query SearchMarketplace($query: String!, $lat: Float!, $lng: Float!) {
@@ -30,6 +33,7 @@ const SearchQuery = graphql(`
         branch {
           id
           deliveryFeeMinor
+          isAcceptingOrders
           isOpenNow
           opensAtLabel
           photo {
@@ -253,6 +257,7 @@ function SearchScreen() {
 type BranchShape = {
   id: string;
   deliveryFeeMinor: number;
+  isAcceptingOrders: boolean;
   isOpenNow: boolean;
   opensAtLabel?: string | null;
   photo?: { url: string; source: string; attributionHtml?: string | null } | null;
@@ -273,7 +278,9 @@ function RestaurantRow({
   hit: { distanceM: number; etaMinutes: number; branch: BranchShape };
 }) {
   const r = hit.branch.restaurant;
-  const closed = !hit.branch.isOpenNow;
+  // Unavailable if outside opening hours OR manually paused — mirror the home/restaurant
+  // pages so search never shows a normal ETA row for a branch that can't take orders.
+  const closed = !hit.branch.isOpenNow || !hit.branch.isAcceptingOrders;
   return (
     <li>
       <Link
