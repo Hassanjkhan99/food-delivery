@@ -2,7 +2,7 @@
 // live board, customer tracking, rider job feed. In-memory pubsub — single instance.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import { pubsub, type OrderChangedPayload } from "../pubsub.js";
+import { pubsub, type OrderChangedPayload, type NotificationPayload } from "../pubsub.js";
 import { builder } from "./builder.js";
 
 const OrderChangedType = builder.objectRef<OrderChangedPayload>("OrderChanged");
@@ -11,6 +11,15 @@ OrderChangedType.implement({
     orderId: t.exposeString("orderId"),
     branchId: t.exposeString("branchId"),
     status: t.exposeString("status"),
+  }),
+});
+
+// Live bell badge (#56): pushes the caller's current unread count on every new inbox row.
+const NotificationEventType = builder.objectRef<NotificationPayload>("NotificationEvent");
+NotificationEventType.implement({
+  fields: (t) => ({
+    userId: t.exposeString("userId"),
+    unreadCount: t.exposeInt("unreadCount"),
   }),
 });
 
@@ -61,6 +70,17 @@ builder.subscriptionType({
         return pubsub.subscribe("riderJobs", ctx.riderId);
       },
       resolve: (payload: OrderChangedPayload) => payload,
+    }),
+
+    // Notification feed for the signed-in user: drives the live unread badge (#56).
+    notificationFeed: t.field({
+      type: NotificationEventType,
+      authScopes: { loggedIn: true },
+      subscribe: (_root, _args, ctx) => {
+        if (!ctx.userId) throw new GraphQLError("Not authenticated");
+        return pubsub.subscribe("userNotifications", ctx.userId);
+      },
+      resolve: (payload: NotificationPayload) => payload,
     }),
   }),
 });

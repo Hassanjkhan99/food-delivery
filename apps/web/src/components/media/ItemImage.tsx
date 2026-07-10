@@ -26,7 +26,7 @@ export function ItemImage({
   return (
     <div
       aria-hidden
-      className={cn("relative shrink-0 overflow-hidden bg-neutral-100", className)}
+      className={cn("relative shrink-0 overflow-hidden bg-kd-surface-muted", className)}
       style={show ? undefined : { background: fallbackGradient(name) }}
     >
       {show ? (

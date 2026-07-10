@@ -50,14 +50,14 @@ export default function AdminOverviewPage() {
       <h1 className="mb-4 text-xl font-bold">Marketplace overview</h1>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((t) => (
-          <div key={t.label} className="rounded-2xl border border-neutral-200 bg-white p-4">
+          <div key={t.label} className="rounded-2xl border border-kd-border bg-kd-surface p-4">
             <p className="text-2xl font-bold">{t.value}</p>
-            <p className="text-xs text-neutral-500">{t.label}</p>
+            <p className="text-xs text-kd-fg-muted">{t.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 max-w-md rounded-2xl border border-neutral-200 bg-white p-4">
+      <div className="mt-8 max-w-md rounded-2xl border border-kd-border bg-kd-surface p-4">
         <p className="mb-2 text-sm font-semibold">Order escalation</p>
         <div className="flex gap-2">
           <Input

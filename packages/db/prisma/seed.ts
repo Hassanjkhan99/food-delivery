@@ -21,6 +21,9 @@ async function wipe() {
   const tables = [
     "ratings",
     "support_tickets",
+    "home_banners",
+    "subscriptions",
+    "membership_plans",
     "refunds",
     "cancellations",
     "payments",
@@ -51,8 +54,11 @@ async function wipe() {
     "otp_codes",
     "audit_logs",
     "fee_configs",
+    // #30: RESTRICT FK to branches — must be wiped before branches or re-seed fails.
+    "branch_cancellation_stats",
     "branches",
     "user_roles",
+    "notifications",
     "restaurants",
     "tax_profiles",
     "users",
@@ -139,6 +145,19 @@ async function main() {
     },
   });
 
+  // Pandapro-style membership plan (#59): Rs 199/mo, free delivery on orders >= Rs 500,
+  // otherwise 50% off delivery. Mock-billed at sign-up.
+  await prisma.membershipPlan.create({
+    data: {
+      name: "KhaanaDo Pro",
+      priceMinor: 19_900,
+      freeDeliveryThresholdMinor: 50_000,
+      deliveryDiscountBps: 5_000,
+      billingPeriodDays: 30,
+      isActive: true,
+    },
+  });
+
   // Restaurants + branches (Bahria Phase 8, Rawalpindi cluster — a few km apart)
   async function mkRestaurant(opts: {
     name: string;
@@ -148,6 +167,9 @@ async function main() {
     status?: "approved" | "pending_approval";
     lat: number;
     lng: number;
+    cuisineTags?: string[];
+    deliveryFeeMinor?: number;
+    hoursJson?: Prisma.InputJsonValue;
   }) {
     const r = await prisma.restaurant.create({
       data: {
@@ -156,6 +178,7 @@ async function main() {
         tier: opts.tier,
         ownerId: opts.ownerId,
         status: opts.status ?? "approved",
+        cuisineTags: opts.cuisineTags ?? [],
       },
     });
     const b = await prisma.branch.create({
@@ -167,9 +190,9 @@ async function main() {
         lng: new Prisma.Decimal(opts.lng),
         deliveryRadiusM: 5_000,
         minOrderMinor: 50_000,
-        deliveryFeeMinor: 8_000,
+        deliveryFeeMinor: opts.deliveryFeeMinor ?? 8_000,
         taxProfileId: tax.id,
-        hoursJson: { open: "11:00", close: "23:30", days: [0, 1, 2, 3, 4, 5, 6] },
+        hoursJson: opts.hoursJson ?? { open: "11:00", close: "23:30", days: [0, 1, 2, 3, 4, 5, 6] },
       },
     });
     return { r, b };
@@ -182,6 +205,7 @@ async function main() {
     ownerId: owner1.id,
     lat: 33.5205,
     lng: 73.1005,
+    cuisineTags: ["Biryani", "Desi", "BBQ/Karahi"],
   });
   const gb = await mkRestaurant({
     name: "Green Bowl",
@@ -190,6 +214,8 @@ async function main() {
     ownerId: owner1.id,
     lat: 33.5312,
     lng: 73.0871,
+    cuisineTags: ["Healthy", "Drinks"],
+    deliveryFeeMinor: 0, // free delivery — exercises the free-delivery emphasis + swimlane
   });
   const bt = await mkRestaurant({
     name: "Burger Theory",
@@ -198,6 +224,9 @@ async function main() {
     ownerId: owner2.id,
     lat: 33.5104,
     lng: 73.1152,
+    cuisineTags: ["Burgers", "Pizza", "Desserts"],
+    // Late-night-only hours → closed during daytime, exercises the "Closed — opens" overlay.
+    hoursJson: { open: "02:00", close: "05:00", days: [0, 1, 2, 3, 4, 5, 6] },
   });
   const pending = await mkRestaurant({
     name: "Lajawab Bites",
@@ -207,6 +236,47 @@ async function main() {
     status: "pending_approval",
     lat: 33.5411,
     lng: 73.0968,
+    cuisineTags: ["Desi", "BBQ/Karahi"],
+  });
+
+  // Structured opening hours (#19) for one branch, exercising the BranchHours model
+  // path (the rest keep the legacy hoursJson fallback). These mirror KBH's hoursJson
+  // window (11:00–23:30 daily = minutes 660–1410) so open/closed results are identical.
+  await prisma.branchHours.createMany({
+    data: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      branchId: kbh.b.id,
+      dayOfWeek,
+      openMinute: 11 * 60,
+      closeMinute: 23 * 60 + 30,
+    })),
+  });
+
+  // Home promo banners (ux-parity #36) — lightweight demo set. Images are static
+  // SVGs in apps/web/public/banners (no external/Google imagery). Real campaigns
+  // land with #22.
+  //
+  // NOTE: the "WELCOME50" code banner is intentionally omitted here — this branch has
+  // no promo-code input and quoteCart/placeOrder apply no discount, so advertising a
+  // code would charge customers full price. The voucher engine lands separately
+  // (PR #70); the discount-code banner can be re-seeded once that plumbing is on this feed.
+  await prisma.homeBanner.createMany({
+    data: [
+      {
+        // Scoped to Green Bowl, the one seeded branch with deliveryFeeMinor: 0 — the banner
+        // must not promise free delivery platform-wide when other branches charge a fee
+        // (#36 review round 2). Keep this in sync with Green Bowl's deliveryFeeMinor above.
+        title: "Free delivery at Green Bowl",
+        imageUrl: "/banners/free-delivery.svg",
+        linkHref: "/r/green-bowl",
+        sortOrder: 0,
+      },
+      {
+        title: "Biryani cravings sorted",
+        imageUrl: "/banners/biryani.svg",
+        linkHref: "/r/karachi-biryani-house",
+        sortOrder: 1,
+      },
+    ],
   });
 
   // Roles

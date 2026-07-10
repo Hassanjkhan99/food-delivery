@@ -1,5 +1,6 @@
 // Auth domain: viewer, requestOtp, verifyOtp, logout.
 import { prisma } from "@fd/db";
+import { GraphQLError } from "graphql";
 import { SESSION_COOKIE_NAME, SESSION_TTL_DAYS, homeForRoles, type Role } from "@fd/shared";
 import { signSessionToken } from "../auth/session.js";
 import { requestOtp, verifyOtp } from "../auth/otp.js";
@@ -12,6 +13,8 @@ export const UserType = builder.prismaObject("User", {
     phone: t.exposeString("phone"),
     name: t.exposeString("name", { nullable: true }),
     email: t.exposeString("email", { nullable: true }),
+    // Marketing opt-out state (#56), surfaced so the account screen can toggle it.
+    marketingOptOut: t.exposeBoolean("marketingOptOut"),
   }),
 });
 
@@ -51,6 +54,20 @@ OtpRequestResult.implement({
   }),
 });
 
+// Active device sessions surfaced to the account page for revocation.
+const SessionType = builder.prismaObject("Session", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    userAgent: t.exposeString("userAgent", { nullable: true }),
+    createdAt: t.field({ type: "DateTime", resolve: (s) => s.createdAt }),
+    expiresAt: t.field({ type: "DateTime", resolve: (s) => s.expiresAt }),
+    // Whether this row is the session making the request (don't offer self-revoke as "sign out elsewhere").
+    isCurrent: t.boolean({
+      resolve: (session, _args, ctx) => session.id === ctx.sessionId,
+    }),
+  }),
+});
+
 function toViewer(userId: string, roles: Array<{ role: string; restaurantId: string | null }>) {
   return {
     userId,
@@ -64,6 +81,18 @@ builder.queryFields((t) => ({
     type: ViewerType,
     nullable: true,
     resolve: (_root, _args, ctx) => (ctx.userId ? toViewer(ctx.userId, ctx.roles) : null),
+  }),
+
+  // Active (non-revoked, non-expired) sessions for the signed-in user, newest first.
+  mySessions: t.prismaField({
+    type: [SessionType],
+    authScopes: { loggedIn: true },
+    resolve: (query, _root, _args, ctx) =>
+      prisma.session.findMany({
+        ...query,
+        where: { userId: ctx.userId!, revokedAt: null, expiresAt: { gte: new Date() } },
+        orderBy: { createdAt: "desc" },
+      }),
   }),
 }));
 
@@ -111,6 +140,52 @@ builder.mutationFields((t) => ({
       });
 
       return toViewer(userId, roleClaims);
+    },
+  }),
+
+  // Lazy profile capture (name/email). Called on first checkout ("who should the
+  // rider ask for?") and from the account page. Only provided fields are patched.
+  updateProfile: t.prismaField({
+    type: "User",
+    authScopes: { loggedIn: true },
+    args: {
+      name: t.arg.string({ required: false }),
+      email: t.arg.string({ required: false }),
+    },
+    resolve: (query, _root, args, ctx) => {
+      // Distinguish an omitted arg (leave the column untouched) from a provided
+      // blank/null one (the user cleared the field → write null). An arg only
+      // appears in the update when the client actually sent it.
+      const data: { name?: string | null; email?: string | null } = {};
+      if (args.name !== undefined) data.name = args.name?.trim() || null;
+      if (args.email !== undefined) data.email = args.email?.trim() || null;
+      return prisma.user.update({
+        ...query,
+        where: { id: ctx.userId! },
+        data,
+      });
+    },
+  }),
+
+  // Revoke a specific device session the user owns (remote sign-out).
+  revokeSession: t.field({
+    type: "Boolean",
+    authScopes: { loggedIn: true },
+    args: { sessionId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const session = await prisma.session.findFirst({
+        where: { id: args.sessionId, userId: ctx.userId! },
+      });
+      if (!session) throw new GraphQLError("Session not found.");
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      });
+      // If they revoked their own current session, clear the cookie too.
+      if (session.id === ctx.sessionId) {
+        await ctx.request.cookieStore?.delete(SESSION_COOKIE_NAME);
+      }
+      return true;
     },
   }),
 

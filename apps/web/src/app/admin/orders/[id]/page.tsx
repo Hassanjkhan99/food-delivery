@@ -71,14 +71,14 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
   const order = data?.order;
 
   if (fetching && !order) return <Skeleton className="h-64 rounded-2xl" />;
-  if (!order) return <p className="text-neutral-500">Order not found.</p>;
+  if (!order) return <p className="text-kd-fg-muted">Order not found.</p>;
 
   return (
     <main className="max-w-2xl">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">{order.code}</h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-kd-fg-muted">
             {order.branch.restaurant.name} · {formatRs(order.grandTotalMinor)} ·{" "}
             {order.paymentMode.toUpperCase()} · {order.contactPhone}
           </p>
@@ -86,13 +86,13 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
         <Badge>{order.status}</Badge>
       </div>
 
-      <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+      <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
         <p className="mb-2 text-sm font-semibold">Status override (audited)</p>
         <div className="flex flex-wrap gap-2">
           <select
             value={toStatus}
             onChange={(e) => setToStatus(e.target.value)}
-            className="rounded-lg border border-neutral-300 px-2 py-1.5 text-sm"
+            className="rounded-lg border border-kd-border px-2 py-1.5 text-sm"
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -101,7 +101,7 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
             ))}
           </select>
           <input
-            className="flex-1 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+            className="flex-1 rounded-lg border border-kd-border px-3 py-1.5 text-sm"
             placeholder="Reason (required, goes to the audit log)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -119,26 +119,26 @@ export default function AdminOrderPage({ params }: { params: Promise<{ id: strin
             Apply
           </Button>
         </div>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        <p className="mt-2 text-xs text-neutral-400">
+        {error && <p className="mt-2 text-sm text-kd-danger">{error}</p>}
+        <p className="mt-2 text-xs text-kd-fg-subtle">
           Illegal transitions are rejected by the state machine even for admins overriding from
           terminal states.
         </p>
       </div>
 
-      <h2 className="mb-2 text-sm font-bold uppercase text-neutral-500">Event chain</h2>
+      <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">Event chain</h2>
       <div className="space-y-1">
         {order.events.map((e) => (
           <div
             key={e.id}
-            className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-lg bg-kd-surface px-3 py-2 text-sm"
           >
             <span>
-              <span className="font-mono text-xs text-neutral-400">{e.fromStatus ?? "∅"} → </span>
+              <span className="font-mono text-xs text-kd-fg-subtle">{e.fromStatus ?? "∅"} → </span>
               <span className="font-medium">{e.toStatus}</span>
-              {e.reason && <span className="ml-2 text-xs text-neutral-500">({e.reason})</span>}
+              {e.reason && <span className="ml-2 text-xs text-kd-fg-muted">({e.reason})</span>}
             </span>
-            <span className="text-xs text-neutral-400">
+            <span className="text-xs text-kd-fg-subtle">
               {e.actorRole} · {new Date(e.createdAt as unknown as string).toLocaleTimeString()}
             </span>
           </div>

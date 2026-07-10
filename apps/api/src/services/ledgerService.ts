@@ -8,7 +8,26 @@ import type { LedgerOwnerType, Order, Payment, PrismaClient } from "@fd/db";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
-type OrderWithMoney = Order & { payment: Payment | null; branch: { restaurantId: string } };
+type OrderWithMoney = Order & {
+  payment: Payment | null;
+  branch: { restaurantId: string };
+  deliveryTask?: { riderId: string | null } | null;
+};
+
+// Holding account for wallet-paid orders: prepaid balance moves here at placement and
+// only leaves on settlement (to restaurant/platform) or reversal (back to prepaid).
+export const WALLET_HOLDING = "platform:wallet_holding";
+
+// Liability account for rider tips collected at checkout. The tip rides inside
+// grandTotalMinor but is neither restaurant share nor platform revenue, so on
+// settlement it parks here (owed to riders) instead of inflating platform:revenue.
+// The rider payout split draws from this later (not yet wired — see rider.ts).
+export const RIDER_TIPS = "platform:rider_tips";
+
+/** The customer's spendable wallet balance in minor units (prepaid ledger account). */
+export async function walletBalance(tx: Tx, customerId: string): Promise<number> {
+  return accountBalance(tx, `customer:${customerId}:prepaid`);
+}
 
 export type Leg = {
   code: string;
@@ -66,9 +85,37 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
   const fees = order.commissionMinor + order.platformFeeMinor;
   const restaurantShare =
     order.subtotalMinor + order.taxTotalMinor + order.deliveryFeeMinor - order.commissionMinor;
+  // Rider tip (#21): the tip is part of grandTotalMinor and must be released so the legs
+  // balance — credit it to the assigned rider's payable (platform pays it out with the
+  // delivery earnings). Falls back to platform:payable if no rider is attached, keeping
+  // the tip owed rather than dropping it. Shared by the card + wallet branches below.
+  const tip = order.tipAmount;
+  const riderId = order.deliveryTask?.riderId ?? null;
+  const riderTipLegs: Leg[] =
+    tip > 0
+      ? [
+          riderId
+            ? {
+                code: `rider:${riderId}:payable`,
+                ownerType: "rider",
+                ownerId: riderId,
+                credit: tip,
+              }
+            : { code: "platform:payable", ownerType: "platform", credit: tip },
+        ]
+      : [];
+
+  // Loyalty is platform-funded (FP-07 / #57): the customer only prepaid the discounted
+  // grandTotal, but the restaurant is owed the full (undiscounted) share. The platform
+  // absorbs the gap (debit platform:revenue) so the legs balance and the restaurant is
+  // never shortchanged. Applies to both prepaid (card) and wallet settlements.
+  const loyaltyLegs: Leg[] =
+    order.loyaltyDiscountMinor > 0
+      ? [{ code: "platform:revenue", ownerType: "platform", debit: order.loyaltyDiscountMinor }]
+      : [];
 
   if (order.paymentMode === "card") {
-    // Platform holds the customer's money; release restaurant share, keep fees.
+    // Platform holds the customer's money; release restaurant share, keep fees, pay tip.
     await postLedgerTx(
       tx,
       `Settlement ${order.code} (card)`,
@@ -86,6 +133,29 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
           credit: restaurantShare,
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
+        ...riderTipLegs,
+        ...loyaltyLegs,
+      ],
+      { orderId: order.id },
+    );
+  } else if (order.paymentMode === "wallet") {
+    // The grand total is sitting in platform:wallet_holding (moved out of the customer's
+    // prepaid balance at placement). Release restaurant share + keep fees + pay tip —
+    // identical to the card economics, only the source leg differs. (#55 + #21 + #57)
+    await postLedgerTx(
+      tx,
+      `Settlement ${order.code} (wallet)`,
+      [
+        { code: WALLET_HOLDING, ownerType: "platform", debit: order.grandTotalMinor },
+        {
+          code: `restaurant:${restaurantId}:payable`,
+          ownerType: "restaurant",
+          ownerId: restaurantId,
+          credit: restaurantShare,
+        },
+        { code: "platform:revenue", ownerType: "platform", credit: fees },
+        ...riderTipLegs,
+        ...loyaltyLegs,
       ],
       { orderId: order.id },
     );
@@ -126,6 +196,13 @@ export async function onOrderMoneyReversal(
   tx: Tx,
   order: OrderWithMoney,
   to: string,
+  /**
+   * #30: the policy-decided refund amount (minor units). When omitted the whole
+   * captured charge is returned (the historical full-refund behaviour). When the
+   * cancellation policy assesses a fee, the caller passes `grandTotal - fee` here
+   * so the customer keeps only the refundable remainder and the fee is retained.
+   */
+  refundMinor?: number,
 ): Promise<void> {
   if (order.paymentMode === "cod") {
     // Nothing was collected; void the pending payment.
@@ -136,26 +213,73 @@ export async function onOrderMoneyReversal(
     return;
   }
 
-  // Card: refund the captured charge in full.
+  if (order.paymentMode === "wallet") {
+    // The grand total is parked in wallet_holding; return it to the customer's prepaid
+    // balance. No provider call — the money never left the platform. (#55)
+    if (!order.payment || order.payment.status !== "captured") return;
+    await tx.payment.update({
+      where: { id: order.payment.id },
+      data: { status: "refunded", refundedMinor: order.payment.amountMinor },
+    });
+    const refund = await tx.refund.create({
+      data: {
+        orderId: order.id,
+        status: "refunded",
+        amountMinor: order.payment.amountMinor,
+        destination: "wallet",
+        reason: `Automatic refund — order ${to}`,
+        decidedAt: new Date(),
+      },
+    });
+    await postLedgerTx(
+      tx,
+      `Refund ${order.code} (${to}, wallet)`,
+      [
+        { code: WALLET_HOLDING, ownerType: "platform", debit: order.payment.amountMinor },
+        {
+          code: `customer:${order.customerId}:prepaid`,
+          ownerType: "customer",
+          ownerId: order.customerId,
+          credit: order.payment.amountMinor,
+        },
+      ],
+      { orderId: order.id, refundId: refund.id },
+    );
+    return;
+  }
+
+  // Card: refund the captured charge (in full, or the policy amount when given). (#30)
   if (!order.payment || order.payment.status !== "captured" || !order.payment.providerRef) return;
+
+  // Clamp the policy amount into [0, captured]; default to a full refund.
+  const captured = order.payment.amountMinor;
+  const amount =
+    refundMinor === undefined ? captured : Math.max(0, Math.min(refundMinor, captured));
+
+  // A fully-forfeited refund (fee == total) collects the whole charge: no money moves
+  // back to the customer, and the payment stays captured rather than flipping to refunded.
+  if (amount === 0) return;
 
   const { mockProvider } = await import("./payments/mockProvider.js");
   await mockProvider.refund({
     chargeRef: order.payment.providerRef,
-    amountMinor: order.payment.amountMinor,
+    amountMinor: amount,
     reference: order.code,
   });
 
   await tx.payment.update({
     where: { id: order.payment.id },
-    data: { status: "refunded", refundedMinor: order.payment.amountMinor },
+    data: {
+      status: amount >= captured ? "refunded" : "partially_refunded",
+      refundedMinor: amount,
+    },
   });
 
   const refund = await tx.refund.create({
     data: {
       orderId: order.id,
       status: "refunded",
-      amountMinor: order.payment.amountMinor,
+      amountMinor: amount,
       destination: "card",
       reason: `Automatic refund — order ${to}`,
       decidedAt: new Date(),
@@ -170,9 +294,9 @@ export async function onOrderMoneyReversal(
         code: `customer:${order.customerId}:prepaid`,
         ownerType: "customer",
         ownerId: order.customerId,
-        debit: order.payment.amountMinor,
+        debit: amount,
       },
-      { code: "platform:cash", ownerType: "platform", credit: order.payment.amountMinor },
+      { code: "platform:cash", ownerType: "platform", credit: amount },
     ],
     { orderId: order.id, refundId: refund.id },
   );
@@ -194,4 +318,67 @@ export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void
     ],
     { orderId: order.id },
   );
+}
+
+/**
+ * Credit the customer's wallet after a successful card top-up charge. Mirrors an
+ * order charge: real cash enters the platform, the customer's prepaid balance grows.
+ */
+export async function onWalletToppedUp(
+  tx: Tx,
+  customerId: string,
+  amountMinor: number,
+): Promise<void> {
+  await postLedgerTx(tx, `Wallet top-up`, [
+    { code: "platform:cash", ownerType: "platform", debit: amountMinor },
+    {
+      code: `customer:${customerId}:prepaid`,
+      ownerType: "customer",
+      ownerId: customerId,
+      credit: amountMinor,
+    },
+  ]);
+}
+
+/**
+ * Move a wallet-paid order's grand total out of the customer's prepaid balance into
+ * the holding account at placement — settlement/reversal draw from there. Called
+ * inside the placeOrder transaction after the balance check passes.
+ */
+export async function onWalletCharged(tx: Tx, order: OrderWithMoney): Promise<void> {
+  await postLedgerTx(
+    tx,
+    `Wallet charge ${order.code}`,
+    [
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        debit: order.grandTotalMinor,
+      },
+      { code: WALLET_HOLDING, ownerType: "platform", credit: order.grandTotalMinor },
+    ],
+    { orderId: order.id },
+  );
+}
+
+/**
+ * Admin goodwill credit: the platform funds a bounded credit to the customer's wallet
+ * (platform:revenue bears it). Refs left empty — not tied to an order/refund row.
+ */
+export async function onGoodwillCredit(
+  tx: Tx,
+  customerId: string,
+  amountMinor: number,
+  memo: string,
+): Promise<void> {
+  await postLedgerTx(tx, memo, [
+    { code: "platform:revenue", ownerType: "platform", debit: amountMinor },
+    {
+      code: `customer:${customerId}:prepaid`,
+      ownerType: "customer",
+      ownerId: customerId,
+      credit: amountMinor,
+    },
+  ]);
 }

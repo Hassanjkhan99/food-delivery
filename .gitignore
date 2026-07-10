@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-preview/
+.next-integration/
 dist/
 .turbo/
 .pgdata/
@@ -11,3 +13,8 @@ dist/
 **/src/graphql/generated/
 coverage/
 .DS_Store
+# Playwright E2E artifacts
+playwright-report/
+test-results/
+.playwright/
+blob-report/

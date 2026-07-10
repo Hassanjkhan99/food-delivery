@@ -6,13 +6,15 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/rider", label: "Jobs" },
   { href: "/rider/earnings", label: "Earnings" },
+  { href: "/rider/payouts", label: "Payouts" },
+  { href: "/rider/verification", label: "Verification" },
 ];
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-neutral-50">
-      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white px-4 py-3">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-kd-surface-muted">
+      <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface px-4 py-3">
         <div className="flex items-center justify-between">
           <span className="font-bold">🛵 Rider</span>
           <nav className="flex gap-3 text-sm">
@@ -21,7 +23,7 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
                 key={t.href}
                 href={t.href}
                 className={
-                  pathname === t.href ? "font-semibold text-neutral-900" : "text-neutral-500"
+                  pathname === t.href ? "font-semibold text-kd-fg" : "text-kd-fg-muted"
                 }
               >
                 {t.label}

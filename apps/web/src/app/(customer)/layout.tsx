@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useQuery } from "urql";
-import { ShoppingBag, User } from "lucide-react";
+import { Search, ShoppingBag, User } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
+import { useI18n } from "@/i18n/provider";
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -23,43 +26,67 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const lines = useCart((s) => s.lines);
   const [{ data }] = useQuery({ query: ViewerQuery });
   const viewer = data?.viewer;
+  const { t } = useI18n();
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-50">
-      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-kd-bg">
+      <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
-          <Link href="/" className="text-lg font-bold tracking-tight text-neutral-900">
-            🍜 Khaana<span className="text-rose-600">Do</span>
+          <Link href="/" className="text-lg font-bold tracking-tight text-kd-fg">
+            🍜 Khaana<span className="text-kd-primary">Do</span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/orders" className="text-neutral-600 hover:text-neutral-900">
-              Orders
+          <nav className="flex items-center gap-3 text-sm sm:gap-4">
+            <LocaleSwitcher />
+            <Link
+              href="/search"
+              aria-label={t("nav.search")}
+              className="rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+            >
+              <Search className="h-5 w-5" aria-hidden />
+            </Link>
+            <Link
+              href="/orders"
+              className="rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+            >
+              {t("nav.orders")}
+            </Link>
+            <Link href="/help" className="hidden text-kd-fg-muted hover:text-kd-fg sm:inline">
+              Help
             </Link>
             <Link
               href="/cart"
-              className="relative flex items-center gap-1 text-neutral-600 hover:text-neutral-900"
+              aria-label={
+                lines.length > 0
+                  ? `${t("a11y.viewCartItems")}, ${lines.length}`
+                  : t("a11y.viewCartItems")
+              }
+              className="relative flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
             >
-              <ShoppingBag className="h-5 w-5" />
+              <ShoppingBag className="h-5 w-5" aria-hidden />
               {lines.length > 0 && (
-                <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white">
+                <span className="absolute -end-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-kd-primary text-[10px] font-bold text-white">
                   {lines.length}
                 </span>
               )}
             </Link>
             {viewer ? (
-              <Link
-                href="/account"
-                className="flex items-center gap-1 text-neutral-600 hover:text-neutral-900"
-              >
-                <User className="h-5 w-5" />
-                <span className="hidden sm:inline">{viewer.user?.name ?? "Account"}</span>
-              </Link>
+              <>
+                <NotificationBell />
+                <Link
+                  href="/account"
+                  aria-label={t("a11y.account")}
+                  className="flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+                >
+                  <User className="h-5 w-5" aria-hidden />
+                  <span className="hidden sm:inline">{viewer.user?.name ?? t("nav.account")}</span>
+                </Link>
+              </>
             ) : (
               <Link
                 href="/login"
-                className="rounded-lg bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700"
+                className="rounded-lg bg-kd-primary px-3 py-1.5 font-medium text-white hover:bg-kd-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
               >
-                Sign in
+                {t("nav.signIn")}
               </Link>
             )}
           </nav>

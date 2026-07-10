@@ -2,22 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BadgeDollarSign, FileClock, Gauge, HandCoins, Store, Undo2 } from "lucide-react";
+import {
+  Ban,
+  BadgeDollarSign,
+  Bike,
+  FileClock,
+  FileSpreadsheet,
+  Gauge,
+  HandCoins,
+  LifeBuoy,
+  Megaphone,
+  Store,
+  Tag,
+  Undo2,
+} from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: Gauge },
   { href: "/admin/restaurants", label: "Restaurants", icon: Store },
+  { href: "/admin/tickets", label: "Support", icon: LifeBuoy },
+  { href: "/admin/campaigns", label: "Promotions", icon: Megaphone },
+  { href: "/admin/riders", label: "Riders", icon: Bike },
+  { href: "/admin/vouchers", label: "Vouchers", icon: Tag },
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },
+  { href: "/admin/metrics/export", label: "Metrics export", icon: FileSpreadsheet },
+  { href: "/admin/cancellations", label: "Cancellations", icon: Ban },
   { href: "/admin/audit", label: "Audit", icon: FileClock },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="flex min-h-screen bg-neutral-100">
-      <aside className="hidden w-52 shrink-0 border-r border-neutral-200 bg-neutral-900 p-4 text-white sm:block">
+    <div className="flex min-h-screen bg-kd-surface-muted">
+      <aside className="hidden w-52 shrink-0 border-r border-kd-border bg-neutral-900 p-4 text-white sm:block">
         <Link href="/admin" className="mb-6 block text-lg font-bold">
           ⚙️ Admin
         </Link>
@@ -42,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <Link href="/" className="mt-8 block text-xs text-neutral-500 hover:text-neutral-300">
+        <Link href="/" className="mt-8 block text-xs text-neutral-300 hover:text-white">
           ← Customer site
         </Link>
       </aside>

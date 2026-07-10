@@ -242,7 +242,43 @@ builder.mutationFields((t) => ({
       });
     },
   }),
+
+  // Vendor reply to a review (#61). Owner-guarded: the caller must be a member of
+  // the rating's restaurant. Auto-published (no admin moderation — mirrors the
+  // auto-approve rating policy). Upsert so an owner can edit an existing reply.
+  respondToRating: t.prismaField({
+    type: "RatingResponse",
+    authScopes: { restaurantMember: true },
+    args: {
+      ratingId: t.arg.string({ required: true }),
+      body: t.arg.string({ required: true }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      const body = args.body.trim();
+      if (!body) throw new GraphQLError("A response cannot be empty");
+      if (body.length > 1000) throw new GraphQLError("Response is too long (max 1000 chars)");
+      const rating = await prisma.rating.findUnique({ where: { id: args.ratingId } });
+      if (!rating) throw new GraphQLError("Review not found");
+      if (!ctx.restaurantIds.includes(rating.restaurantId) && !ctx.hasRole("admin")) {
+        throw new GraphQLError("Not a member of this restaurant");
+      }
+      return prisma.ratingResponse.upsert({
+        where: { ratingId: args.ratingId },
+        update: { body },
+        create: { ratingId: args.ratingId, restaurantId: rating.restaurantId, body },
+      });
+    },
+  }),
 }));
+
+builder.prismaObject("RatingResponse", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    body: t.exposeString("body"),
+    createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
+    updatedAt: t.field({ type: "DateTime", resolve: (r) => r.updatedAt }),
+  }),
+});
 
 builder.prismaObject("Rating", {
   fields: (t) => ({
@@ -250,5 +286,8 @@ builder.prismaObject("Rating", {
     stars: t.exposeInt("stars"),
     tags: t.exposeStringList("tags"),
     comment: t.exposeString("comment", { nullable: true }),
+    createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
+    // Vendor reply, auto-published (#61). Null until the owner responds.
+    response: t.relation("response", { nullable: true }),
   }),
 });

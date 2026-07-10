@@ -1,7 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "e2e"
 allowBuilds:
+  "@embedded-postgres/linux-x64": true
   "@embedded-postgres/windows-x64": true
   "@prisma/engines": true
   esbuild: true

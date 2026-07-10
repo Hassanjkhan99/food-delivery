@@ -2,10 +2,15 @@
 // workbench (executes money), payout batches, versioned fee config, audit explorer.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import type { OrderStatus } from "@fd/shared";
+import type { OrderStatus, PolicyMatrixRow, CancellationPolicyConfig } from "@fd/shared";
+import { CANCELLATION_POLICY_MATRIX, CANCELLATION_POLICY_CONFIG, formatRs } from "@fd/shared";
 import { transition } from "../services/orderService.js";
-import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
+import { recordCancellation } from "../services/policyService.js";
+import { accountBalance, onGoodwillCredit, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
+import { recomputeTrustScore } from "../services/riderTrustService.js";
+import { missingRequirements } from "../services/riderVerificationService.js";
+import { adminMetricsCsv, bucketMetrics } from "../services/csvExport.js";
 import { builder } from "./builder.js";
 
 async function audit(
@@ -61,6 +66,9 @@ builder.prismaObject("Refund", {
     reason: t.exposeString("reason"),
     createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
     order: t.relation("order"),
+    // Help tickets that opened this refund (#45) — lets the workbench see the
+    // structured intake (attached items) behind the request.
+    tickets: t.relation("tickets"),
   }),
 });
 
@@ -84,6 +92,8 @@ builder.prismaObject("FeeConfig", {
     smallBusinessPlatformFeeMinor: t.exposeInt("smallBusinessPlatformFeeMinor"),
     chainCommissionBps: t.exposeInt("chainCommissionBps"),
     chainPlatformFeeMinor: t.exposeInt("chainPlatformFeeMinor"),
+    featuredSlotDailyRateSmallMinor: t.exposeInt("featuredSlotDailyRateSmallMinor"),
+    featuredSlotDailyRateChainMinor: t.exposeInt("featuredSlotDailyRateChainMinor"),
     createdAt: t.field({ type: "DateTime", resolve: (f) => f.createdAt }),
   }),
 });
@@ -101,7 +111,52 @@ PayoutCandidate.implement({
   }),
 });
 
+// #30 admin-visible cancellation & refund policy matrix. Static rows from the
+// kickoff table + the live tunable config, so ops can see exactly what the engine does.
+const CancellationPolicyRow = builder.objectRef<PolicyMatrixRow>("CancellationPolicyRow");
+CancellationPolicyRow.implement({
+  fields: (t) => ({
+    scenario: t.exposeString("scenario"),
+    label: t.exposeString("label"),
+    customerPays: t.exposeString("customerPays"),
+    outcome: t.exposeString("outcome"),
+  }),
+});
+
+const CancellationPolicyConfigView = builder.objectRef<CancellationPolicyConfig>(
+  "CancellationPolicyConfig",
+);
+CancellationPolicyConfigView.implement({
+  fields: (t) => ({
+    gracePeriodSeconds: t.exposeInt("gracePeriodSeconds"),
+    postAcceptFeeMinor: t.exposeInt("postAcceptFeeMinor"),
+    afterPreparedSubtotalBps: t.exposeInt("afterPreparedSubtotalBps"),
+    unreachableChargesDeliveryFee: t.exposeBoolean("unreachableChargesDeliveryFee"),
+    unreachableWaitSeconds: t.exposeInt("unreachableWaitSeconds"),
+  }),
+});
+
+const CancellationPolicy = builder.objectRef<{
+  rows: PolicyMatrixRow[];
+  config: CancellationPolicyConfig;
+}>("CancellationPolicy");
+CancellationPolicy.implement({
+  fields: (t) => ({
+    rows: t.field({ type: [CancellationPolicyRow], resolve: (p) => p.rows }),
+    config: t.field({ type: CancellationPolicyConfigView, resolve: (p) => p.config }),
+  }),
+});
+
 builder.queryFields((t) => ({
+  cancellationPolicyMatrix: t.field({
+    type: CancellationPolicy,
+    authScopes: { admin: true },
+    resolve: () => ({
+      rows: CANCELLATION_POLICY_MATRIX,
+      config: CANCELLATION_POLICY_CONFIG,
+    }),
+  }),
+
   dashboardStats: t.field({
     type: DashboardStats,
     authScopes: { admin: true },
@@ -172,6 +227,41 @@ builder.queryFields((t) => ({
     resolve: (query) => prisma.restaurant.findMany({ ...query, orderBy: { createdAt: "asc" } }),
   }),
 
+  // Rider verification queue — mirrors restaurantApprovalQueue. Riders awaiting review
+  // (verificationStatus = pending), oldest first, with their uploaded docs.
+  riderVerificationQueue: t.prismaField({
+    type: ["Rider"],
+    authScopes: { admin: true },
+    resolve: (query) =>
+      prisma.rider.findMany({
+        ...query,
+        where: { verificationStatus: "pending" },
+        orderBy: { createdAt: "asc" },
+      }),
+  }),
+
+  allRiders: t.prismaField({
+    type: ["Rider"],
+    authScopes: { admin: true },
+    resolve: (query) => prisma.rider.findMany({ ...query, orderBy: { createdAt: "asc" } }),
+  }),
+
+  // Unmet onboarding requirements for one rider (empty => ready to verify). Lets the
+  // admin UI show what's missing before approving a shared/independent rider.
+  riderMissingRequirements: t.field({
+    type: ["String"],
+    authScopes: { admin: true },
+    args: { riderId: t.arg.string({ required: true }) },
+    resolve: async (_root, args) => {
+      const rider = await prisma.rider.findUnique({
+        where: { id: args.riderId },
+        include: { verificationDocs: true },
+      });
+      if (!rider) throw new GraphQLError("Rider not found");
+      return missingRequirements(rider);
+    },
+  }),
+
   refundQueue: t.prismaField({
     type: ["Refund"],
     authScopes: { admin: true },
@@ -215,6 +305,45 @@ builder.queryFields((t) => ({
         if (balance !== 0) out.push({ restaurantId: r.id, name: r.name, balanceMinor: balance });
       }
       return out.sort((a, b) => b.balanceMinor - a.balanceMinor);
+    },
+  }),
+
+  // Platform metrics export CSV (#29): orders / GMV / take-rate bucketed per period.
+  // GMV = subtotal + tax + delivery over delivered orders; take rate = platform revenue
+  // (commission + platform fee) / GMV. Computed live — no stored aggregates.
+  adminMetricsCsv: t.string({
+    authScopes: { admin: true },
+    args: {
+      from: t.arg({ type: "DateTime", required: false }),
+      to: t.arg({ type: "DateTime", required: false }),
+      granularity: t.arg.string({ required: false }),
+    },
+    resolve: async (_root, args) => {
+      const g = (["day", "week", "month"] as const).includes(args.granularity as never)
+        ? (args.granularity as "day" | "week" | "month")
+        : "day";
+      const orders = await prisma.order.findMany({
+        where: {
+          status: "delivered",
+          ...(args.from || args.to
+            ? {
+                deliveredAt: {
+                  ...(args.from ? { gte: args.from } : {}),
+                  ...(args.to ? { lte: args.to } : {}),
+                },
+              }
+            : {}),
+        },
+        select: {
+          deliveredAt: true,
+          subtotalMinor: true,
+          taxTotalMinor: true,
+          deliveryFeeMinor: true,
+          commissionMinor: true,
+          platformFeeMinor: true,
+        },
+      });
+      return adminMetricsCsv(bucketMetrics(orders, g));
     },
   }),
 }));
@@ -287,6 +416,87 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Approve a rider after docs are reviewed. For shared/independent riders the onboarding
+  // requirements must be complete (CNIC + photo + vehicle + plate + training + agreement);
+  // restaurant riders have only soft requirements. Audited like restaurant approval.
+  approveRider: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_q, _root, args, ctx) => {
+      const before = await prisma.rider.findUnique({
+        where: { id: args.id },
+        include: { verificationDocs: true },
+      });
+      if (!before) throw new GraphQLError("Rider not found");
+      const missing = missingRequirements(before);
+      if (missing.length > 0) {
+        throw new GraphQLError(`Cannot verify — missing: ${missing.join(", ")}`);
+      }
+      const updated = await prisma.rider.update({
+        where: { id: args.id },
+        data: { verificationStatus: "verified", verifiedAt: new Date(), rejectionReason: null },
+      });
+      await audit(
+        ctx.userId,
+        "rider.approve",
+        "Rider",
+        args.id,
+        { verificationStatus: before.verificationStatus },
+        { verificationStatus: "verified" },
+      );
+      return updated;
+    },
+  }),
+
+  rejectRider: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }), reason: t.arg.string({ required: true }) },
+    resolve: async (_q, _root, args, ctx) => {
+      const before = await prisma.rider.findUniqueOrThrow({ where: { id: args.id } });
+      const updated = await prisma.rider.update({
+        where: { id: args.id },
+        // Rejecting also pulls shared eligibility — a rejected rider gets no offers.
+        data: {
+          verificationStatus: "rejected",
+          rejectionReason: args.reason,
+          sharedModeEnabled: false,
+        },
+      });
+      await audit(
+        ctx.userId,
+        "rider.reject",
+        "Rider",
+        args.id,
+        { verificationStatus: before.verificationStatus },
+        { verificationStatus: "rejected", reason: args.reason },
+      );
+      return updated;
+    },
+  }),
+
+  // Recompute one rider's trust score on demand (the nightly job calls the service for
+  // all riders). Auto-disables shared mode when the score falls below threshold.
+  recomputeRiderTrust: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const before = await prisma.rider.findUniqueOrThrow({ where: { id: args.id } });
+      const breakdown = await recomputeTrustScore(args.id);
+      await audit(
+        ctx.userId,
+        "rider.trust_recompute",
+        "Rider",
+        args.id,
+        { trustScore: before.trustScore },
+        { trustScore: breakdown.score },
+      );
+      return prisma.rider.findUniqueOrThrow({ ...query, where: { id: args.id } });
+    },
+  }),
+
   overrideOrderStatus: t.prismaField({
     type: "Order",
     authScopes: { admin: true },
@@ -295,14 +505,26 @@ builder.mutationFields((t) => ({
       toStatus: t.arg.string({ required: true }),
       reason: t.arg.string({ required: true }),
     },
-    resolve: (_q, _root, args, ctx) =>
+    resolve: async (_q, _root, args, ctx) => {
+      const toStatus = args.toStatus as OrderStatus;
+      // #30: capture the order before the move so a cancellation policy row can be
+      // written against its pre-transition state (grace-window/timing intact).
+      const before =
+        ["rejected", "auto_expired", "cancelled"].includes(toStatus)
+          ? await prisma.order.findUnique({ where: { id: args.id } })
+          : null;
       // transition() audits admin/system actors internally.
-      transition(
+      const updated = await transition(
         args.id,
-        args.toStatus as OrderStatus,
+        toStatus,
         { userId: ctx.userId, role: "admin" },
         { reason: args.reason },
-      ),
+      );
+      // Admin-driven cancellations still owe a Cancellation audit row (admin_override
+      // scenario, full refund by default). Persist it after the transition succeeds.
+      if (before) await recordCancellation(before, "admin");
+      return updated;
+    },
   }),
 
   decideRefund: t.prismaField({
@@ -325,6 +547,17 @@ builder.mutationFields((t) => ({
         const updated = await prisma.refund.update({
           where: { id: args.id },
           data: { status: "refund_rejected", decidedByUserId: ctx.userId, decidedAt: new Date() },
+        });
+        // Reflect the decision on any help ticket that opened this refund so the
+        // customer sees the outcome on their ticket thread (#45).
+        await prisma.supportTicket.updateMany({
+          where: { refundId: refund.id, status: { not: "closed" } },
+          data: {
+            status: "resolved",
+            resolutionNote: args.reason?.trim()
+              ? `We reviewed your request and couldn't approve a refund: ${args.reason.trim()}`
+              : "We reviewed your request and couldn't approve a refund for this order.",
+          },
         });
         await audit(
           ctx.userId,
@@ -394,10 +627,20 @@ builder.mutationFields((t) => ({
             { orderId: order.id, refundId: refund.id },
           );
         }
-        return tx.refund.update({
+        const r = await tx.refund.update({
           where: { id: args.id },
           data: { status: "refunded", decidedByUserId: ctx.userId, decidedAt: new Date() },
         });
+        // Surface the approved-refund resolution on any linked help ticket (#45).
+        const dest = refund.destination === "card" ? "your original payment method" : "your wallet";
+        await tx.supportTicket.updateMany({
+          where: { refundId: refund.id, status: { not: "closed" } },
+          data: {
+            status: "resolved",
+            resolutionNote: `Refund of ${formatRs(refund.amountMinor)} approved to ${dest}.`,
+          },
+        });
+        return r;
       });
       await audit(
         ctx.userId,
@@ -419,15 +662,30 @@ builder.mutationFields((t) => ({
       smallBusinessPlatformFeeMinor: t.arg.int({ required: true }),
       chainCommissionBps: t.arg.int({ required: true }),
       chainPlatformFeeMinor: t.arg.int({ required: true }),
+      // Featured-slot daily rates (#22). Optional so existing callers keep working;
+      // when omitted they carry forward from the current config version.
+      featuredSlotDailyRateSmallMinor: t.arg.int({ required: false }),
+      featuredSlotDailyRateChainMinor: t.arg.int({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
       for (const [k, v] of Object.entries(args)) {
-        if (v < 0 || v > 100_000) throw new GraphQLError(`${k} out of range`);
+        if (v != null && (v < 0 || v > 100_000)) throw new GraphQLError(`${k} out of range`);
       }
+      const current = await prisma.feeConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      const data = {
+        smallBusinessCommissionBps: args.smallBusinessCommissionBps,
+        smallBusinessPlatformFeeMinor: args.smallBusinessPlatformFeeMinor,
+        chainCommissionBps: args.chainCommissionBps,
+        chainPlatformFeeMinor: args.chainPlatformFeeMinor,
+        featuredSlotDailyRateSmallMinor:
+          args.featuredSlotDailyRateSmallMinor ?? current?.featuredSlotDailyRateSmallMinor ?? 0,
+        featuredSlotDailyRateChainMinor:
+          args.featuredSlotDailyRateChainMinor ?? current?.featuredSlotDailyRateChainMinor ?? 50_000,
+      };
       const created = await prisma.feeConfig.create({
-        data: { ...args, createdByUserId: ctx.userId },
+        data: { ...data, createdByUserId: ctx.userId },
       });
-      await audit(ctx.userId, "fees.update", "FeeConfig", created.id, null, args);
+      await audit(ctx.userId, "fees.update", "FeeConfig", created.id, null, data);
       return created;
     },
   }),
@@ -481,6 +739,41 @@ builder.mutationFields((t) => ({
         }
       }
       return payouts;
+    },
+  }),
+
+  // Bounded, audited goodwill credit to a customer's wallet (platform:revenue funds it).
+  // Returns the customer's new prepaid balance in minor units.
+  issueGoodwillCredit: t.field({
+    type: "Int",
+    authScopes: { admin: true },
+    args: {
+      customerId: t.arg.string({ required: true }),
+      amountMinor: t.arg.int({ required: true }),
+      reason: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      // Bound the credit so a mis-click can't mint an unlimited balance (Rs 1 – Rs 50,000).
+      if (args.amountMinor < 100 || args.amountMinor > 5_000_000) {
+        throw new GraphQLError("Goodwill credit must be between Rs 1 and Rs 50,000");
+      }
+      const customer = await prisma.user.findUnique({ where: { id: args.customerId } });
+      if (!customer) throw new GraphQLError("Customer not found");
+
+      const balance = await prisma.$transaction(async (tx) => {
+        await onGoodwillCredit(
+          tx,
+          args.customerId,
+          args.amountMinor,
+          `Goodwill credit — ${args.reason}`,
+        );
+        return accountBalance(tx, `customer:${args.customerId}:prepaid`);
+      });
+      await audit(ctx.userId, "wallet.goodwill_credit", "User", args.customerId, null, {
+        amountMinor: args.amountMinor,
+        reason: args.reason,
+      });
+      return balance;
     },
   }),
 }));

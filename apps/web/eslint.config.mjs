@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Isolated build dir used by parallel preview servers (see next.config distDir).
+    ".next-preview/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

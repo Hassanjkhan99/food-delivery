@@ -1,0 +1,53 @@
+# CODEOWNERS — required reviewers for sensitive, money- and policy-bearing code.
+#
+# Syntax: <path glob>  <owner…>. The LAST matching pattern wins, so the most
+# specific rules go at the bottom. Replace the placeholder teams/handles below
+# with real GitHub teams before enabling branch protection.
+#
+# Owners here are enforced via a "Require review from Code Owners" branch
+# protection rule on the default branch.
+
+# ----------------------------------------------------------------------------
+# Default: anything not otherwise claimed.
+# ----------------------------------------------------------------------------
+*                                               @Hassanjkhan99
+
+# ----------------------------------------------------------------------------
+# Governance & licensing — changes here need a maintainer.
+# ----------------------------------------------------------------------------
+/LICENSE                                        @Hassanjkhan99
+/LICENSE-Apache-2.0.txt                         @Hassanjkhan99
+/NOTICE                                         @Hassanjkhan99
+/DCO.txt                                        @Hassanjkhan99
+/CODE_OF_CONDUCT.md                             @Hassanjkhan99
+/CONTRIBUTING.md                                @Hassanjkhan99
+/SECURITY.md                                    @Hassanjkhan99
+/.github/                                       @Hassanjkhan99
+/packages/shared/LICENSE                        @Hassanjkhan99
+
+# ----------------------------------------------------------------------------
+# Money flow — payments, ledger, payouts, refunds. Highest bar.
+# ----------------------------------------------------------------------------
+/apps/api/src/services/payments/                @Hassanjkhan99
+/apps/api/src/services/ledgerService.ts         @Hassanjkhan99
+
+# Fee / commission math lives in the quote service (there is no standalone
+# tax/compliance module yet — guard it here until one exists).
+/apps/api/src/services/quoteService.ts          @Hassanjkhan99
+
+# ----------------------------------------------------------------------------
+# Admin & payment GraphQL surface.
+# ----------------------------------------------------------------------------
+/apps/api/src/schema/admin.ts                   @Hassanjkhan99
+/apps/api/src/schema/payment.ts                 @Hassanjkhan99
+
+# ----------------------------------------------------------------------------
+# Order state machine — the source of truth for order lifecycle transitions.
+# ----------------------------------------------------------------------------
+/packages/shared/src/orderStateMachine.ts       @Hassanjkhan99
+
+# ----------------------------------------------------------------------------
+# Database schema & migrations — additive-only; review every change.
+# ----------------------------------------------------------------------------
+/packages/db/prisma/schema.prisma               @Hassanjkhan99
+/packages/db/prisma/migrations/                 @Hassanjkhan99

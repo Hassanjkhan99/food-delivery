@@ -1,0 +1,43 @@
+KhaanaDo — restaurant-first delivery marketplace
+Copyright (c) 2026 KhaanaDo contributors
+
+This product bundles several components under different open-source licenses.
+
+================================================================================
+License split
+================================================================================
+
+This is a monorepo. Different parts carry different licenses on purpose:
+
+  * Core hosted server (network copyleft) — GNU AGPL-3.0-or-later
+      apps/api           GraphQL API, resolvers, services, ledger
+      apps/web           Next.js app (customer PWA, restaurant/rider/admin UIs)
+      packages/db        Prisma schema, migrations, seed
+      packages/config    shared build/lint config used only by the above
+
+  * SDKs / API clients / shareable libraries (patent grant, ecosystem uptake)
+      — Apache License 2.0
+      packages/shared    pure, framework-free domain library
+                         (money math, geo, hours, order state machine, roles,
+                         zod schemas, constants) that a third-party SDK or
+                         integrator can import without inheriting AGPL.
+
+The authoritative texts live at the repository root:
+  * LICENSE                  — GNU AGPL-3.0-or-later (the "core" license)
+  * LICENSE-Apache-2.0.txt   — Apache License 2.0 (the "SDK" license)
+
+Each Apache-2.0 package additionally carries its own LICENSE file and a
+`"license"` field in its package.json so the boundary travels with the code
+when published. See CONTRIBUTING.md ("Licensing & file headers") for the
+per-file SPDX header convention.
+
+================================================================================
+Attribution
+================================================================================
+
+This software is built on third-party open-source packages listed in the
+respective package.json / pnpm-lock.yaml manifests, each under its own license.
+
+Timing note (from the Phase-8 kickoff report): do NOT publish this repository
+publicly until the finance / SLA / shared-rider mechanics are battle-tested.
+Externalizing unstable money policy invites forks of broken policy.

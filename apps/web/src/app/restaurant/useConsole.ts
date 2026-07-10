@@ -16,6 +16,7 @@ const MyRestaurantsQuery = graphql(`
         id
         name
         isAcceptingOrders
+        prepBufferMinutes
         minOrderMinor
         deliveryFeeMinor
         deliveryRadiusM

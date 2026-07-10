@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { GraphQLProvider } from "@/lib/urql";
+import { I18nProvider } from "@/i18n/provider";
 import { PwaSetup } from "@/components/PwaSetup";
 import "./globals.css";
 
@@ -31,9 +32,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    // lang/dir default to en/ltr for SSR; I18nProvider updates them on the client
+    // when the stored locale is Urdu (RTL). See src/i18n for the scaffolding note.
+    <html lang="en" dir="ltr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <GraphQLProvider>{children}</GraphQLProvider>
+        <I18nProvider>
+          <GraphQLProvider>{children}</GraphQLProvider>
+        </I18nProvider>
         <PwaSetup />
       </body>
     </html>
