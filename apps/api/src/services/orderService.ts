@@ -29,6 +29,7 @@ import {
   validateVoucher,
 } from "./voucherService.js";
 import { onOrderDeliveredLoyalty, onOrderReversalLoyalty, postLoyaltyTx } from "./loyaltyService.js";
+import { onRefereeOrderDelivered } from "./referralService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
 import { notifyOrderStatus } from "./notificationService.js";
@@ -418,6 +419,8 @@ export async function transition(
       await postDiscountLedger(tx, order);
       // Earn loyalty points on the delivered order (FP-07 / #57).
       await onOrderDeliveredLoyalty(tx, order);
+      // Referral (#58): the referee's first delivered order credits both wallets.
+      await onRefereeOrderDelivered(tx, order.customerId, order.id);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
       await onOrderMoneyReversal(tx, order, to, opts.refundMinor);
       // Free the voucher redemption so it stops counting against the user's limit + budget. (#52)

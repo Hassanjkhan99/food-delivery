@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CreditCard, Gift, Wallet } from "lucide-react";
 import { useMutation, useQuery } from "urql";
-import { CreditCard, Wallet } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useResetGraphQLClient } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
@@ -335,6 +335,15 @@ export default function AccountPage() {
           </ul>
         )}
       </section>
+
+      {/* Referral invite (#58) */}
+      <Link
+        href="/referrals"
+        className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm hover:border-kd-primary"
+      >
+        <Gift className="h-5 w-5 text-kd-primary" />
+        <span className="font-medium text-kd-fg">Invite friends, earn credit</span>
+      </Link>
 
       <Button
         variant="outline"

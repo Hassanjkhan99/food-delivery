@@ -254,6 +254,15 @@ enum LoyaltyReason {
   adjust
 }
 
+// Referral lifecycle (#58). pending → qualified (referee's first order delivered,
+// both sides credited to their customer wallet). Kept single-step: we credit at
+// qualify time, so there is no separate "paid" state for the mocked-money world.
+enum ReferralStatus {
+  pending
+  qualified
+  cancelled
+}
+
 // ───────────────────────────── identity & auth ─────────────────────────────
 
 model User {
@@ -279,6 +288,9 @@ model User {
   notifications    Notification[]
   loyaltyAccount   LoyaltyAccount?
   loyaltyLedger    LoyaltyLedger[]
+  referralCode     ReferralCode?
+  referralsMade    Referral[]          @relation("Referrer")
+  referralReceived Referral?           @relation("Referee")
 
   @@map("users")
 }
@@ -1442,4 +1454,42 @@ model LoyaltyLedger {
 
   @@index([userId, createdAt])
   @@map("loyalty_ledger")
+}
+
+// ───────────────────────────── referrals (#58) ─────────────────────────────
+
+// One share code per user, minted lazily on first view of the invite screen.
+model ReferralCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("referral_codes")
+}
+
+// One row per invited friend. `refereeId` is unique so a user can only ever be
+// referred once (anti-abuse: no self-referral, no re-referral). Reward amounts
+// are snapshotted at claim time so later policy changes don't retro-adjust.
+model Referral {
+  id                 String         @id @default(cuid())
+  referrerId         String
+  refereeId          String         @unique
+  code               String
+  status             ReferralStatus @default(pending)
+  refereeRewardMinor Int
+  referrerRewardMinor Int
+  qualifyingOrderId  String?
+  ledgerTxId         String?
+  createdAt          DateTime       @default(now()) @db.Timestamptz()
+  qualifiedAt        DateTime?      @db.Timestamptz()
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id])
+  referee  User @relation("Referee", fields: [refereeId], references: [id])
+
+  @@index([referrerId])
+  @@index([status])
+  @@map("referrals")
 }
