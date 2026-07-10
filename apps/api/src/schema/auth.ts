@@ -151,15 +151,16 @@ builder.mutationFields((t) => ({
       email: t.arg.string({ required: false }),
     },
     resolve: (query, _root, args, ctx) => {
-      const name = args.name?.trim();
-      const email = args.email?.trim();
+      // Distinguish an omitted arg (leave the column untouched) from a provided
+      // blank/null one (the user cleared the field → write null). An arg only
+      // appears in the update when the client actually sent it.
+      const data: { name?: string | null; email?: string | null } = {};
+      if (args.name !== undefined) data.name = args.name?.trim() || null;
+      if (args.email !== undefined) data.email = args.email?.trim() || null;
       return prisma.user.update({
         ...query,
         where: { id: ctx.userId! },
-        data: {
-          ...(name ? { name } : {}),
-          ...(email ? { email } : {}),
-        },
+        data,
       });
     },
   }),

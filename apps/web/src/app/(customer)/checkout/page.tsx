@@ -115,7 +115,12 @@ export default function CheckoutPage() {
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
 
   // Lazy name capture: prompt only when the signed-in user has no saved name.
-  const [{ data: viewerData }] = useQuery({ query: CheckoutViewerQuery });
+  // Until the viewer resolves we can't know whether a name is on file, so we
+  // treat the pending state as "not yet ready" and block submission (below).
+  const [{ data: viewerData, fetching: viewerFetching }] = useQuery({
+    query: CheckoutViewerQuery,
+  });
+  const viewerLoaded = !viewerFetching && viewerData !== undefined;
   const savedName = viewerData?.viewer?.user?.name ?? null;
   const needsName = viewerData?.viewer != null && !savedName;
   const [customerName, setCustomerName] = useState("");
@@ -413,7 +418,13 @@ export default function CheckoutPage() {
           type="submit"
           size="lg"
           className="w-full"
-          disabled={placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius}
+          disabled={
+            placeState.fetching ||
+            !viewerLoaded ||
+            !quote ||
+            !quote.meetsMinimum ||
+            !quote.inRadius
+          }
         >
           {placeState.fetching
             ? "Placing order…"

@@ -37,6 +37,10 @@ const VerifyOtpMutation = graphql(`
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
+// A code is submittable only when all six positions hold a digit (no placeholder
+// spaces from editing a middle box).
+const isComplete = (code: string) => code.length === OTP_LENGTH && !code.includes(" ");
+
 /**
  * Six auto-advancing OTP boxes with paste support and backspace navigation.
  * Controlled: parent owns the joined `value` string; onChange fires on every edit.
@@ -55,12 +59,15 @@ function OtpBoxes({
   const refs = useRef<Array<HTMLInputElement | null>>([]);
   const digits = value.padEnd(OTP_LENGTH, " ").slice(0, OTP_LENGTH).split("");
 
+  // Keep a fixed-length value with spaces as placeholders so editing a middle
+  // digit never shifts later digits left. Trailing spaces are trimmed only so
+  // the parent's `.length` check reflects "all six filled".
   function setAt(index: number, char: string) {
-    const next = value.padEnd(OTP_LENGTH, " ").split("");
+    const next = value.padEnd(OTP_LENGTH, " ").slice(0, OTP_LENGTH).split("");
     next[index] = char || " ";
     const joined = next.join("").replace(/\s+$/g, "");
-    onChange(joined.replace(/\s/g, ""));
-    return joined.replace(/\s/g, "");
+    onChange(joined);
+    return joined;
   }
 
   function handleChange(index: number, raw: string) {
@@ -68,7 +75,7 @@ function OtpBoxes({
     if (!char) return;
     const joined = setAt(index, char);
     if (index < OTP_LENGTH - 1) refs.current[index + 1]?.focus();
-    if (joined.length === OTP_LENGTH) onComplete(joined);
+    if (isComplete(joined)) onComplete(joined);
   }
 
   function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
@@ -195,7 +202,7 @@ function LoginForm() {
 
   function onVerify(e: React.FormEvent) {
     e.preventDefault();
-    if (code.length === OTP_LENGTH) void submitCode(code);
+    if (isComplete(code)) void submitCode(code);
   }
 
   return (
@@ -277,7 +284,7 @@ function LoginForm() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={verState.fetching || code.length !== OTP_LENGTH}
+                disabled={verState.fetching || !isComplete(code)}
               >
                 {verState.fetching ? "Verifying…" : "Verify & continue"}
               </Button>

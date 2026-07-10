@@ -102,7 +102,9 @@ export default function AccountPage() {
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
-    await updateProfile({ name: name.trim() || undefined, email: email.trim() || undefined });
+    // Send null (not undefined) for a cleared field so the resolver actually
+    // wipes it; the editor is pre-filled, so an empty box means intentional clear.
+    await updateProfile({ name: name.trim() || null, email: email.trim() || null });
     setEditing(false);
     refetch({ requestPolicy: "network-only" });
   }
