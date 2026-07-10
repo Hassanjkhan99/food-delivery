@@ -110,7 +110,15 @@ export default function HomePage() {
     query: HomeQuery,
     variables: { lat: loc.lat, lng: loc.lng },
   });
-  const [{ data: viewerData }] = useQuery({ query: HomeViewerQuery });
+  // Revalidate the viewer in the background (cache-and-network) so the logged-in gate
+  // for the reorder row reflects the current session — e.g. after a logout on this or
+  // another tab — instead of a stale cached viewer keeping the reorder query alive. The
+  // urql client is also reset on logout (see useResetGraphQLClient), so the two together
+  // guarantee we never pause/unpause reorders off a stale identity. — #36 review round 2.
+  const [{ data: viewerData }] = useQuery({
+    query: HomeViewerQuery,
+    requestPolicy: "cache-and-network",
+  });
   const loggedIn = Boolean(viewerData?.viewer?.user?.id);
   const [{ data: reorderData }] = useQuery({ query: OrderAgainQuery, pause: !loggedIn });
 
@@ -203,6 +211,18 @@ export default function HomePage() {
   );
   const freeDelivery = useMemo(() => hits.filter((h) => h.deliveryFeeMinor === 0), [hits]);
 
+  // Promo banners deep-link into a restaurant (linkHref = "/r/<slug>"). Hide any banner
+  // whose target restaurant doesn't deliver to the current area, otherwise the banner
+  // dead-ends on a restaurant the server rejects at checkout. Banners with no /r/ link
+  // (generic campaigns) are always kept. — #36 review round 2.
+  const banners = useMemo(() => {
+    const deliverable = new Set(hits.map((h) => h.restaurant.slug));
+    return (data?.homeBanners ?? []).filter((b) => {
+      const m = /^\/r\/([^/?#]+)/.exec(b.linkHref ?? "");
+      return m ? deliverable.has(m[1]) : true;
+    });
+  }, [data, hits]);
+
   // Only surface reorder targets that (a) come from a successfully delivered order —
   // not in-flight/cancelled/rejected ones — and (b) actually deliver to the current
   // location, otherwise the row links to restaurants the server rejects at checkout.
@@ -289,7 +309,7 @@ export default function HomePage() {
               promos/reorder link into restaurants, so they'd dead-end in an empty area. */}
           {!filtering && hits.length > 0 && (
             <>
-              {data.homeBanners.length > 0 && <PromoCarousel banners={data.homeBanners} />}
+              {banners.length > 0 && <PromoCarousel banners={banners} />}
               <OrderAgainRow targets={reorderTargets} />
               <Swimlane title="Top rated near you" hits={topRated} />
               <Swimlane title="Free delivery" hits={freeDelivery} />

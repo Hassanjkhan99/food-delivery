@@ -12,6 +12,7 @@ export type BranchHours =
 
 const PKT_OFFSET_MINUTES = 5 * 60;
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function toMinutes(hhmm: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
@@ -57,5 +58,24 @@ export function branchOpenState(hours: BranchHours, nowMs: number): OpenState {
     isOpen = true;
   }
 
-  return { isOpen, opensAtLabel: isOpen ? null : hours.open };
+  if (isOpen) return { isOpen, opensAtLabel: null };
+
+  // Closed → find the next day the branch actually opens so the label reads e.g.
+  // "Mon 09:00" instead of assuming today. If it opens later TODAY (closed only because
+  // it's before opening time), show just the time. Otherwise prefix the weekday. — #36
+  // review round 2.
+  const opensToday = days.includes(day) && mins < openM;
+  if (opensToday) return { isOpen, opensAtLabel: hours.open };
+
+  // Scan forward up to 7 days for the next opening day.
+  for (let ahead = 1; ahead <= 7; ahead++) {
+    const d = (day + ahead) % 7;
+    if (days.includes(d)) {
+      const label = ahead === 1 ? `tomorrow ${hours.open}` : `${DAY_NAMES[d]} ${hours.open}`;
+      return { isOpen, opensAtLabel: label };
+    }
+  }
+
+  // Shouldn't happen (days is non-empty), but fall back to the bare time.
+  return { isOpen, opensAtLabel: hours.open };
 }

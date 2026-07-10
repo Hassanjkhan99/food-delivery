@@ -79,14 +79,23 @@ export function useDeliveryLocation(): DeliveryLocation {
       .query({ name: "geolocation" })
       .then((status) => {
         if (status.state !== "granted") return;
+        // Re-check right before firing the async GPS read — the customer may have picked
+        // a preset while the permissions query was in flight.
+        if (useLocationStore.getState().source === "preset") return;
         navigator.geolocation.getCurrentPosition(
-          (pos) =>
+          (pos) => {
+            // And re-check AGAIN in the position callback: getCurrentPosition is async, so
+            // an explicit preset chosen between the request and the fix must win. Without
+            // this, the stale closure would silently snap the customer back to GPS. — #36
+            // review round 2.
+            if (useLocationStore.getState().source === "preset") return;
             useLocationStore.setState({
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
               label: "Current location",
               source: "gps",
-            }),
+            });
+          },
           () => {},
           { timeout: 5_000 },
         );

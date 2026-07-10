@@ -25,6 +25,14 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
 
   if (count === 0) return null;
 
+  // Clamp the active index into range for rendering: when the banner list shrinks (e.g. a
+  // promo is filtered out because its restaurant stopped delivering to the current area),
+  // the stored `index` can point past the end and render an empty/broken slide. Deriving a
+  // safe index here fixes the render immediately; the auto-advance modulo and in-range dot
+  // clicks bring the stored `index` back into range on their own (no setState-in-effect,
+  // which cascades renders). — #36 review round 2.
+  const safeIndex = Math.min(index, count - 1);
+
   return (
     <div
       className="relative overflow-hidden rounded-2xl"
@@ -33,7 +41,7 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
     >
       <div
         className="flex transition-transform duration-500 ease-out"
-        style={{ transform: `translateX(-${index * 100}%)` }}
+        style={{ transform: `translateX(-${safeIndex * 100}%)` }}
       >
         {banners.map((b) => {
           const inner = (
@@ -68,7 +76,7 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
               onClick={() => setIndex(i)}
               className={cn(
                 "h-1.5 rounded-full bg-white/70 transition-all",
-                i === index ? "w-5 bg-white" : "w-1.5",
+                i === safeIndex ? "w-5 bg-white" : "w-1.5",
               )}
             />
           ))}

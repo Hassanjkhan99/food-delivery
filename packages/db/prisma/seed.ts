@@ -232,7 +232,10 @@ async function main() {
   await prisma.homeBanner.createMany({
     data: [
       {
-        title: "Free delivery weekend",
+        // Scoped to Green Bowl, the one seeded branch with deliveryFeeMinor: 0 — the banner
+        // must not promise free delivery platform-wide when other branches charge a fee
+        // (#36 review round 2). Keep this in sync with Green Bowl's deliveryFeeMinor above.
+        title: "Free delivery at Green Bowl",
         imageUrl: "/banners/free-delivery.svg",
         linkHref: "/r/green-bowl",
         sortOrder: 0,

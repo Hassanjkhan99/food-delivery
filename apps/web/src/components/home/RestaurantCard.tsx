@@ -131,10 +131,13 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           className={cn("aspect-[16/10] w-44 rounded-xl", avail.closed && "grayscale-[0.6]")}
           sizes="176px"
           // Scrim inside the image so the Google attribution stays visible — #36 review.
+          // Use the shared availability label so the paused state ("Temporarily paused")
+          // shows here too, matching the full card instead of always saying "Closed". — #36
+          // review round 2.
           overlay={
             avail.closed && (
-              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 text-xs font-bold text-white">
-                {hit.opensAtLabel ? `Opens ${hit.opensAtLabel}` : "Closed"}
+              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 px-2 text-center text-xs font-bold text-white">
+                {avail.label ?? "Closed"}
               </span>
             )
           }
