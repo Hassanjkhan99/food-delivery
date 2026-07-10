@@ -38,6 +38,9 @@ export const quoteInputSchema = z.object({
   // Optional promo code (#52). Validated + priced server-side; never trusted from the
   // client for the discount amount, only the code string.
   voucherCode: z.string().trim().min(1).max(40).optional(),
+  // Fulfillment mode (#54). `pickup` zeroes the delivery fee and skips the radius
+  // check; the coordinates are still required (they're used for the distance readout).
+  fulfillmentMode: z.enum(["delivery", "pickup"]).default("delivery"),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({
@@ -49,6 +52,9 @@ export const placeOrderInputSchema = quoteInputSchema.extend({
   paymentMethodId: z.string().optional(),
   // Include cutlery/napkins with the order; defaults to true (opt-out).
   cutleryRequested: z.boolean().default(true),
+  // Optional future slot for scheduled orders (#54). ISO datetime; must be in the
+  // future when provided. Groundwork — the acceptance-SLA rescheduling is a follow-up.
+  scheduledFor: z.string().datetime().optional(),
 });
 
 export type CartLineInput = z.infer<typeof cartLineSchema>;

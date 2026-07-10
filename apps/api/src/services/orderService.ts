@@ -52,6 +52,7 @@ export async function placeOrder(
   // only counts distinct orders — genuine scripted spam / cost-abuse, not double-taps.
   await assertOrderVelocity(customerId);
 
+  // Pickup skips the radius check entirely (quoteCart already forces inRadius=true). (#54)
   const quote = await quoteCart(input, customerId);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
@@ -61,6 +62,16 @@ export async function placeOrder(
   if (input.voucherCode && quote.voucherError) {
     const { VoucherError } = await import("./voucherService.js");
     throw new VoucherError(quote.voucherError as never);
+  }
+
+  const isPickup = input.fulfillmentMode === "pickup";
+  // Scheduled orders (#54): validate the slot is in the future. Groundwork only — the
+  // acceptance SLA still starts at placement (see acceptDeadlineAt below); shifting the
+  // 120s window to `scheduledFor − leadTime` and holding the order out of the board's
+  // "New" lane until then is the follow-up that makes scheduling fully functional.
+  const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null;
+  if (scheduledFor && scheduledFor.getTime() <= Date.now()) {
+    throw new GraphQLError("Scheduled time must be in the future");
   }
 
   // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
@@ -92,6 +103,11 @@ export async function placeOrder(
     .toString(36)
     .toUpperCase()}`;
 
+  // Short 4-digit code the customer quotes at the counter to collect a pickup order.
+  const pickupCode = isPickup
+    ? String(Math.floor(1000 + Math.random() * 9000))
+    : null;
+
   try {
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -122,6 +138,9 @@ export async function placeOrder(
           voucherId: quote.appliedVoucher?.voucher.id ?? null,
           grandTotalMinor: quote.grandTotalMinor,
           paymentMode: input.paymentMode,
+          fulfillmentMode: input.fulfillmentMode,
+          scheduledFor,
+          pickupCode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
           items: {
               // Freeze the line. For a combo (#53) we also freeze the component list so

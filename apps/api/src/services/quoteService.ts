@@ -90,7 +90,10 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     input.deliveryLat,
     input.deliveryLng,
   );
-  const inRadius = distanceM <= branch.deliveryRadiusM;
+  // Pickup (#54): the customer collects at the branch, so the delivery radius never
+  // applies (any distance is fine — they travel to the branch, not the reverse).
+  const isPickup = input.fulfillmentMode === "pickup";
+  const inRadius = isPickup || distanceM <= branch.deliveryRadiusM;
 
   // Resolve items against the ACTIVE menu only (stale carts re-priced or rejected).
   const itemIds = input.lines.map((l) => l.menuItemId).filter((id): id is string => Boolean(id));
@@ -203,8 +206,13 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   const commissionBps = isChain ? fee.chainCommissionBps : fee.smallBusinessCommissionBps;
   const platformFee = isChain ? fee.chainPlatformFeeMinor : fee.smallBusinessPlatformFeeMinor;
   const commission = applyBps(subtotal, commissionBps);
-  // Rider tip is added on top of the bill; it isn't taxed or commissioned.
-  const tipAmount = input.tipAmount ?? 0;
+  // Rider tip is added on top of the bill; it isn't taxed or commissioned. Pickup has
+  // no rider leg, so a rider tip can't be routed to anyone — force it to zero (#54) so
+  // a tip chosen on the cart page before switching to Pickup is never charged.
+  const tipAmount = isPickup ? 0 : input.tipAmount ?? 0;
+  // Pickup has no rider leg, so there's no delivery fee to charge (#54). Founder call:
+  // no separate pickup discount in v1 — the waived delivery fee is the customer win.
+  const deliveryFeeMinor = isPickup ? 0 : branch.deliveryFeeMinor;
 
   // Voucher (#52): validate + price the code when one is supplied and we know the user.
   // In the preview path an invalid code surfaces as voucherError; the discount is 0.
@@ -229,15 +237,17 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     }
   }
 
+  // Use the pickup-aware deliveryFeeMinor (0 for pickup), not branch.deliveryFeeMinor,
+  // so a pickup order isn't charged delivery. (#52 discount + #54 pickup reconciled)
   const grandTotalMinor = Math.max(
     0,
-    subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount - discountMinor,
+    subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor,
   );
 
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
-    deliveryFeeMinor: branch.deliveryFeeMinor,
+    deliveryFeeMinor,
     taxTotalMinor: tax,
     platformFeeMinor: platformFee,
     commissionMinor: commission,

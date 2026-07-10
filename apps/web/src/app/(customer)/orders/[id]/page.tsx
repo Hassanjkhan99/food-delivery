@@ -22,6 +22,9 @@ const OrderQuery = graphql(`
       code
       status
       paymentMode
+      fulfillmentMode
+      pickupCode
+      scheduledFor
       subtotalMinor
       taxTotalMinor
       deliveryFeeMinor
@@ -98,7 +101,7 @@ const ACTIVE_STATUSES = [
 // The happy-path stages the customer sees, in order. Each stage collapses one
 // or more raw order statuses so the progress bar stays simple and readable.
 type Stage = { key: string; label: string; statuses: string[] };
-const STAGES: Stage[] = [
+const DELIVERY_STAGES: Stage[] = [
   { key: "placed", label: "Placed", statuses: ["pending_acceptance"] },
   { key: "accepted", label: "Accepted", statuses: ["accepted"] },
   { key: "preparing", label: "Preparing", statuses: ["preparing"] },
@@ -109,6 +112,16 @@ const STAGES: Stage[] = [
     statuses: ["picked_up", "out_for_delivery", "reassigning"],
   },
   { key: "delivered", label: "Delivered", statuses: ["delivered"] },
+];
+
+// Pickup skips the rider leg (#54): after "Ready for pickup" the customer collects and
+// the branch closes the order out directly to delivered ("Collected").
+const PICKUP_STAGES: Stage[] = [
+  { key: "placed", label: "Placed", statuses: ["pending_acceptance"] },
+  { key: "accepted", label: "Accepted", statuses: ["accepted"] },
+  { key: "preparing", label: "Preparing", statuses: ["preparing"] },
+  { key: "ready", label: "Ready for pickup", statuses: ["ready_for_pickup"] },
+  { key: "delivered", label: "Collected", statuses: ["delivered"] },
 ];
 
 // Terminal statuses that end the happy path unhappily. When the order lands on
@@ -126,11 +139,11 @@ const OUT_FOR_DELIVERY_STATUSES = ["picked_up", "out_for_delivery"];
 // counter). Once picked up the handoff is done, so we stop showing it. (#25)
 const PICKUP_PIN_STATUSES = ["accepted", "preparing", "ready_for_pickup", "rider_assigned"];
 
-function stageIndexForStatus(status: string): number {
-  const idx = STAGES.findIndex((s) => s.statuses.includes(status));
+function stageIndexForStatus(status: string, stages: Stage[]): number {
+  const idx = stages.findIndex((s) => s.statuses.includes(status));
   // failed_delivery_attempt keeps the shopper on the "out for delivery" stage.
   if (idx === -1 && status === "failed_delivery_attempt") {
-    return STAGES.findIndex((s) => s.key === "out_for_delivery");
+    return stages.findIndex((s) => s.key === "out_for_delivery");
   }
   return idx;
 }
@@ -203,11 +216,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   if (!order) return <p className="text-kd-fg-muted">Order not found.</p>;
 
   const address = order.addressSnapshotJson as { text?: string } | null;
+  const isPickup = order.fulfillmentMode === "pickup";
+  const stages = isPickup ? PICKUP_STAGES : DELIVERY_STAGES;
 
   // Map each completed stage to the earliest event timestamp for one of its
   // statuses — this gives a per-stage "done at" time straight from the event log.
   const stageTimes: Record<string, string> = {};
-  for (const stage of STAGES) {
+  for (const stage of stages) {
     const ev = order.events
       .filter((e) => stage.statuses.includes(e.toStatus))
       .sort(
@@ -219,8 +234,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const terminal = TERMINAL_UNHAPPY[order.status];
-  const currentStageIdx = stageIndexForStatus(order.status);
-  const isOutForDelivery = OUT_FOR_DELIVERY_STATUSES.includes(order.status);
+  const currentStageIdx = stageIndexForStatus(order.status, stages);
+  // Pickup orders never go "out for delivery"; suppress the rider-contact card for them.
+  const isOutForDelivery = !isPickup && OUT_FOR_DELIVERY_STATUSES.includes(order.status);
   const failedAttempt = order.status === "failed_delivery_attempt";
 
   // TODO(rider-contact): the API contract does not expose the assigned rider on
@@ -259,7 +275,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       {/* Staged progress tracker (happy path). */}
       {!terminal && (
         <ol className="relative mb-6 space-y-5 border-l border-kd-border pl-5">
-          {STAGES.map((stage, idx) => {
+          {stages.map((stage, idx) => {
             const done = currentStageIdx > idx || order.status === "delivered";
             const current = currentStageIdx === idx && order.status !== "delivered";
             const time = stageTimes[stage.key];
@@ -309,6 +325,39 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             );
           })}
         </ol>
+      )}
+
+      {/* Pickup code (#54): shown once the order is ready so the customer can quote it
+          at the counter. Also surface the scheduled slot if one was booked. */}
+      {isPickup && !terminal && (
+        <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
+          <p className="text-sm font-medium text-kd-fg">Pickup order</p>
+          {order.scheduledFor && (
+            <p className="mt-1 text-xs text-kd-fg-muted">
+              Scheduled for{" "}
+              {new Date(order.scheduledFor as unknown as string).toLocaleString([], {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
+          )}
+          {order.pickupCode ? (
+            <div className="mt-3">
+              <p className="text-xs text-kd-fg-muted">
+                {order.status === "ready_for_pickup"
+                  ? "Ready! Quote this code at the counter:"
+                  : "Quote this code when you collect:"}
+              </p>
+              <p className="mt-1 font-mono text-3xl font-bold tracking-widest text-kd-primary">
+                {order.pickupCode}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-kd-fg-muted">
+              You&apos;ll collect this order at the restaurant.
+            </p>
+          )}
+        </div>
       )}
 
       {/* Delivery attempt failed — still on the road, reassuring copy. */}
@@ -419,8 +468,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>{formatRs(order.taxTotalMinor)}</span>
         </div>
         <div className="flex justify-between text-kd-fg-muted">
-          <span>Delivery</span>
-          <span>{formatRs(order.deliveryFeeMinor)}</span>
+          <span>{isPickup ? "Pickup" : "Delivery"}</span>
+          <span>{isPickup ? "Free" : formatRs(order.deliveryFeeMinor)}</span>
         </div>
         <div className="flex justify-between text-kd-fg-muted">
           <span>Platform fee</span>
@@ -460,7 +509,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {address?.text && (
+      {!isPickup && address?.text && (
         <p className="mt-4 text-sm text-kd-fg-muted">Delivering to: {address.text}</p>
       )}
 

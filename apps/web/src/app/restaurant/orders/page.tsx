@@ -29,6 +29,9 @@ const BoardQuery = graphql(`
       code
       status
       paymentMode
+      fulfillmentMode
+      pickupCode
+      scheduledFor
       grandTotalMinor
       customerNote
       cutleryRequested
@@ -112,6 +115,14 @@ const Set86Mutation = graphql(`
     }
   }
 `);
+const MarkCollectedMutation = graphql(`
+  mutation MarkCollected($id: String!) {
+    markCollected(id: $id) {
+      id
+      status
+    }
+  }
+`);
 
 const BranchFeedSubscription = graphql(`
   subscription BranchFeed($branchId: String!) {
@@ -145,6 +156,9 @@ type BoardOrder = {
   code: string;
   status: string;
   paymentMode: string;
+  fulfillmentMode?: string | null;
+  pickupCode?: string | null;
+  scheduledFor?: unknown;
   grandTotalMinor: number;
   customerName?: string | null;
   customerNote?: string | null;
@@ -202,6 +216,8 @@ function PickupPin({ pin }: { pin: string }) {
 }
 
 function OrderCard({ order, children }: { order: BoardOrder; children?: React.ReactNode }) {
+  const isPickup = order.fulfillmentMode === "pickup";
+  const scheduledFor = order.scheduledFor as string | null | undefined;
   return (
     <div className="rounded-xl border border-kd-border bg-kd-surface p-3 text-sm shadow-sm">
       <div className="flex items-center justify-between">
@@ -212,6 +228,21 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
       </div>
       {order.customerName && (
         <p className="mt-0.5 text-xs text-kd-fg-muted">{order.customerName}</p>
+      )}
+      {(isPickup || scheduledFor) && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {isPickup && <Badge variant="outline">Pickup</Badge>}
+          {scheduledFor && (
+            <Badge variant="outline">
+              {new Date(scheduledFor).toLocaleString([], {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </Badge>
+          )}
+        </div>
       )}
       <ul className="mt-1 space-y-0.5 text-kd-fg-muted">
         {order.items.map((i) => {
@@ -269,6 +300,7 @@ export default function OrdersBoardPage() {
   const [, assignRider] = useMutation(AssignRiderMutation);
   const [, setBusyMode] = useMutation(SetBusyModeMutation);
   const [, set86] = useMutation(Set86Mutation);
+  const [, markCollected] = useMutation(MarkCollectedMutation);
 
   // Which order (if any) has an open accept / reject / 86 sheet.
   const [acceptFor, setAcceptFor] = useState<BoardOrder | null>(null);
@@ -485,32 +517,55 @@ export default function OrdersBoardPage() {
             Ready ({byStatus(["ready_for_pickup"]).length})
           </h2>
           <div className="space-y-2">
-            {byStatus(["ready_for_pickup"]).map((o) => (
-              <OrderCard key={o.id} order={o}>
-                <div className="mt-2">
-                  <select
-                    className="w-full rounded-lg border border-kd-border px-2 py-1 text-xs"
-                    defaultValue=""
-                    onChange={async (e) => {
-                      if (e.target.value) {
-                        await assignRider({ orderId: o.id, riderId: e.target.value });
+            {byStatus(["ready_for_pickup"]).map((o) =>
+              o.fulfillmentMode === "pickup" ? (
+                // Pickup (#54): no rider — verify the customer's code and mark collected.
+                <OrderCard key={o.id} order={o}>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-kd-fg-muted">
+                      Code:{" "}
+                      <span className="font-mono font-semibold text-kd-fg">
+                        {o.pickupCode ?? "—"}
+                      </span>
+                    </span>
+                    <Button
+                      size="xs"
+                      onClick={async () => {
+                        await markCollected({ id: o.id });
                         refresh();
-                      }
-                    }}
-                  >
-                    <option value="" disabled>
-                      Assign rider…
-                    </option>
-                    {riders.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.user.name ?? "Rider"} {r.isOnline ? "●" : "○"}
+                      }}
+                    >
+                      Mark collected
+                    </Button>
+                  </div>
+                </OrderCard>
+              ) : (
+                <OrderCard key={o.id} order={o}>
+                  <div className="mt-2">
+                    <select
+                      className="w-full rounded-lg border border-kd-border px-2 py-1 text-xs"
+                      defaultValue=""
+                      onChange={async (e) => {
+                        if (e.target.value) {
+                          await assignRider({ orderId: o.id, riderId: e.target.value });
+                          refresh();
+                        }
+                      }}
+                    >
+                      <option value="" disabled>
+                        Assign rider…
                       </option>
-                    ))}
-                  </select>
-                </div>
-                {o.pickupPin && <PickupPin pin={o.pickupPin} />}
-              </OrderCard>
-            ))}
+                      {riders.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.user.name ?? "Rider"} {r.isOnline ? "●" : "○"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {o.pickupPin && <PickupPin pin={o.pickupPin} />}
+                </OrderCard>
+              ),
+            )}
           </div>
         </section>
 

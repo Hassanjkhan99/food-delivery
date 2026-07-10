@@ -554,6 +554,25 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Pickup collection (#54): the customer collected the order at the counter, so the
+  // branch closes it out directly (ready_for_pickup -> delivered) with no rider leg.
+  // Guarded to pickup orders — delivery orders must go through the rider flow.
+  markCollected: t.prismaField({
+    type: "Order",
+    authScopes: { restaurantMember: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_q, _root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.id);
+      if (order.fulfillmentMode !== "pickup") {
+        throw new GraphQLError("Only pickup orders can be marked collected");
+      }
+      return transition(args.id, "delivered", restaurantActor(ctx), {
+        expectedFrom: "ready_for_pickup",
+        reason: "Collected by customer",
+      });
+    },
+  }),
+
   assignRider: t.prismaField({
     type: "Order",
     authScopes: { restaurantMember: true },
@@ -563,6 +582,11 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Pickup orders have no rider leg (#54): the customer collects at the counter, so
+      // never let one enter the delivery workflow via a stale UI or restaurant client.
+      if (order.fulfillmentMode === "pickup") {
+        throw new GraphQLError("Pickup orders can't be assigned to a rider");
+      }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
@@ -617,6 +641,10 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Pickup orders have no rider leg (#54): never offer one to a rider.
+      if (order.fulfillmentMode === "pickup") {
+        throw new GraphQLError("Pickup orders can't be offered to a rider");
+      }
       // Only orders still awaiting a rider can be offered. Guards against offering a
       // pending/cancelled/delivered order and surfacing a bogus job to the rider.
       if (order.status !== "ready_for_pickup") {
