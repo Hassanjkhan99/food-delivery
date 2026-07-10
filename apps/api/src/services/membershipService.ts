@@ -20,7 +20,14 @@ export async function currentMembership(userId: string) {
 // True when the user has an active, unexpired subscription right now.
 export async function hasActiveMembership(userId: string): Promise<boolean> {
   const sub = await prisma.subscription.findFirst({
-    where: { userId, status: "active", currentPeriodEnd: { gt: new Date() } },
+    // lastChargeRef requirement (Codex P2): a slot claimed by a concurrent subscribe that
+    // hasn't finished charging is active+future but unpaid — it must not grant benefits.
+    where: {
+      userId,
+      status: "active",
+      currentPeriodEnd: { gt: new Date() },
+      lastChargeRef: { not: null },
+    },
   });
   return sub !== null;
 }

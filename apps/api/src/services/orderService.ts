@@ -62,8 +62,14 @@ async function generateUniquePickupCode(
   tx: Prisma.TransactionClient,
   branchId: string,
 ): Promise<string> {
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const candidate = String(Math.floor(1000 + Math.random() * 9000));
+  // First 10 tries use a friendly 4-digit code; after that widen to 6 digits for headroom on
+  // a busy branch. EVERY candidate — including the widened ones — is checked against the
+  // branch's active pickups (Codex P3): the widened fallback must not be returned unchecked.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const candidate =
+      attempt < 10
+        ? String(Math.floor(1000 + Math.random() * 9000))
+        : String(Math.floor(100000 + Math.random() * 900000));
     const clash = await tx.order.findFirst({
       where: {
         branchId,
@@ -74,7 +80,9 @@ async function generateUniquePickupCode(
     });
     if (!clash) return candidate;
   }
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // 40 checked attempts across ~900k codes only exhaust if a single branch has an absurd
+  // number of simultaneously-active pickups — fail loudly rather than risk a collision.
+  throw new GraphQLError("Could not allocate a unique pickup code, please retry");
 }
 
 export async function placeOrder(
