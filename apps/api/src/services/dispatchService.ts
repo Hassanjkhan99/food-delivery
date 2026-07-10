@@ -34,6 +34,14 @@ export const OFFER_TTL_SECONDS = 20;
 /** Only route the top-N haversine candidates (route matrix is billed per element). */
 export const SHORTLIST_SIZE = 10;
 
+/**
+ * Score assigned to a candidate that fails a hard constraint. Kept FINITE (not -Infinity) so
+ * it survives GraphQL's non-null `Float` serialisation — a non-finite float makes the whole
+ * `sharedRiderCandidates`/`generateSharedOffers` response fail. Large-negative so rejected
+ * riders always sort below any eligible one while still carrying their `rejectReason`.
+ */
+const REJECTED_SCORE = -1_000_000;
+
 /** Scoring weights (research-provided function). Positive terms reward, negative penalise. */
 const WEIGHTS = {
   reliability: 40, // * rider_reliability   (trustScore/100, 0..1)
@@ -173,7 +181,7 @@ export function scoreCandidate(cand: RiderCandidate, ctx: ScoreContext): ScoredC
 
   const reject = (rejectReason: string): ScoredCandidate => ({
     ...base,
-    score: Number.NEGATIVE_INFINITY,
+    score: REJECTED_SCORE,
     eligible: false,
     rejectReason,
   });

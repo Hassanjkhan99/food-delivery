@@ -8,6 +8,7 @@
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
+import { transition } from "../services/orderService.js";
 import {
   OFFER_TTL_SECONDS,
   rankCandidates,
@@ -323,17 +324,31 @@ builder.mutationFields((t) => ({
       const expiresAt = new Date(now.getTime() + OFFER_TTL_SECONDS * 1000);
 
       await prisma.$transaction(async (tx) => {
-        // Ensure a DeliveryTask exists in `offered` state (idempotent-ish upsert).
-        const task = await tx.deliveryTask.upsert({
-          where: { orderId: order.id },
-          update: {},
-          create: {
-            orderId: order.id,
-            status: "offered",
-            offeredAt: now,
-            codAmountMinor: order.paymentMode === "cod" ? order.grandTotalMinor : 0,
-          },
-        });
+        // Ensure a DeliveryTask exists and is still open for offering. If the order already has
+        // a task that is assigned/arrived/delivered (a rider committed) or was unassigned by the
+        // decline flow, creating pending offers would either be un-acceptable (acceptSharedOffer
+        // requires status `offered` + riderId null) or race an already-locked task — so re-open a
+        // stale `unassigned` task and refuse to offer on a committed one.
+        const existing = await tx.deliveryTask.findUnique({ where: { orderId: order.id } });
+        let task = existing;
+        if (!existing) {
+          task = await tx.deliveryTask.create({
+            data: {
+              orderId: order.id,
+              status: "offered",
+              offeredAt: now,
+              codAmountMinor: order.paymentMode === "cod" ? order.grandTotalMinor : 0,
+            },
+          });
+        } else if (existing.status === "unassigned") {
+          task = await tx.deliveryTask.update({
+            where: { id: existing.id },
+            data: { status: "offered", offeredAt: now, riderId: null },
+          });
+        } else if (existing.status !== "offered") {
+          throw new GraphQLError("Order's delivery is already committed to a rider");
+        }
+        if (!task) throw new GraphQLError("Failed to prepare delivery task");
         // Supersede any still-pending offers for this task before re-offering.
         await tx.deliveryOffer.updateMany({
           where: { taskId: task.id, status: "pending" },
@@ -380,15 +395,31 @@ builder.mutationFields((t) => ({
 
       const now = new Date();
       await prisma.$transaction(async (tx) => {
+        // Re-validate rider capacity INSIDE the tx: two offers for the same rider (each scored
+        // while activeJobCount was 0) could both otherwise be accepted and overcommit the rider
+        // past the lender's ceiling. Count any OTHER active pre-pickup task this rider already
+        // holds and refuse the accept if one exists (default ceiling = 1 committed job).
+        const alreadyCommitted = await tx.deliveryTask.count({
+          where: {
+            riderId: offer.riderId,
+            status: { in: ["assigned", "arrived_pickup"] },
+            NOT: { id: offer.taskId },
+          },
+        });
+        if (alreadyCommitted > 0) {
+          throw new GraphQLError("You already have an active job and cannot take another");
+        }
         // Lock the task to this rider ONLY if it is still open (offered + no rider committed).
         const locked = await tx.deliveryTask.updateMany({
           where: { id: offer.taskId, status: "offered", riderId: null },
           data: { status: "assigned", riderId: offer.riderId, acceptedAt: now, assignedAt: now },
         });
         if (locked.count === 0) throw new GraphQLError("Task is no longer available");
-        // Accept THIS offer only if still pending (loses a concurrent accept cleanly).
+        // Accept THIS offer only if still pending AND unexpired — enforcing the TTL at the point
+        // of locking closes the window where a request that started just before expiry lands here
+        // after the offer has elapsed.
         const won = await tx.deliveryOffer.updateMany({
-          where: { id: offer.id, status: "pending" },
+          where: { id: offer.id, status: "pending", expiresAt: { gt: now } },
           data: { status: "accepted", respondedAt: now },
         });
         if (won.count === 0) throw new GraphQLError("Offer is no longer available");
@@ -401,6 +432,18 @@ builder.mutationFields((t) => ({
           data: { taskId: offer.taskId, type: "accepted", actorUserId: ctx.userId },
         });
       });
+
+      // Mirror acceptTask: move the order to `rider_assigned` so the restaurant's assignRider
+      // flow (guarded by expectedFrom: "ready_for_pickup") can no longer overwrite the task now
+      // that a shared rider has committed. Best-effort: if the order isn't ready yet the task
+      // lock still stands and the order advances on its own lifecycle.
+      try {
+        await transition(offer.task.orderId, "rider_assigned", { userId: ctx.userId, role: "rider" }, {
+          expectedFrom: "ready_for_pickup",
+        });
+      } catch {
+        // Order not in ready_for_pickup (e.g. offered pre-ready) — the task lock is authoritative.
+      }
 
       return prisma.deliveryOffer.findUniqueOrThrow({ ...query, where: { id: offer.id } });
     },
