@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
+import { CreditCard, Gift } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { Button } from "@/components/ui/button";
 
@@ -55,6 +57,23 @@ export default function AccountPage() {
           Roles: {viewer.roles?.map((r) => r?.role).join(", ") || "customer"}
         </p>
       </div>
+      <nav className="mt-4 space-y-2">
+        <Link
+          href="/gift-cards"
+          className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm hover:bg-kd-surface-muted"
+        >
+          <Gift className="h-5 w-5 text-kd-primary" />
+          <span className="font-medium">Gift cards &amp; wallet</span>
+        </Link>
+        <Link
+          href="/payment-methods"
+          className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm hover:bg-kd-surface-muted"
+        >
+          <CreditCard className="h-5 w-5 text-kd-fg-subtle" />
+          <span className="font-medium">Payment methods</span>
+        </Link>
+      </nav>
+
       <Button
         variant="outline"
         className="mt-6 w-full"

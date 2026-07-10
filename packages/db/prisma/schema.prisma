@@ -211,6 +211,9 @@ model User {
   ownedRestaurants Restaurant[]        @relation("RestaurantOwner")
   tickets          SupportTicket[]
   pushSubs         PushSubscription[]
+  giftCardsBought  GiftCard[]          @relation("GiftCardPurchaser")
+  giftCardsRedeemed GiftCard[]         @relation("GiftCardRedeemer")
+  walletTxns       WalletTransaction[]
 
   @@map("users")
 }
@@ -937,4 +940,63 @@ model Waitlist {
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   @@map("waitlist")
+}
+
+// ───────────────────────────── gift cards & wallet (FP-10 / FP-05) ─────────────────────────────
+
+enum GiftCardStatus {
+  active    // purchased, has balance, not yet fully redeemed
+  redeemed  // fully redeemed into a wallet
+  void      // administratively cancelled
+}
+
+// A gift card is bought with a mock card charge and yields a shareable code.
+// Redemption credits the full remaining balance into the redeemer's wallet
+// (WalletTransaction). Redemption is all-or-nothing in v1: redeeming moves the
+// entire remaining balance to the wallet and marks the card redeemed.
+model GiftCard {
+  id             String         @id @default(cuid())
+  code           String         @unique
+  amountMinor    Int            // original face value
+  balanceMinor   Int            // remaining balance (== amountMinor until redeemed)
+  status         GiftCardStatus @default(active)
+  purchaserId    String
+  recipientEmail String?        // optional "send to" address (not emailed in mock)
+  message        String?
+  providerRef    String?        // mock charge reference
+  redeemedById   String?
+  redeemedAt     DateTime?      @db.Timestamptz()
+  createdAt      DateTime       @default(now()) @db.Timestamptz()
+
+  purchaser  User  @relation("GiftCardPurchaser", fields: [purchaserId], references: [id])
+  redeemedBy User? @relation("GiftCardRedeemer", fields: [redeemedById], references: [id])
+
+  @@index([purchaserId])
+  @@index([redeemedById])
+  @@map("gift_cards")
+}
+
+enum WalletTxnKind {
+  gift_card_redeem
+  order_debit
+  adjustment
+}
+
+// Append-only customer wallet ledger. A user's balance is SUM(amountMinor).
+// Credits are positive, debits negative. FP-05 (full wallet) can layer richer
+// semantics on top; this is the minimal store gift-card redemption needs.
+model WalletTransaction {
+  id          String        @id @default(cuid())
+  userId      String
+  amountMinor Int           // signed: + credit, - debit
+  kind        WalletTxnKind
+  giftCardId  String?       // set when kind == gift_card_redeem
+  orderId     String?       // set when kind == order_debit
+  memo        String?
+  createdAt   DateTime      @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("wallet_transactions")
 }

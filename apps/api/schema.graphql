@@ -135,6 +135,25 @@ type FeeConfig {
   smallBusinessPlatformFeeMinor: Int!
 }
 
+type GiftCard {
+  amountMinor: Int!
+  balanceMinor: Int!
+  code: String!
+  createdAt: DateTime!
+  id: ID!
+  message: String
+  recipientEmail: String
+  redeemedAt: DateTime
+  status: String!
+}
+
+input GiftCardPurchaseInput {
+  amountMinor: Int!
+  message: String
+  paymentMethodId: String!
+  recipientEmail: String
+}
+
 type HomeBanner {
   id: ID!
   imageUrl: String!
@@ -236,8 +255,10 @@ type Mutation {
   presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
   previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
   publishMenu(branchId: String!): Menu!
+  purchaseGiftCard(input: GiftCardPurchaseInput!): GiftCard!
   quoteCart(input: QuoteCartInput!): Quote!
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
+  redeemGiftCard(code: String!): Wallet!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
@@ -376,17 +397,21 @@ type Query {
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
+  giftCardByCode(code: String!): GiftCard
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
+  myGiftCards: [GiftCard!]!
   myJobs: [DeliveryTask!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
+  myWallet: Wallet!
+  myWalletTransactions: [WalletTransaction!]!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
@@ -581,4 +606,16 @@ type Waitlist {
   createdAt: DateTime!
   email: String!
   id: ID!
+}
+
+type Wallet {
+  balanceMinor: Int!
+}
+
+type WalletTransaction {
+  amountMinor: Int!
+  createdAt: DateTime!
+  id: ID!
+  kind: String!
+  memo: String
 }
