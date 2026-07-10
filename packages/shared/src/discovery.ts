@@ -40,7 +40,7 @@ export function median(values: number[]): number {
   return sorted[mid] ?? 0;
 }
 
-/** Human "Rs" glyph string for a price band (1-3). */
+/** Price-band indicator using the single rupee-sign glyph (1-3), e.g. "₨₨". */
 export function priceBandLabel(band: number): string {
-  return "Rs".repeat(Math.min(Math.max(Math.round(band), 1), 3));
+  return "₨".repeat(Math.min(Math.max(Math.round(band), 1), 3));
 }
