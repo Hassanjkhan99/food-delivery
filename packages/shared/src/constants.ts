@@ -53,7 +53,7 @@ export const TICKET_PLAYBOOKS = [
   },
   {
     category: "wrong_item",
-    label: "Wrong item delivered",
+    label: "Wrong / missing item",
     owner: "Restaurant desk",
     firstResponseMin: 5,
     resolutionMin: 60 * 12,
@@ -89,9 +89,31 @@ export const DEFAULT_TICKET_PLAYBOOK = {
   action: "Triage and route",
 } as const;
 
+/**
+ * Legacy/producer category names that map onto a canonical playbook category.
+ * Keeps older seeded/persisted tickets (e.g. `missing_item`) on the right desk
+ * flow without a data migration.
+ */
+const TICKET_CATEGORY_ALIASES: Record<string, TicketPlaybook["category"]> = {
+  missing_item: "wrong_item",
+};
+
 /** Resolve the playbook for a ticket category (never throws). */
-export const ticketPlaybook = (category: string): TicketPlaybook | typeof DEFAULT_TICKET_PLAYBOOK =>
-  TICKET_PLAYBOOKS.find((p) => p.category === category) ?? DEFAULT_TICKET_PLAYBOOK;
+export const ticketPlaybook = (category: string): TicketPlaybook | typeof DEFAULT_TICKET_PLAYBOOK => {
+  const canonical = TICKET_CATEGORY_ALIASES[category] ?? category;
+  return TICKET_PLAYBOOKS.find((p) => p.category === canonical) ?? DEFAULT_TICKET_PLAYBOOK;
+};
+
+/**
+ * Expand a canonical category to every stored value that maps to it, so a
+ * queue filter on `wrong_item` also matches legacy `missing_item` rows.
+ */
+export const ticketCategoryFilterValues = (category: string): string[] => {
+  const aliases = Object.entries(TICKET_CATEGORY_ALIASES)
+    .filter(([, canonical]) => canonical === category)
+    .map(([alias]) => alias);
+  return [category, ...aliases];
+};
 
 /** Resolution codes an agent can close a ticket with (audited on the ticket). */
 export const TICKET_RESOLUTION_CODES = [

@@ -4,7 +4,7 @@
 // dispute — notably COD cash_mismatch — can be triaged to resolution in the UI.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import { TICKET_RESOLUTION_CODES } from "@fd/shared";
+import { TICKET_RESOLUTION_CODES, ticketCategoryFilterValues } from "@fd/shared";
 import { builder } from "./builder.js";
 
 async function audit(
@@ -113,7 +113,10 @@ builder.prismaObject("SupportTicket", {
             label: `Payment ${order.payment.status} (${order.payment.mode})`,
             detail: order.payment.providerRef,
             amountMinor: order.payment.amountMinor,
-            createdAt: order.payment.createdAt,
+            // Label reflects the *current* status, so anchor it to the capture
+            // time when present; otherwise the row sorts before the delivery
+            // event that actually captured a COD/card payment.
+            createdAt: order.payment.capturedAt ?? order.payment.createdAt,
           });
         }
         for (const r of order.refunds) {
@@ -150,8 +153,14 @@ builder.queryFields((t) => ({
       prisma.supportTicket.findMany({
         ...query,
         where: {
-          ...(args.status ? { status: args.status as never } : {}),
-          ...(args.category ? { category: args.category } : {}),
+          // No explicit status ⇒ the "All open" default: active work only, so
+          // stale resolved/closed tickets don't crowd out live SLA rows.
+          ...(args.status
+            ? { status: args.status as never }
+            : { status: { in: ["open", "in_progress"] } }),
+          ...(args.category
+            ? { category: { in: ticketCategoryFilterValues(args.category) } }
+            : {}),
         },
         orderBy: { createdAt: "asc" },
         take: Math.min(args.take ?? 100, 200),

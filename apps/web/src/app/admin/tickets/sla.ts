@@ -13,10 +13,15 @@ function minutesSince(from: string, to: string | null): number {
   return (end - start) / MIN_MS;
 }
 
-/** Classify a single elapsed/target pair. Warn at 75% of target. */
+/**
+ * Classify a single elapsed/target pair. Warn at 75% of target. When `met` is
+ * set, the milestone was hit at `elapsedMin`: if that was within target it's
+ * `done`, otherwise the miss stands (breached) so a late first response is not
+ * silently cleared to "within SLA".
+ */
 function levelFor(elapsedMin: number, targetMin: number, met: boolean): SlaLevel {
-  if (met) return "done";
   if (elapsedMin >= targetMin) return "breached";
+  if (met) return "done";
   if (elapsedMin >= targetMin * 0.75) return "warning";
   return "ok";
 }
