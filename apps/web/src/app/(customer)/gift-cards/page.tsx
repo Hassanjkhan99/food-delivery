@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { Gift, Wallet } from "lucide-react";
 import { formatRs } from "@fd/shared";
@@ -69,6 +69,10 @@ export default function GiftCardsPage() {
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemMsg, setRedeemMsg] = useState<string | null>(null);
 
+  // Stable per-purchase key: a retry of the SAME purchase reuses it (idempotent),
+  // and it is rotated only after a purchase succeeds.
+  const idempotencyKey = useRef<string>(crypto.randomUUID());
+
   const methods = data?.myPaymentMethods ?? [];
   const effectiveMethodId = methodId || methods[0]?.id || "";
 
@@ -85,6 +89,7 @@ export default function GiftCardsPage() {
         amountMinor: amount,
         paymentMethodId: effectiveMethodId,
         recipientEmail: recipient.trim() || undefined,
+        idempotencyKey: idempotencyKey.current,
       },
     });
     if (result.error) {
@@ -93,6 +98,7 @@ export default function GiftCardsPage() {
     }
     setLastCode(result.data?.purchaseGiftCard.code ?? null);
     setRecipient("");
+    idempotencyKey.current = crypto.randomUUID(); // fresh key for the next purchase
     refetch({ requestPolicy: "network-only" });
   }
 

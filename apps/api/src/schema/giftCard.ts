@@ -24,6 +24,7 @@ const purchaseSchema = z.object({
   paymentMethodId: z.string().min(1),
   recipientEmail: z.string().email().max(200).optional(),
   message: z.string().max(280).optional(),
+  idempotencyKey: z.string().min(1).max(200),
 });
 
 // Human-friendly code: 12 base32-ish chars grouped as XXXX-XXXX-XXXX.
@@ -100,10 +101,11 @@ builder.queryFields((t) => ({
   myGiftCards: t.prismaField({
     type: ["GiftCard"],
     authScopes: { loggedIn: true },
+    // Hide pending rows (charge not yet confirmed) and voided/abandoned attempts.
     resolve: (query, _root, _args, ctx) =>
       prisma.giftCard.findMany({
         ...query,
-        where: { purchaserId: ctx.userId! },
+        where: { purchaserId: ctx.userId!, status: { in: ["active", "redeemed"] } },
         orderBy: { createdAt: "desc" },
       }),
   }),
@@ -132,6 +134,9 @@ const PurchaseInput = builder.inputType("GiftCardPurchaseInput", {
     paymentMethodId: t.string({ required: true }),
     recipientEmail: t.string({ required: false }),
     message: t.string({ required: false }),
+    // Stable client key so a timed-out retry returns the first card instead of
+    // minting/charging a second one (mirrors placeOrder).
+    idempotencyKey: t.string({ required: true }),
   }),
 });
 
@@ -146,34 +151,81 @@ builder.mutationFields((t) => ({
         paymentMethodId: args.input.paymentMethodId,
         recipientEmail: args.input.recipientEmail ?? undefined,
         message: args.input.message ?? undefined,
+        idempotencyKey: args.input.idempotencyKey,
       });
+      const userId = ctx.userId!;
+
+      // Idempotent replay: a completed purchase for this key returns its card.
+      // A row still `pending` (a charge that never confirmed) is treated as
+      // unresolved rather than double-charged.
+      const existing = await prisma.giftCard.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) {
+        if (existing.purchaserId !== userId) {
+          throw new GraphQLError("Idempotency key conflict");
+        }
+        if (existing.status === "pending") {
+          throw new GraphQLError("A previous purchase is still being processed");
+        }
+        if (existing.status === "void") {
+          throw new GraphQLError("The previous purchase failed; use a new request");
+        }
+        return prisma.giftCard.findUniqueOrThrow({ ...query, where: { id: existing.id } });
+      }
 
       const method = await prisma.paymentMethod.findUnique({
         where: { id: input.paymentMethodId },
       });
-      if (!method || method.userId !== ctx.userId) {
+      if (!method || method.userId !== userId) {
         throw new GraphQLError("Payment method not found");
       }
 
+      // Persist a durable pending row FIRST. Its unique idempotencyKey is the race
+      // arbiter (like placeOrder): a duplicate submit can never double-charge, and
+      // a card is always recoverable from the charge reference.
       const code = generateCode();
+      let card;
+      try {
+        card = await prisma.giftCard.create({
+          data: {
+            code,
+            amountMinor: input.amountMinor,
+            balanceMinor: input.amountMinor,
+            status: "pending",
+            purchaserId: userId,
+            recipientEmail: input.recipientEmail ?? null,
+            message: input.message ?? null,
+            idempotencyKey: input.idempotencyKey,
+          },
+        });
+      } catch (e) {
+        // Concurrent duplicate won the unique(idempotencyKey) race.
+        if ((e as { code?: string }).code === "P2002") {
+          throw new GraphQLError("A previous purchase is still being processed");
+        }
+        throw e;
+      }
+
       const charge = await mockProvider.charge({
         token: method.providerToken,
         amountMinor: input.amountMinor,
         reference: `gift_${code}`,
       });
-      if (!charge.ok) throw new GraphQLError(charge.declineReason);
+      if (!charge.ok) {
+        // Void the pending row so the balance is never redeemable; the unique key
+        // stays claimed so a blind retry surfaces the failure rather than recharging.
+        await prisma.giftCard.update({
+          where: { id: card.id },
+          data: { status: "void", balanceMinor: 0 },
+        });
+        throw new GraphQLError(charge.declineReason);
+      }
 
-      return prisma.giftCard.create({
+      return prisma.giftCard.update({
         ...query,
-        data: {
-          code,
-          amountMinor: input.amountMinor,
-          balanceMinor: input.amountMinor,
-          purchaserId: ctx.userId!,
-          recipientEmail: input.recipientEmail ?? null,
-          message: input.message ?? null,
-          providerRef: charge.providerRef,
-        },
+        where: { id: card.id },
+        data: { status: "active", providerRef: charge.providerRef },
       });
     },
   }),

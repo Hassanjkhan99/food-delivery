@@ -149,6 +149,7 @@ type GiftCard {
 
 input GiftCardPurchaseInput {
   amountMinor: Int!
+  idempotencyKey: String!
   message: String
   paymentMethodId: String!
   recipientEmail: String

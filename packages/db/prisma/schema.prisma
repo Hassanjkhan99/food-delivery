@@ -945,9 +945,10 @@ model Waitlist {
 // ───────────────────────────── gift cards & wallet (FP-10 / FP-05) ─────────────────────────────
 
 enum GiftCardStatus {
+  pending   // row persisted, provider charge not yet confirmed (never redeemable)
   active    // purchased, has balance, not yet fully redeemed
   redeemed  // fully redeemed into a wallet
-  void      // administratively cancelled
+  void      // administratively cancelled, or an abandoned/failed charge
 }
 
 // A gift card is bought with a mock card charge and yields a shareable code.
@@ -964,6 +965,7 @@ model GiftCard {
   recipientEmail String?        // optional "send to" address (not emailed in mock)
   message        String?
   providerRef    String?        // mock charge reference
+  idempotencyKey String?        @unique // client retry key; unique row per purchase attempt
   redeemedById   String?
   redeemedAt     DateTime?      @db.Timestamptz()
   createdAt      DateTime       @default(now()) @db.Timestamptz()
