@@ -1,6 +1,6 @@
 // Restaurant console domain: live order board, menu CRUD + publish, riders, wallet,
 // onboarding, branch settings. Every resolver verifies branch/restaurant membership.
-import { prisma } from "@fd/db";
+import { prisma, withTenant } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
@@ -248,11 +248,17 @@ builder.queryFields((t) => ({
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
         throw new GraphQLError("Not a member of this restaurant");
       }
-      return prisma.payout.findMany({
-        ...query,
-        where: { restaurantId: args.restaurantId },
-        orderBy: { createdAt: "desc" },
-      });
+      // Reference adoption of the #33 RLS withTenant() pattern (see packages/db/RLS.md).
+      // Admin cuts across tenants (no single restaurantId) so it must run OUTSIDE the wrapper;
+      // tenant users go through withTenant so Postgres RLS enforces isolation as defense-in-depth.
+      const findPayouts = (db: typeof prisma) =>
+        db.payout.findMany({
+          ...query,
+          where: { restaurantId: args.restaurantId },
+          orderBy: { createdAt: "desc" },
+        });
+      if (ctx.hasRole("admin")) return findPayouts(prisma);
+      return withTenant(args.restaurantId, (tx) => findPayouts(tx as typeof prisma));
     },
   }),
 
