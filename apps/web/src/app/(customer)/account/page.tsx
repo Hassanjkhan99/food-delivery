@@ -352,6 +352,15 @@ export default function AccountPage() {
         <span className="font-medium text-kd-fg">Invite friends, earn credit</span>
       </Link>
 
+      {/* Gift cards & wallet (#60) */}
+      <Link
+        href="/gift-cards"
+        className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm font-medium text-kd-fg hover:border-kd-primary"
+      >
+        <Gift className="h-5 w-5 text-kd-fg-subtle" />
+        Gift cards &amp; wallet
+      </Link>
+
       <Button
         variant="outline"
         className="w-full"

@@ -18,5 +18,6 @@ import "./notification.js";
 import "./referral.js";
 import "./subscription.js";
 import "./membership.js";
+import "./giftCard.js";
 
 export const schema = builder.toSchema();
