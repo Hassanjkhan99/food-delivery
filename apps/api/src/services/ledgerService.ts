@@ -14,6 +14,12 @@ type OrderWithMoney = Order & { payment: Payment | null; branch: { restaurantId:
 // only leaves on settlement (to restaurant/platform) or reversal (back to prepaid).
 export const WALLET_HOLDING = "platform:wallet_holding";
 
+// Liability account for rider tips collected at checkout. The tip rides inside
+// grandTotalMinor but is neither restaurant share nor platform revenue, so on
+// settlement it parks here (owed to riders) instead of inflating platform:revenue.
+// The rider payout split draws from this later (not yet wired — see rider.ts).
+export const RIDER_TIPS = "platform:rider_tips";
+
 /** The customer's spendable wallet balance in minor units (prepaid ledger account). */
 export async function walletBalance(tx: Tx, customerId: string): Promise<number> {
   return accountBalance(tx, `customer:${customerId}:prepaid`);
@@ -75,9 +81,15 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
   const fees = order.commissionMinor + order.platformFeeMinor;
   const restaurantShare =
     order.subtotalMinor + order.taxTotalMinor + order.deliveryFeeMinor - order.commissionMinor;
+  // The tip is collected inside grandTotalMinor; it belongs to the rider, not the
+  // restaurant or the platform, so it settles into the rider-tips liability. Only add
+  // the leg when non-zero to avoid a useless entry and keep the ledger balanced.
+  const tip = order.tipAmount;
+  const tipLeg: Leg[] =
+    tip > 0 ? [{ code: RIDER_TIPS, ownerType: "platform", credit: tip }] : [];
 
   if (order.paymentMode === "card") {
-    // Platform holds the customer's money; release restaurant share, keep fees.
+    // Platform holds the customer's money; release restaurant share, keep fees, park tip.
     await postLedgerTx(
       tx,
       `Settlement ${order.code} (card)`,
@@ -95,13 +107,14 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
           credit: restaurantShare,
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
+        ...tipLeg,
       ],
       { orderId: order.id },
     );
   } else if (order.paymentMode === "wallet") {
     // The grand total is sitting in platform:wallet_holding (moved out of the customer's
-    // prepaid balance at placement). Release restaurant share + keep fees — identical to
-    // the card economics, only the source leg differs.
+    // prepaid balance at placement). Release restaurant share + keep fees + park tip —
+    // identical to the card economics, only the source leg differs.
     await postLedgerTx(
       tx,
       `Settlement ${order.code} (wallet)`,
@@ -114,6 +127,7 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
           credit: restaurantShare,
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
+        ...tipLeg,
       ],
       { orderId: order.id },
     );
