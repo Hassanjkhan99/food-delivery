@@ -114,6 +114,24 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
       ? [{ code: "platform:revenue", ownerType: "platform", debit: order.loyaltyDiscountMinor }]
       : [];
 
+  // COD variant of the loyalty reimbursement (#57 / follow-up #121): under COD the
+  // restaurant physically collected the *discounted* grandTotal in cash, so debiting
+  // platform:revenue alone would leave the restaurant short by the discount. We also
+  // credit the restaurant's payable so its net obligation is (fees − discount) — mirroring
+  // the card/wallet economics where the restaurant always nets its full undiscounted share.
+  const codLoyaltyLegs: Leg[] =
+    order.loyaltyDiscountMinor > 0
+      ? [
+          {
+            code: `restaurant:${restaurantId}:payable`,
+            ownerType: "restaurant",
+            ownerId: restaurantId,
+            credit: order.loyaltyDiscountMinor,
+          },
+          { code: "platform:revenue", ownerType: "platform", debit: order.loyaltyDiscountMinor },
+        ]
+      : [];
+
   if (order.paymentMode === "card") {
     // Platform holds the customer's money; release restaurant share, keep fees, pay tip.
     await postLedgerTx(
@@ -172,6 +190,7 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
           debit: fees,
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
+        ...codLoyaltyLegs,
       ],
       { orderId: order.id },
     );

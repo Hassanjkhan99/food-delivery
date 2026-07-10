@@ -88,7 +88,14 @@ async function applyMembershipBenefit(
     return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
   }
   const sub = await prisma.subscription.findFirst({
-    where: { userId: customerId, status: "active", currentPeriodEnd: { gt: new Date() } },
+    // lastChargeRef (Codex P2): don't grant free/discounted delivery from a membership slot
+    // that a concurrent subscribe claimed but hasn't paid for yet (active+future, no charge).
+    where: {
+      userId: customerId,
+      status: "active",
+      currentPeriodEnd: { gt: new Date() },
+      lastChargeRef: { not: null },
+    },
     include: { plan: true },
   });
   if (!sub) return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
@@ -97,7 +104,8 @@ async function applyMembershipBenefit(
     return { deliveryFeeMinor: 0, applied: true };
   }
   if (sub.plan.deliveryDiscountBps > 0) {
-    const discounted = baseDeliveryFeeMinor - applyBps(baseDeliveryFeeMinor, sub.plan.deliveryDiscountBps);
+    const discounted =
+      baseDeliveryFeeMinor - applyBps(baseDeliveryFeeMinor, sub.plan.deliveryDiscountBps);
     return { deliveryFeeMinor: Math.max(0, discounted), applied: true };
   }
   return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
@@ -170,7 +178,9 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       if (combo.items.length === 0) throw new GraphQLError(`'${combo.name}' has no items`);
       const unavailable = combo.items.find((ci) => !ci.menuItem.isAvailable);
       if (unavailable) {
-        throw new GraphQLError(`'${combo.name}' includes '${unavailable.menuItem.name}', which is unavailable`);
+        throw new GraphQLError(
+          `'${combo.name}' includes '${unavailable.menuItem.name}', which is unavailable`,
+        );
       }
       const comboComponents = combo.items.map((ci) => ({
         menuItemId: ci.menuItemId,
@@ -252,7 +262,7 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   // Rider tip is added on top of the bill; it isn't taxed or commissioned. Pickup has
   // no rider leg, so a rider tip can't be routed to anyone — force it to zero (#54) so
   // a tip chosen on the cart page before switching to Pickup is never charged.
-  const tipAmount = isPickup ? 0 : input.tipAmount ?? 0;
+  const tipAmount = isPickup ? 0 : (input.tipAmount ?? 0);
   // Pickup has no rider leg, so there's no delivery fee to charge (#54). Founder call:
   // no separate pickup discount in v1 — the waived delivery fee is the customer win.
   const baseDeliveryFeeMinor = isPickup ? 0 : branch.deliveryFeeMinor;
@@ -307,7 +317,13 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   // and the loyalty discount (#57). Clamp to 0 so stacked discounts can't go negative.
   const grandTotalMinor = Math.max(
     0,
-    subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor - loyaltyDiscountMinor,
+    subtotal +
+      tax +
+      deliveryFeeMinor +
+      platformFee +
+      tipAmount -
+      discountMinor -
+      loyaltyDiscountMinor,
   );
 
   return {

@@ -1424,6 +1424,10 @@ model Subscription {
   user User           @relation(fields: [userId], references: [id])
   plan MembershipPlan @relation(fields: [planId], references: [id])
 
+  // One subscription row per user (subscribe() reuses the row on renew/reactivate).
+  // Enforced at the DB so concurrent first-time subscribes can't both create a row
+  // and double-charge — see membershipService.subscribe (follow-up #123).
+  @@unique([userId])
   @@index([userId, status])
   @@map("subscriptions")
 }

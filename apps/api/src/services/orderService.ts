@@ -2,10 +2,11 @@
 // transition(): optimistic-concurrency guard, append-only OrderEvent, audit for
 // privileged actors, money side-effects, and pubsub — one transaction.
 import { randomUUID } from "node:crypto";
-import { prisma, type Order } from "@fd/db";
+import { prisma, type Order, type Prisma } from "@fd/db";
 import {
   ACCEPTANCE_SLA_SECONDS,
   assertTransition,
+  TERMINAL_STATUSES,
   type ActorRole,
   type OrderStatus,
   type PlaceOrderInput,
@@ -28,7 +29,11 @@ import {
   reverseRedemptionForOrder,
   validateVoucher,
 } from "./voucherService.js";
-import { onOrderDeliveredLoyalty, onOrderReversalLoyalty, postLoyaltyTx } from "./loyaltyService.js";
+import {
+  onOrderDeliveredLoyalty,
+  onOrderReversalLoyalty,
+  postLoyaltyTx,
+} from "./loyaltyService.js";
 import { onRefereeOrderDelivered } from "./referralService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
@@ -44,6 +49,41 @@ const STATUS_TIMESTAMP: Partial<Record<OrderStatus, keyof Order>> = {
   delivered: "deliveredAt",
   cancelled: "cancelledAt",
 };
+
+/**
+ * A 4-digit pickup code that isn't currently in use by another *active* (non-terminal)
+ * pickup order at the same branch. Retries a handful of times, then widens to a 6-digit
+ * code so it always terminates even in the (practically impossible) fully-saturated case.
+ *
+ * Runs on the transaction client while the caller holds a per-branch advisory lock, so the
+ * read-then-insert is serialized per branch and can't hand two orders the same code.
+ */
+async function generateUniquePickupCode(
+  tx: Prisma.TransactionClient,
+  branchId: string,
+): Promise<string> {
+  // First 10 tries use a friendly 4-digit code; after that widen to 6 digits for headroom on
+  // a busy branch. EVERY candidate — including the widened ones — is checked against the
+  // branch's active pickups (Codex P3): the widened fallback must not be returned unchecked.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const candidate =
+      attempt < 10
+        ? String(Math.floor(1000 + Math.random() * 9000))
+        : String(Math.floor(100000 + Math.random() * 900000));
+    const clash = await tx.order.findFirst({
+      where: {
+        branchId,
+        pickupCode: candidate,
+        status: { notIn: TERMINAL_STATUSES as OrderStatus[] },
+      },
+      select: { id: true },
+    });
+    if (!clash) return candidate;
+  }
+  // 40 checked attempts across ~900k codes only exhaust if a single branch has an absurd
+  // number of simultaneously-active pickups — fail loudly rather than risk a collision.
+  throw new GraphQLError("Could not allocate a unique pickup code, please retry");
+}
 
 export async function placeOrder(
   customerId: string,
@@ -124,13 +164,18 @@ export async function placeOrder(
     .toString(36)
     .toUpperCase()}`;
 
-  // Short 4-digit code the customer quotes at the counter to collect a pickup order.
-  const pickupCode = isPickup
-    ? String(Math.floor(1000 + Math.random() * 9000))
-    : null;
-
   try {
     const order = await prisma.$transaction(async (tx) => {
+      // Short 4-digit code the customer quotes at the counter to collect a pickup order.
+      // Assigned inside the txn under a per-branch advisory lock so two concurrent pickups
+      // at the same branch can't both read "free" and be handed the same code — the earlier
+      // pre-txn check-then-insert wasn't atomic (Codex P2 / follow-up #115).
+      let pickupCode: string | null = null;
+      if (isPickup) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${quote.branchId})::bigint)`;
+        pickupCode = await generateUniquePickupCode(tx, quote.branchId);
+      }
+
       const created = await tx.order.create({
         data: {
           code,

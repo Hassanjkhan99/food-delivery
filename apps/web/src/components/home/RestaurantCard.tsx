@@ -132,7 +132,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
                 <span aria-label={`Price band ${hit.priceBand} of 3`}>
                   <span className="font-semibold text-kd-fg">{priceBandLabel(hit.priceBand)}</span>
                   <span className="text-kd-fg-subtle">
-                    {priceBandLabel(3).slice(hit.priceBand * 2)}
+                    {priceBandLabel(3).slice(hit.priceBand)}
                   </span>
                 </span>
               </>

@@ -28,9 +28,12 @@ builder.prismaObject("Subscription", {
     currentPeriodStart: t.field({ type: "DateTime", resolve: (s) => s.currentPeriodStart }),
     currentPeriodEnd: t.field({ type: "DateTime", resolve: (s) => s.currentPeriodEnd }),
     cancelledAt: t.field({ type: "DateTime", nullable: true, resolve: (s) => s.cancelledAt }),
-    // Derived: still an active member right now (status active and not yet expired).
+    // Derived: still an active member right now — status active, not yet expired, AND paid
+    // for this period (lastChargeRef set). The charge-ref guard keeps a concurrently-claimed
+    // but not-yet-charged slot from reporting as active (Codex P2).
     isActive: t.boolean({
-      resolve: (s) => s.status === "active" && s.currentPeriodEnd > new Date(),
+      resolve: (s) =>
+        s.status === "active" && s.currentPeriodEnd > new Date() && s.lastChargeRef !== null,
     }),
     plan: t.relation("plan"),
   }),
