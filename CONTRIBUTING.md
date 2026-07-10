@@ -107,6 +107,7 @@ Run the same gates CI runs, from the repo root:
 pnpm typecheck     # tsc --noEmit across the workspace
 pnpm lint          # eslint
 pnpm build         # turbo build
+pnpm exec prettier --check "**/*.{ts,tsx,json,md,yml}" --ignore-path .gitignore  # format gate
 ```
 
 If you changed the GraphQL schema, regenerate and commit the SDL + web types
