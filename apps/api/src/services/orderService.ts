@@ -29,7 +29,11 @@ import {
   reverseRedemptionForOrder,
   validateVoucher,
 } from "./voucherService.js";
-import { onOrderDeliveredLoyalty, onOrderReversalLoyalty, postLoyaltyTx } from "./loyaltyService.js";
+import {
+  onOrderDeliveredLoyalty,
+  onOrderReversalLoyalty,
+  postLoyaltyTx,
+} from "./loyaltyService.js";
 import { onRefereeOrderDelivered } from "./referralService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
