@@ -2,40 +2,12 @@
 
 import Link from "next/link";
 import { Trash2, UtensilsCrossed } from "lucide-react";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { formatRs } from "@fd/shared";
-import { cartSubtotal, useCart } from "@/lib/cart";
+import { cartSubtotal, useCart, useCartExtras } from "@/lib/cart";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-
-// Tip + cutlery preferences. Persisted separately from the item cart (`fd-cart`)
-// so they survive navigation to /checkout, where the checkout page reads this
-// store and threads tipAmount + cutleryRequested into quoteCart(QuoteCartInput)
-// and placeOrder(PlaceOrderInput). The API folds tip into grandTotalMinor
-// (untaxed/uncommissioned); cutleryRequested defaults true.
-type CartExtras = {
-  tipAmount: number; // minor units (paisa)
-  cutleryRequested: boolean;
-  setTip: (minor: number) => void;
-  setCutlery: (on: boolean) => void;
-  reset: () => void;
-};
-
-export const useCartExtras = create<CartExtras>()(
-  persist(
-    (set) => ({
-      tipAmount: 0,
-      cutleryRequested: true,
-      setTip: (minor) => set({ tipAmount: Math.max(0, Math.round(minor)) }),
-      setCutlery: (on) => set({ cutleryRequested: on }),
-      reset: () => set({ tipAmount: 0, cutleryRequested: true }),
-    }),
-    { name: "fd-cart-extras" },
-  ),
-);
 
 // Preset tip chips in minor units (Rs 0 / 50 / 100).
 const TIP_PRESETS = [0, 5000, 10000] as const;

@@ -7,7 +7,7 @@ import { formatRs } from "@fd/shared";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReorderButton } from "@/components/ReorderButton";
-import type { OrderItemSnapshot } from "@/lib/cart";
+import { REORDERABLE_STATUSES, type OrderItemSnapshot } from "@/lib/cart";
 
 const MyOrdersQuery = graphql(`
   query MyOrders {
@@ -34,10 +34,6 @@ const MyOrdersQuery = graphql(`
     }
   }
 `);
-
-// Orders worth offering a one-tap reorder on: anything that reached a terminal
-// state where the customer might want the same thing again.
-const REORDERABLE_STATUSES = new Set(["delivered", "cancelled", "rejected", "auto_expired"]);
 
 const STATUS_LABEL: Record<string, string> = {
   pending_acceptance: "Waiting for restaurant",

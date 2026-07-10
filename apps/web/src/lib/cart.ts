@@ -68,6 +68,33 @@ export const useCart = create<CartState>()(
 export const cartSubtotal = (lines: CartLine[]) =>
   lines.reduce((s, l) => s + l.unitPriceMinor * l.qty, 0);
 
+// ── Cart extras (tip + cutlery) ─────────────────────────────────────────────
+// Persisted separately from the item cart (`fd-cart`) so they survive navigation
+// to /checkout, where the checkout page reads this store and threads
+// tipAmount + cutleryRequested into quoteCart(QuoteCartInput) and
+// placeOrder(PlaceOrderInput). The API folds tip into grandTotalMinor
+// (untaxed/uncommissioned); cutleryRequested defaults true.
+type CartExtras = {
+  tipAmount: number; // minor units (paisa)
+  cutleryRequested: boolean;
+  setTip: (minor: number) => void;
+  setCutlery: (on: boolean) => void;
+  reset: () => void;
+};
+
+export const useCartExtras = create<CartExtras>()(
+  persist(
+    (set) => ({
+      tipAmount: 0,
+      cutleryRequested: true,
+      setTip: (minor) => set({ tipAmount: Math.max(0, Math.round(minor)) }),
+      setCutlery: (on) => set({ cutleryRequested: on }),
+      reset: () => set({ tipAmount: 0, cutleryRequested: true }),
+    }),
+    { name: "fd-cart-extras" },
+  ),
+);
+
 // ── Reorder ───────────────────────────────────────────────────────────────
 // Rebuild the cart from a past order's item snapshots (menuSnapshotJson). Prices
 // and modifier names come straight from the snapshot as display estimates — the
@@ -82,9 +109,21 @@ export type OrderItemSnapshot = {
     menuItemId?: string;
     name?: string;
     unitPriceMinor?: number;
+    // Seeded/older snapshots store the display price under `priceMinor`.
+    priceMinor?: number;
     modifiers?: Array<{ optionId?: string; optionName?: string }>;
   };
 };
+
+// Order statuses that reached a terminal state where offering a one-tap reorder
+// makes sense. Both the orders list and the order detail page gate on this so an
+// in-flight order can't be turned into a duplicate before it's fulfilled.
+export const REORDERABLE_STATUSES = new Set([
+  "delivered",
+  "cancelled",
+  "rejected",
+  "auto_expired",
+]);
 
 /** A past order reduced to what reorder needs: the branch and its item snapshots. */
 export type ReorderSource = {
@@ -113,7 +152,7 @@ export function reorderIntoCart(source: ReorderSource): ReorderResult {
       menuItemId: snap.menuItemId,
       name: snap.name ?? "Item",
       qty: Math.max(1, it.qty),
-      unitPriceMinor: snap.unitPriceMinor ?? 0,
+      unitPriceMinor: snap.unitPriceMinor ?? snap.priceMinor ?? 0,
       modifierOptionIds: modifiers.map((m) => m.optionId).filter((id): id is string => !!id),
       modifierNames: modifiers.map((m) => m.optionName).filter((n): n is string => !!n),
       notes: it.notes ?? undefined,
@@ -128,5 +167,9 @@ export function reorderIntoCart(source: ReorderSource): ReorderResult {
     branchName: source.branch.name,
     lines,
   });
+  // Reorder starts a fresh cart, so drop any tip/cutlery override carried over
+  // from a previous cart — otherwise a stale custom tip is silently reapplied at
+  // checkout despite the "cleared and started fresh" messaging.
+  useCartExtras.getState().reset();
   return "reordered";
 }
