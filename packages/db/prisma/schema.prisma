@@ -139,6 +139,7 @@ enum DeliveryOfferStatus {
 enum PaymentMode {
   cod
   card
+  wallet
 }
 
 // How the customer receives the order. `delivery` is the default (rider brings it);

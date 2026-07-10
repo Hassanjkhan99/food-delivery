@@ -58,6 +58,9 @@ const CheckoutMethodsQuery = graphql(`
       last4
       isDefault
     }
+    myWallet {
+      balanceMinor
+    }
   }
 `);
 
@@ -118,7 +121,7 @@ export default function CheckoutPage() {
   // Optional scheduled slot as a datetime-local value ("" = ASAP). Sent to the API as
   // an ISO string; scheduling is groundwork (see PR notes) but the picker is wired.
   const [scheduledLocal, setScheduledLocal] = useState("");
-  const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
+  const [paymentMode, setPaymentMode] = useState<"cod" | "card" | "wallet">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
 
   // Promo code (#52). `voucherInput` is the field text; `voucherCode` is the applied
@@ -206,6 +209,7 @@ export default function CheckoutPage() {
     pause: !loggedIn,
   });
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
+  const walletBalanceMinor = methodsData?.myWallet?.balanceMinor ?? 0;
 
   // Lazy name capture: prompt only when the signed-in user has no saved name.
   // Until the viewer resolves we can't know whether a name is on file, so we
@@ -279,6 +283,9 @@ export default function CheckoutPage() {
 
   const quote = quoteState.data?.quoteCart;
   const quoteError = quoteState.error?.graphQLErrors[0]?.message;
+  // Wallet can't cover this order → block placement and nudge to top up.
+  const walletShort =
+    paymentMode === "wallet" && !!quote && walletBalanceMinor < quote.grandTotalMinor;
 
   const isPickup = fulfillmentMode === "pickup";
   // The visible quote is stale while a mode switch is still being re-priced.
@@ -544,7 +551,7 @@ export default function CheckoutPage() {
           <p className="mb-3 text-sm font-semibold">Payment</p>
           <RadioGroup
             value={paymentMode}
-            onValueChange={(v) => setPaymentMode(v as "cod" | "card")}
+            onValueChange={(v) => setPaymentMode(v as "cod" | "card" | "wallet")}
           >
             <Label
               htmlFor="pay-cod"
@@ -554,6 +561,16 @@ export default function CheckoutPage() {
               <span className="text-sm font-medium text-kd-fg">Cash on delivery</span>
             </Label>
             <Label
+              htmlFor="pay-wallet"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
+            >
+              <span className="flex items-center gap-3">
+                <RadioGroupItem id="pay-wallet" value="wallet" />
+                <span className="text-sm font-medium text-kd-fg">Wallet</span>
+              </span>
+              <span className="text-xs text-kd-fg-muted">{formatRs(walletBalanceMinor)}</span>
+            </Label>
+            <Label
               htmlFor="pay-card"
               className="flex cursor-pointer items-center gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
             >
@@ -561,6 +578,15 @@ export default function CheckoutPage() {
               <span className="text-sm font-medium text-kd-fg">Pay now by card</span>
             </Label>
           </RadioGroup>
+          {paymentMode === "wallet" && walletShort && (
+            <p className="mt-3 border-t border-kd-border pt-3 text-xs text-kd-danger">
+              Not enough balance.{" "}
+              <Link href="/wallet" className="underline">
+                Top up your wallet
+              </Link>{" "}
+              or pick another method.
+            </p>
+          )}
           {paymentMode === "card" && (
             <div className="mt-3 space-y-2 border-t border-kd-border pt-3">
               {methods.length === 0 ? (
@@ -710,7 +736,8 @@ export default function CheckoutPage() {
             !quote ||
             !quote.meetsMinimum ||
             !quote.inRadius ||
-            !loggedIn
+            !loggedIn ||
+            walletShort
           }
         >
           {placeState.fetching

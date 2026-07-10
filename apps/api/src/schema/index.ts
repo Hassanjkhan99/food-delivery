@@ -4,6 +4,7 @@ import "./auth.js";
 import "./marketplace.js";
 import "./order.js";
 import "./payment.js";
+import "./wallet.js";
 import "./restaurant.js";
 import "./media.js";
 import "./rider.js";
