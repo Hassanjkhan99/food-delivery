@@ -761,7 +761,14 @@ builder.queryFields((t) => ({
         const best = candidates[0];
         if (best && !seenBranch.has(best.id)) {
           seenBranch.add(best.id);
-          restaurantHits.push({ branchId: best.id, distanceM: best.distanceM });
+          // priceBand/popularityScore are browse-ranking facets (#51); search results
+          // don't rank by them, so default to 0 (= unknown, handled by the client).
+          restaurantHits.push({
+            branchId: best.id,
+            distanceM: best.distanceM,
+            priceBand: 0,
+            popularityScore: 0,
+          });
         }
       }
       restaurantHits.sort((a, b) => a.distanceM - b.distanceM);

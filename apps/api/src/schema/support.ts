@@ -68,7 +68,11 @@ builder.prismaObject("SupportTicket", {
     resolvedAt: t.field({ type: "DateTime", nullable: true, resolve: (r) => r.resolvedAt }),
     createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
     updatedAt: t.field({ type: "DateTime", resolve: (r) => r.updatedAt }),
+    // Structured intake payload for the category (help-center #45).
+    contextJson: t.field({ type: "JSON", nullable: true, resolve: (tk) => tk.contextJson }),
     order: t.relation("order", { nullable: true }),
+    // Refund opened by this ticket (missing/wrong items), if any (#45).
+    refund: t.relation("refund", { nullable: true }),
     customer: t.relation("customer"),
     // The dispute primitives assembled in one panel. Empty when the ticket has no order.
     evidence: t.field({

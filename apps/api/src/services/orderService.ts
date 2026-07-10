@@ -167,6 +167,7 @@ export async function placeOrder(
           pickupCode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
           items: {
+            create: quote.lines.map((l) => ({
               // Freeze the line. For a combo (#53) we also freeze the component list so
               // the order never depends on the live combo/menu; kind distinguishes them.
               // Item snapshots also carry the per-line "if unavailable" preference (#39).

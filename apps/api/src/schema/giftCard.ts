@@ -60,10 +60,12 @@ builder.prismaObject("WalletTransaction", {
   }),
 });
 
-// Wallet summary — just the derived balance in v1.
+// Wallet balance summary returned by the gift-card redeem flow. Distinct typename from
+// the canonical `Wallet` (wallet.ts, #55) to avoid a duplicate-typename clash — the
+// redeem mutation just needs to echo the resulting balance.
 type WalletSummary = { balanceMinor: number };
-const WalletType = builder.objectRef<WalletSummary>("Wallet");
-WalletType.implement({
+const WalletBalanceType = builder.objectRef<WalletSummary>("GiftCardWalletBalance");
+WalletBalanceType.implement({
   fields: (t) => ({
     balanceMinor: t.exposeInt("balanceMinor"),
   }),
@@ -78,14 +80,8 @@ async function walletBalanceMinor(userId: string): Promise<number> {
 }
 
 builder.queryFields((t) => ({
-  myWallet: t.field({
-    type: WalletType,
-    authScopes: { loggedIn: true },
-    resolve: async (_root, _args, ctx) => ({
-      balanceMinor: await walletBalanceMinor(ctx.userId!),
-    }),
-  }),
-
+  // Note: the canonical `myWallet` query lives in wallet.ts (#55, ledger-backed). This
+  // module only adds the WalletTransaction history + the gift-card flows below.
   myWalletTransactions: t.prismaField({
     type: ["WalletTransaction"],
     authScopes: { loggedIn: true },
@@ -233,7 +229,7 @@ builder.mutationFields((t) => ({
   // Redeem a code: move the whole remaining balance into the caller's wallet.
   // A conditional updateMany on status guards against double-redeem races.
   redeemGiftCard: t.field({
-    type: WalletType,
+    type: WalletBalanceType,
     authScopes: { loggedIn: true },
     args: { code: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {

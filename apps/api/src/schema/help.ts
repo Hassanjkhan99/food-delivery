@@ -10,21 +10,9 @@ import { HELP_CATEGORIES, helpCategory } from "@fd/shared";
 import { builder } from "./builder.js";
 
 // Customer-visible view of a support ticket. Only fields safe to show the owner.
-builder.prismaObject("SupportTicket", {
-  fields: (t) => ({
-    id: t.exposeID("id"),
-    category: t.exposeString("category"),
-    subject: t.exposeString("subject"),
-    body: t.exposeString("body"),
-    status: t.exposeString("status"),
-    resolutionNote: t.exposeString("resolutionNote", { nullable: true }),
-    contextJson: t.field({ type: "JSON", nullable: true, resolve: (tk) => tk.contextJson }),
-    createdAt: t.field({ type: "DateTime", resolve: (tk) => tk.createdAt }),
-    updatedAt: t.field({ type: "DateTime", resolve: (tk) => tk.updatedAt }),
-    order: t.relation("order", { nullable: true }),
-    refund: t.relation("refund", { nullable: true }),
-  }),
-});
+// Note: the SupportTicket GraphQL type is defined once in support.ts (#14), which now
+// also exposes the help-center fields (contextJson, refund). This module only adds the
+// help-center queries/mutations below.
 
 // Structured intake for item-scoped categories: the ids of the order's items the
 // complaint is about. The mutation resolves each to its lineTotal for the refund.

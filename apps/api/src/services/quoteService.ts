@@ -186,6 +186,7 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
         unitPriceMinor: combo.priceMinor,
         lineTotalMinor: combo.priceMinor * line.qty,
         notes: line.notes,
+        unavailabilityPreference: line.unavailabilityPreference,
         modifiers: [],
         comboComponents,
       };
@@ -286,13 +287,6 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     }
   }
 
-  // Use the pickup-aware deliveryFeeMinor (0 for pickup), not branch.deliveryFeeMinor,
-  // so a pickup order isn't charged delivery. (#52 discount + #54 pickup reconciled)
-  const grandTotalMinor = Math.max(
-    0,
-    subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor,
-  );
-
   // Loyalty redemption (FP-07). Points can only offset the subtotal — fees, tax, and
   // tip stay fully owed — so the restaurant/rider are never shortchanged by a discount.
   let loyaltyPointsBalance = 0;
@@ -309,19 +303,11 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     }
   }
 
-  // Pickup-aware deliveryFeeMinor (0 for pickup), minus BOTH the voucher discount (#52)
+  // Pickup + membership-aware deliveryFeeMinor, minus BOTH the voucher discount (#52)
   // and the loyalty discount (#57). Clamp to 0 so stacked discounts can't go negative.
   const grandTotalMinor = Math.max(
     0,
     subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor - loyaltyDiscountMinor,
-  );
-
-  // Membership benefit (#59): waive/reduce the delivery fee for active members.
-  const baseDeliveryFeeMinor = branch.deliveryFeeMinor;
-  const { deliveryFeeMinor, applied } = await applyMembershipBenefit(
-    customerId,
-    subtotal,
-    baseDeliveryFeeMinor,
   );
 
   return {
