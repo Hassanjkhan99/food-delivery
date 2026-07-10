@@ -870,6 +870,10 @@ model SupportTicket {
   refund   Refund? @relation(fields: [refundId], references: [id])
 
   @@index([status])
+  // Order-help view lists a customer's tickets for one order, newest first
+  // (help.ts ticketsForOrder). Serve that access pattern from the index instead
+  // of scanning as ticket volume grows.
+  @@index([customerId, orderId, createdAt])
   @@map("support_tickets")
 }
 

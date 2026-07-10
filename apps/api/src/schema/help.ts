@@ -4,7 +4,7 @@
 // lineTotals so the admin refund workbench can act on real data. The customer sees
 // the ticket status + resolutionNote (written when the linked refund is decided)
 // without contacting anyone. Reuses SupportTicket + Refund — no new thread model yet.
-import { prisma } from "@fd/db";
+import { prisma, Prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import { HELP_CATEGORIES, helpCategory } from "@fd/shared";
 import { builder } from "./builder.js";
@@ -110,24 +110,41 @@ builder.mutationFields((t) => ({
             }
           : null;
 
-      // Item categories flagged autoRefund open a pending refund for the workbench.
+      // Item categories flagged autoRefund open a pending refund for the workbench —
+      // but only once the order was actually delivered (missing/wrong items can't
+      // apply to an order that never arrived, and a non-delivered order has no cash
+      // collected / delivery to reverse). Otherwise we file a ticket-only complaint
+      // for support to triage. Mirrors the delivered-only gate used for ratings.
       const refundAmount = selectedItems.reduce((sum, i) => sum + i.lineTotalMinor, 0);
-      const openRefund = cat.autoRefund && refundAmount > 0;
+      const openRefund = cat.autoRefund && refundAmount > 0 && order.status === "delivered";
 
       return prisma.$transaction(async (tx) => {
         let refundId: string | null = null;
         if (openRefund) {
-          const refund = await tx.refund.create({
-            data: {
+          // Idempotency / over-refund guard: never open a second refund while an
+          // earlier one for this order is still pending or already approved. The
+          // approve path processes each Refund independently, so without this a
+          // customer could resubmit the same items and be refunded twice.
+          const existing = await tx.refund.findFirst({
+            where: {
               orderId: order.id,
-              status: "refund_pending",
-              amountMinor: refundAmount,
-              // COD has no card to reverse, so refund to wallet; card back to card.
-              destination: order.paymentMode === "cod" ? "wallet" : "card",
-              reason: `${cat.label} (help ticket): ${itemNames.join(", ")}`,
+              status: { in: ["refund_pending", "refunded"] },
             },
+            select: { id: true },
           });
-          refundId = refund.id;
+          if (!existing) {
+            const refund = await tx.refund.create({
+              data: {
+                orderId: order.id,
+                status: "refund_pending",
+                amountMinor: refundAmount,
+                // COD has no card to reverse, so refund to wallet; card back to card.
+                destination: order.paymentMode === "cod" ? "wallet" : "card",
+                reason: `${cat.label} (help ticket): ${itemNames.join(", ")}`,
+              },
+            });
+            refundId = refund.id;
+          }
         }
         return tx.supportTicket.create({
           ...query,
@@ -137,7 +154,9 @@ builder.mutationFields((t) => ({
             category: cat.value,
             subject,
             body,
-            contextJson: contextJson as never,
+            // Json? column: pass a real object when we have context, else DbNull so
+            // Prisma writes SQL NULL (JS `null` is rejected/ambiguous for Json fields).
+            contextJson: contextJson ?? Prisma.DbNull,
             refundId,
           },
         });
