@@ -1,0 +1,54 @@
+name: Policy change
+description: Propose a change to money, fees, tax/compliance, SLA, or licensing/governance policy.
+title: "policy: <short summary>"
+labels: ["policy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for changes to **policy**, not code mechanics: commission/fee tiers,
+        refund rules, payout timing, tax/collecting-agent posture, SLA targets, rider
+        economics, or licensing/governance. These decisions are high-impact and often
+        irreversible for live merchants.
+  - type: textarea
+    id: current
+    attributes:
+      label: Current policy
+      description: What is the behavior/policy today, and where is it enforced (file/path)?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed policy
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale & impact
+      description: Who is affected (customers, restaurants, riders, platform)? Money/legal impact?
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Policy domain
+      options:
+        - fees / commission
+        - refunds
+        - payouts
+        - tax / compliance
+        - SLA / support
+        - rider economics
+        - licensing / governance
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I understand this may require CODEOWNERS review and legal/tax sign-off before implementation.
+          required: true

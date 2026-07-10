@@ -1,0 +1,45 @@
+name: Feature request
+description: Propose a new capability or enhancement.
+title: "feat: <short summary>"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What user or business problem does this solve? Who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - customer web / PWA
+        - restaurant console
+        - rider PWA
+        - admin
+        - API / GraphQL
+        - database / migrations
+        - payments / ledger
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: sensitive
+    attributes:
+      label: Sensitive area
+      options:
+        - label: This touches payments, the ledger, fees/tax, or the order state machine (expect extra review).

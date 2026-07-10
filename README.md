@@ -69,3 +69,25 @@ Platform-in-the-money-flow is exactly the posture Punjab PRA's collecting-agent
 notification targets. Cards are mocked today; before wiring a real PSP
 (Safepay/PayFast), get tax counsel on collecting-agent registration, and keep card
 data fully outsourced to the PSP (tokens only — the schema already enforces this).
+
+## License & governance
+
+KhaanaDo is a **dual-licensed monorepo**:
+
+- **Core** (`apps/api`, `apps/web`, `packages/db`, `packages/config`) —
+  **GNU AGPL-3.0-or-later** ([`LICENSE`](./LICENSE)). Network copyleft: run a modified
+  server for others and you must offer them the source.
+- **SDK / shareable library** (`packages/shared`) — **Apache-2.0**
+  ([`LICENSE-Apache-2.0.txt`](./LICENSE-Apache-2.0.txt)) for ecosystem uptake and a
+  patent grant. See [`NOTICE`](./NOTICE) for the exact boundary.
+
+Contributing: read [`CONTRIBUTING.md`](./CONTRIBUTING.md) — branch strategy,
+Conventional Commits, and **DCO sign-off** (`git commit -s`, see [`DCO.txt`](./DCO.txt)).
+Report vulnerabilities privately per [`SECURITY.md`](./SECURITY.md), never in a public
+issue. Sensitive money/policy paths are guarded by
+[`.github/CODEOWNERS`](./.github/CODEOWNERS). Be excellent to each other
+([`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)).
+
+> **Do not open-source publicly yet** — per the Phase-8 kickoff report, wait until the
+> finance / SLA / shared-rider mechanics are battle-tested. These files prepare the repo;
+> flipping visibility is a separate, deliberate decision.
