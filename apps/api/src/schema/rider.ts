@@ -33,6 +33,18 @@ const DeliveryTaskType = builder.prismaObject("DeliveryTask", {
       nullable: true,
       resolve: (d) => d.pickupVerifiedAt,
     }),
+    // Whether this task actually has a pickup PIN to verify (#25). Legacy/pre-migration
+    // orders carry no PIN, so the rider UI must gate "Picked up" on this — not on
+    // pickupVerifiedAt alone — or those orders can never be picked up.
+    pickupPinRequired: t.boolean({
+      resolve: async (d) => {
+        const order = await prisma.order.findUnique({
+          where: { id: d.orderId },
+          select: { pickupPin: true },
+        });
+        return Boolean(order?.pickupPin);
+      },
+    }),
     order: t.relation("order"),
     podMedia: t.relation("podMedia", { nullable: true }),
   }),
@@ -268,6 +280,21 @@ builder.mutationFields((t) => ({
     resolve: async (query, _root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
       if (task.status !== "offered") throw new GraphQLError("Job is not awaiting acceptance");
+      // Re-check the COD block at accept time (#25): a rider can be handed a COD offer and
+      // only later cross the cash-variance threshold. offerTask's guard ran when the offer
+      // was created, so without this an already-blocked rider could still accept the stale
+      // offer and collect cash on it.
+      if (task.order.paymentMode === "cod") {
+        const rider = await prisma.rider.findUnique({
+          where: { id: task.riderId! },
+          select: { codDisabled: true },
+        });
+        if (rider?.codDisabled) {
+          throw new GraphQLError("You are currently blocked from cash-on-delivery orders", {
+            extensions: { code: "rider_cod_disabled" },
+          });
+        }
+      }
       const now = new Date();
       // Only promote if it's still `offered` (a concurrent decline/withdraw loses).
       const res = await prisma.deliveryTask.updateMany({
@@ -506,11 +533,23 @@ builder.mutationFields((t) => ({
       taskId: t.arg.string({ required: false }),
     },
     resolve: async (_root, args, ctx) => {
+      // Only attach the anomaly to a task we can prove belongs to this rider — the client
+      // supplies taskId and could otherwise pin GPS-anomaly evidence onto another rider's
+      // (or an arbitrary) delivery, corrupting the fraud/audit trail. Untrusted IDs are
+      // dropped; the heartbeat still records without a task link.
+      let taskId: string | null = null;
+      if (args.taskId) {
+        const task = await prisma.deliveryTask.findUnique({
+          where: { id: args.taskId },
+          select: { riderId: true },
+        });
+        if (task?.riderId === ctx.riderId) taskId = args.taskId;
+      }
       const { anomaly } = await recordRiderLocation({
         riderId: ctx.riderId!,
         lat: args.lat,
         lng: args.lng,
-        taskId: args.taskId ?? null,
+        taskId,
       });
       return anomaly;
     },

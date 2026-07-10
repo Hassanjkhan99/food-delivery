@@ -122,6 +122,7 @@ type DeliveryTask {
   id: ID!
   offeredAt: DateTime
   order: Order!
+  pickupPinRequired: Boolean!
   pickupVerifiedAt: DateTime
   podMedia: MediaAsset
   status: String!

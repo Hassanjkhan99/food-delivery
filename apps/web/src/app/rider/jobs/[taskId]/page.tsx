@@ -19,6 +19,7 @@ const JobQuery = graphql(`
       status
       codAmountMinor
       pickupVerifiedAt
+      pickupPinRequired
       order {
         id
         code
@@ -214,7 +215,9 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
       {/* Pickup PIN gate: at the counter the rider asks the restaurant for the order's
           PIN and enters it here. Verifying unlocks "Picked up". If the API stops sending
           a PIN (legacy order) the task arrives already verified and this card is skipped. */}
-      {["assigned", "arrived_pickup"].includes(job.status) && !job.pickupVerifiedAt && (
+      {["assigned", "arrived_pickup"].includes(job.status) &&
+        job.pickupPinRequired &&
+        !job.pickupVerifiedAt && (
         <div className="space-y-3 rounded-2xl border border-kd-border bg-kd-surface p-4">
           <div>
             <label className="text-sm font-medium">Pickup PIN</label>
@@ -250,7 +253,9 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         </div>
       )}
 
-      {["assigned", "arrived_pickup"].includes(job.status) && job.pickupVerifiedAt && (
+      {["assigned", "arrived_pickup"].includes(job.status) &&
+        job.pickupPinRequired &&
+        job.pickupVerifiedAt && (
         <p className="rounded-lg bg-kd-success-soft p-2 text-center text-sm font-medium text-kd-success">
           Pickup PIN verified
         </p>
@@ -261,7 +266,7 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
           className="w-full"
           size="lg"
           variant={job.status === "assigned" ? "outline" : "default"}
-          disabled={!job.pickupVerifiedAt}
+          disabled={job.pickupPinRequired && !job.pickupVerifiedAt}
           onClick={async () => {
             const r = await pickedUp({ taskId });
             if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Failed");
