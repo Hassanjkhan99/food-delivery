@@ -192,6 +192,8 @@ export default function CheckoutPage() {
         qty: l.qty,
         modifierOptionIds: l.modifierOptionIds,
         notes: l.notes,
+        // Carry the per-line "if unavailable" preference to the server (#39).
+        unavailabilityPreference: l.unavailabilityPreference,
       })),
     [lines],
   );

@@ -1,7 +1,12 @@
 // Server-authoritative cart pricing. The client never sends prices — only item ids,
 // modifier option ids, and quantities. Everything money is recomputed here.
 import { prisma } from "@fd/db";
-import { applyBps, haversineMeters, type QuoteInput } from "@fd/shared";
+import {
+  applyBps,
+  haversineMeters,
+  type QuoteInput,
+  type UnavailabilityPreference,
+} from "@fd/shared";
 import { GraphQLError } from "graphql";
 
 export type ResolvedLine = {
@@ -11,6 +16,8 @@ export type ResolvedLine = {
   unitPriceMinor: number; // base + selected modifier deltas
   lineTotalMinor: number;
   notes?: string;
+  // Customer's "if unavailable" preference (#39), snapshotted onto the order item.
+  unavailabilityPreference: UnavailabilityPreference;
   modifiers: Array<{
     groupName: string;
     optionId: string;
@@ -112,6 +119,7 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
       unitPriceMinor: unit,
       lineTotalMinor: unit * line.qty,
       notes: line.notes,
+      unavailabilityPreference: line.unavailabilityPreference,
       modifiers,
     };
   });

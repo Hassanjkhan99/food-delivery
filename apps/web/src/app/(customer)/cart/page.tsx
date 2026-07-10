@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2, UtensilsCrossed } from "lucide-react";
-import { formatRs } from "@fd/shared";
+import { Pencil, Trash2, UtensilsCrossed } from "lucide-react";
+import {
+  DEFAULT_UNAVAILABILITY_PREFERENCE,
+  formatRs,
+  unavailabilityPreferenceLabel,
+} from "@fd/shared";
 import { cartSubtotal, useCart, useCartExtras } from "@/lib/cart";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +58,12 @@ export default function CartPage() {
                 <p className="text-xs text-kd-fg-muted">{l.modifierNames.join(", ")}</p>
               )}
               {l.notes && <p className="text-xs italic text-kd-fg-subtle">“{l.notes}”</p>}
+              <p className="text-xs text-kd-fg-subtle">
+                If unavailable:{" "}
+                {unavailabilityPreferenceLabel(
+                  l.unavailabilityPreference ?? DEFAULT_UNAVAILABILITY_PREFERENCE,
+                )}
+              </p>
               <div className="mt-2 flex items-center gap-2">
                 <div className="flex items-center rounded-lg border border-kd-border">
                   <Button variant="ghost" size="sm" onClick={() => setQty(l.lineId, l.qty - 1)}>
@@ -64,7 +74,21 @@ export default function CartPage() {
                     +
                   </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => removeLine(l.lineId)}>
+                {/* Edit round-trips through the restaurant page, which holds the
+                    item's modifier groups needed to pre-fill the sheet (#39). */}
+                <Link
+                  href={`/r/${branchSlug}?edit=${l.lineId}`}
+                  aria-label={`Edit ${l.name}`}
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
+                >
+                  <Pencil className="h-4 w-4 text-kd-fg-subtle" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Remove ${l.name}`}
+                  onClick={() => removeLine(l.lineId)}
+                >
                   <Trash2 className="h-4 w-4 text-kd-fg-subtle" />
                 </Button>
               </div>

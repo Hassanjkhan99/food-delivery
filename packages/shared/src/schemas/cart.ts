@@ -1,12 +1,21 @@
 // Cart/checkout validation shared by the web forms and API resolvers.
 import { z } from "zod";
+import { MAX_CART_LINE_QTY, UNAVAILABILITY_PREFERENCES } from "../constants";
+
+const unavailabilityPreferenceValues = UNAVAILABILITY_PREFERENCES.map((p) => p.value) as [
+  "remove_item",
+  "cancel_order",
+  "contact_me",
+];
 
 export const cartLineSchema = z.object({
   menuItemId: z.string().min(1),
-  qty: z.number().int().min(1).max(50),
+  qty: z.number().int().min(1).max(MAX_CART_LINE_QTY),
   // Selected modifier option ids, validated server-side against group min/max.
   modifierOptionIds: z.array(z.string()).default([]),
   notes: z.string().max(300).optional(),
+  // What the customer wants done if this item turns out to be unavailable (#39).
+  unavailabilityPreference: z.enum(unavailabilityPreferenceValues).default("remove_item"),
 });
 
 export const quoteInputSchema = z.object({

@@ -47,6 +47,9 @@ export const RIDER_TRUST_COD_MIN = 50;
 /** Below this, shared/independent offers are withheld and shared mode auto-disables. */
 export const RIDER_TRUST_SHARED_MIN = 60;
 
+/** Max quantity for a single cart line. Enforced client-side (merge cap) and by the server schema. (#39) */
+export const MAX_CART_LINE_QTY = 50;
+
 /**
  * Canonical post-delivery review tags (Foodpanda-style quick chips). Shown on the
  * rating form and rendered as pills on the reviews page. `value` is what's stored
@@ -167,3 +170,22 @@ export const TICKET_RESOLUTION_CODES = [
 ] as const;
 
 export type TicketResolutionCode = (typeof TICKET_RESOLUTION_CODES)[number];
+
+/**
+ * Per-line "if this item is unavailable" preference (UX-04 / #39). Captured on the
+ * cart line, snapshotted onto the OrderItem, and honored by the vendor flow. Default
+ * is `remove_item`.
+ */
+export const UNAVAILABILITY_PREFERENCES = [
+  { value: "remove_item", label: "Remove it from my order", short: "Remove item" },
+  { value: "cancel_order", label: "Cancel the whole order", short: "Cancel order" },
+  { value: "contact_me", label: "Call me", short: "Call customer" },
+] as const;
+
+export type UnavailabilityPreference = (typeof UNAVAILABILITY_PREFERENCES)[number]["value"];
+
+export const DEFAULT_UNAVAILABILITY_PREFERENCE: UnavailabilityPreference = "remove_item";
+
+/** Map a stored preference value to its short operator-facing label. */
+export const unavailabilityPreferenceLabel = (value: string): string =>
+  UNAVAILABILITY_PREFERENCES.find((p) => p.value === value)?.short ?? value;

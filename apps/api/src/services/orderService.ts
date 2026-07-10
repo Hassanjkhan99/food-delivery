@@ -115,6 +115,7 @@ export async function placeOrder(
                 name: l.name,
                 unitPriceMinor: l.unitPriceMinor,
                 modifiers: l.modifiers,
+                unavailabilityPreference: l.unavailabilityPreference,
               },
               qty: l.qty,
               unitPriceMinor: l.unitPriceMinor,
