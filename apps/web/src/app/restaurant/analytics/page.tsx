@@ -13,14 +13,59 @@ const AnalyticsQuery = graphql(`
       avgOrderValueMinor
       ordersByDayOfWeek
       ordersByHour
+      avgAcceptSeconds
+      repeatCustomerRate
       topItems {
         name
         qty
         revenueMinor
       }
+      bottomItems {
+        name
+        qty
+        revenueMinor
+      }
+      revenueByDay {
+        date
+        revenueMinor
+        orders
+      }
+      acceptSecondsTrend {
+        date
+        revenueMinor
+        orders
+      }
+      cancelReasons {
+        reason
+        count
+      }
     }
   }
 `);
+
+// Human labels for cancellation reason codes; falls back to the raw code.
+const CANCEL_REASON_LABELS: Record<string, string> = {
+  customer_request: "Customer request",
+  restaurant_unavailable: "Restaurant unavailable",
+  item_out_of_stock: "Item out of stock",
+  rider_unavailable: "Rider unavailable",
+  address_issue: "Address issue",
+  payment_failed: "Payment failed",
+  other: "Other",
+};
+
+function cancelReasonLabel(code: string): string {
+  return (
+    CANCEL_REASON_LABELS[code] ??
+    code.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
+}
+
+function formatAcceptTime(seconds: number | null | undefined): string {
+  if (seconds == null) return "—";
+  if (seconds < 90) return `${seconds}s`;
+  return `${Math.round(seconds / 60)} min`;
+}
 
 // ordersByDayOfWeek is indexed 0=Sunday…6=Saturday (server buckets in PKT).
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -79,7 +124,7 @@ export default function AnalyticsPage() {
 
       {a && (
         <>
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-2xl border border-kd-border bg-kd-surface p-5">
               <p className="text-sm text-kd-fg-muted">Total orders</p>
               <p className="text-3xl font-bold text-kd-fg">{a.totalOrders}</p>
@@ -91,6 +136,18 @@ export default function AnalyticsPage() {
             <div className="rounded-2xl border border-kd-border bg-kd-surface p-5">
               <p className="text-sm text-kd-fg-muted">Avg order value</p>
               <p className="text-3xl font-bold text-kd-fg">{formatRs(a.avgOrderValueMinor)}</p>
+            </div>
+            <div className="rounded-2xl border border-kd-border bg-kd-surface p-5">
+              <p className="text-sm text-kd-fg-muted">Avg accept time</p>
+              <p className="text-3xl font-bold text-kd-fg">
+                {formatAcceptTime(a.avgAcceptSeconds)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-kd-border bg-kd-surface p-5">
+              <p className="text-sm text-kd-fg-muted">Repeat customers</p>
+              <p className="text-3xl font-bold text-kd-fg">
+                {Math.round(a.repeatCustomerRate * 100)}%
+              </p>
             </div>
           </div>
 
@@ -105,7 +162,47 @@ export default function AnalyticsPage() {
             <p className="mt-2 text-xs text-kd-fg-subtle">Hour of day (PKT), 0–23.</p>
           </div>
 
-          <div className="rounded-2xl border border-kd-border bg-kd-surface p-5">
+          <div className="mb-6 rounded-2xl border border-kd-border bg-kd-surface p-5">
+            <h2 className="mb-4 font-semibold">Revenue by day</h2>
+            {a.revenueByDay.length > 0 ? (
+              <>
+                <Bars
+                  data={a.revenueByDay.map((d) => d.revenueMinor)}
+                  labelFor={(i) => {
+                    const d = a.revenueByDay[i]?.date;
+                    return d ? d.slice(5) : ""; // MM-DD
+                  }}
+                />
+                <p className="mt-2 text-xs text-kd-fg-subtle">
+                  Daily revenue (PKT), delivered orders.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-kd-fg-subtle">No sales in this window yet.</p>
+            )}
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-kd-border bg-kd-surface p-5">
+            <h2 className="mb-4 font-semibold">Acceptance time trend</h2>
+            {a.acceptSecondsTrend.length > 0 ? (
+              <>
+                <Bars
+                  data={a.acceptSecondsTrend.map((d) => d.revenueMinor)}
+                  labelFor={(i) => {
+                    const d = a.acceptSecondsTrend[i]?.date;
+                    return d ? d.slice(5) : "";
+                  }}
+                />
+                <p className="mt-2 text-xs text-kd-fg-subtle">
+                  Mean seconds from order placed to accepted, per day.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-kd-fg-subtle">No accepted orders in this window yet.</p>
+            )}
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-kd-border bg-kd-surface p-5">
             <h2 className="mb-3 font-semibold">Top items</h2>
             <div className="space-y-1">
               {a.topItems.map((it, i) => (
@@ -123,6 +220,47 @@ export default function AnalyticsPage() {
               ))}
               {a.topItems.length === 0 && (
                 <p className="text-sm text-kd-fg-subtle">No sales in this window yet.</p>
+              )}
+            </div>
+          </div>
+
+          {a.bottomItems.length > 0 && (
+            <div className="mt-6 rounded-2xl border border-kd-border bg-kd-surface p-5">
+              <h2 className="mb-1 font-semibold">Bottom items</h2>
+              <p className="mb-3 text-xs text-kd-fg-subtle">Lowest sellers in this window.</p>
+              <div className="space-y-1">
+                {a.bottomItems.map((it, i) => (
+                  <div
+                    key={`${it.name}-${i}`}
+                    className="flex items-center justify-between rounded-lg bg-kd-surface-muted px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate">
+                      {it.name}
+                      <span className="ml-2 text-xs text-kd-fg-subtle">×{it.qty}</span>
+                    </span>
+                    <span className="ml-3 shrink-0 font-semibold">
+                      {formatRs(it.revenueMinor)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 rounded-2xl border border-kd-border bg-kd-surface p-5">
+            <h2 className="mb-3 font-semibold">Cancellation reasons</h2>
+            <div className="space-y-1">
+              {a.cancelReasons.map((c) => (
+                <div
+                  key={c.reason}
+                  className="flex items-center justify-between rounded-lg bg-kd-surface-muted px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate">{cancelReasonLabel(c.reason)}</span>
+                  <span className="ml-3 shrink-0 font-semibold tabular-nums">{c.count}</span>
+                </div>
+              ))}
+              {a.cancelReasons.length === 0 && (
+                <p className="text-sm text-kd-fg-subtle">No cancellations in this window.</p>
               )}
             </div>
           </div>

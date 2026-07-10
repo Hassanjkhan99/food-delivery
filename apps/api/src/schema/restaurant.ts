@@ -129,9 +129,39 @@ AnalyticsTopItem.implement({
   }),
 });
 
+// One day's revenue in the trailing window (#61). `date` is an ISO yyyy-mm-dd in PKT.
+const AnalyticsRevenueDay = builder.objectRef<{
+  date: string;
+  revenueMinor: number;
+  orders: number;
+}>("AnalyticsRevenueDay");
+AnalyticsRevenueDay.implement({
+  fields: (t) => ({
+    date: t.exposeString("date"),
+    revenueMinor: t.exposeInt("revenueMinor"),
+    orders: t.exposeInt("orders"),
+  }),
+});
+
+// One cancellation-reason bucket (#61): the reason code and how many times it occurred.
+const AnalyticsCancelReason = builder.objectRef<{ reason: string; count: number }>(
+  "AnalyticsCancelReason",
+);
+AnalyticsCancelReason.implement({
+  fields: (t) => ({
+    reason: t.exposeString("reason"),
+    count: t.exposeInt("count"),
+  }),
+});
+
 // Read-only sales summary over a trailing window, computed from delivered orders.
 // ordersByDayOfWeek is indexed 0=Sunday…6=Saturday; ordersByHour is 0…23. Both are
 // bucketed in PKT so they line up with the branch's opening hours.
+//
+// #61 deepens this: bottomItems (worst sellers), avgAcceptSeconds + an acceptance-time
+// trend, a cancellation-reason breakdown, repeat-customer rate, and revenue by day.
+// Everything is still computed live from Order/OrderItem/Cancellation — no stored
+// aggregates, no schema change for analytics.
 type AnalyticsResult = {
   totalOrders: number;
   totalRevenueMinor: number;
@@ -139,6 +169,12 @@ type AnalyticsResult = {
   ordersByDayOfWeek: number[];
   ordersByHour: number[];
   topItems: Array<{ name: string; qty: number; revenueMinor: number }>;
+  bottomItems: Array<{ name: string; qty: number; revenueMinor: number }>;
+  revenueByDay: Array<{ date: string; revenueMinor: number; orders: number }>;
+  avgAcceptSeconds: number | null;
+  acceptSecondsTrend: Array<{ date: string; revenueMinor: number; orders: number }>;
+  cancelReasons: Array<{ reason: string; count: number }>;
+  repeatCustomerRate: number;
 };
 const RestaurantAnalytics = builder.objectRef<AnalyticsResult>("RestaurantAnalytics");
 RestaurantAnalytics.implement({
@@ -149,6 +185,19 @@ RestaurantAnalytics.implement({
     ordersByDayOfWeek: t.field({ type: ["Int"], resolve: (a) => a.ordersByDayOfWeek }),
     ordersByHour: t.field({ type: ["Int"], resolve: (a) => a.ordersByHour }),
     topItems: t.field({ type: [AnalyticsTopItem], resolve: (a) => a.topItems }),
+    bottomItems: t.field({ type: [AnalyticsTopItem], resolve: (a) => a.bottomItems }),
+    revenueByDay: t.field({ type: [AnalyticsRevenueDay], resolve: (a) => a.revenueByDay }),
+    // Mean seconds from placed→accepted over the window (null if nothing accepted).
+    avgAcceptSeconds: t.int({ nullable: true, resolve: (a) => a.avgAcceptSeconds }),
+    // Per-day mean acceptance time: `revenueMinor` carries the mean seconds and
+    // `orders` the sample size (reuses AnalyticsRevenueDay to avoid a bespoke type).
+    acceptSecondsTrend: t.field({
+      type: [AnalyticsRevenueDay],
+      resolve: (a) => a.acceptSecondsTrend,
+    }),
+    cancelReasons: t.field({ type: [AnalyticsCancelReason], resolve: (a) => a.cancelReasons }),
+    // Share (0..1) of delivered-order customers who ordered more than once in the window.
+    repeatCustomerRate: t.float({ resolve: (a) => a.repeatCustomerRate }),
   }),
 });
 
@@ -275,6 +324,30 @@ builder.queryFields((t) => ({
     },
   }),
 
+  // Console reviews feed (#61): approved ratings for the owner's restaurant, newest
+  // first, each with its vendor response (if any) so the console can show reply status.
+  restaurantReviews: t.prismaField({
+    type: ["Rating"],
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      limit: t.arg.int({ required: false }),
+      offset: t.arg.int({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
+        throw new GraphQLError("Not a member of this restaurant");
+      }
+      return prisma.rating.findMany({
+        ...query,
+        where: { restaurantId: args.restaurantId, moderationStatus: "approved" },
+        orderBy: { createdAt: "desc" },
+        take: Math.min(Math.max(args.limit ?? 20, 1), 50),
+        skip: Math.max(args.offset ?? 0, 0),
+      });
+    },
+  }),
+
   draftMenu: t.prismaField({
     type: "Menu",
     authScopes: { restaurantMember: true },
@@ -369,6 +442,8 @@ builder.queryFields((t) => ({
         select: {
           grandTotalMinor: true,
           placedAt: true,
+          acceptedAt: true,
+          customerId: true,
           items: { select: { qty: true, lineTotalMinor: true, menuSnapshotJson: true } },
         },
       });
@@ -376,7 +451,15 @@ builder.queryFields((t) => ({
       const ordersByDayOfWeek = Array<number>(7).fill(0);
       const ordersByHour = Array<number>(24).fill(0);
       const tally = new Map<string, { qty: number; revenueMinor: number }>();
+      // Per-PKT-day revenue + acceptance latency, keyed by yyyy-mm-dd.
+      const byDay = new Map<
+        string,
+        { revenueMinor: number; orders: number; acceptSum: number; acceptN: number }
+      >();
+      const ordersByCustomer = new Map<string, number>();
       let totalRevenueMinor = 0;
+      let acceptSum = 0;
+      let acceptN = 0;
 
       for (const o of orders) {
         totalRevenueMinor += o.grandTotalMinor;
@@ -386,6 +469,27 @@ builder.queryFields((t) => ({
         const hour = pkt.getUTCHours();
         ordersByDayOfWeek[dow] = (ordersByDayOfWeek[dow] ?? 0) + 1;
         ordersByHour[hour] = (ordersByHour[hour] ?? 0) + 1;
+
+        const dateKey = pkt.toISOString().slice(0, 10);
+        const dayAgg = byDay.get(dateKey) ?? {
+          revenueMinor: 0,
+          orders: 0,
+          acceptSum: 0,
+          acceptN: 0,
+        };
+        dayAgg.revenueMinor += o.grandTotalMinor;
+        dayAgg.orders += 1;
+        if (o.acceptedAt) {
+          const secs = Math.max(0, (o.acceptedAt.getTime() - o.placedAt.getTime()) / 1000);
+          acceptSum += secs;
+          acceptN += 1;
+          dayAgg.acceptSum += secs;
+          dayAgg.acceptN += 1;
+        }
+        byDay.set(dateKey, dayAgg);
+
+        ordersByCustomer.set(o.customerId, (ordersByCustomer.get(o.customerId) ?? 0) + 1);
+
         for (const it of o.items) {
           const snap = it.menuSnapshotJson as { name?: string } | null;
           const name = snap?.name;
@@ -397,10 +501,41 @@ builder.queryFields((t) => ({
         }
       }
 
-      const topItems = [...tally.entries()]
+      const sortedItems = [...tally.entries()]
         .map(([name, v]) => ({ name, qty: v.qty, revenueMinor: v.revenueMinor }))
-        .sort((a, b) => b.qty - a.qty)
-        .slice(0, 10);
+        .sort((a, b) => b.qty - a.qty);
+      const topItems = sortedItems.slice(0, 10);
+      // Worst sellers: reverse tail, but never duplicate the top list on small menus.
+      const bottomItems = [...sortedItems]
+        .reverse()
+        .slice(0, 10)
+        .filter((it) => !topItems.includes(it));
+
+      const revenueByDay = [...byDay.entries()]
+        .map(([date, v]) => ({ date, revenueMinor: v.revenueMinor, orders: v.orders }))
+        .sort((a, b) => (a.date < b.date ? -1 : 1));
+      const acceptSecondsTrend = [...byDay.entries()]
+        .filter(([, v]) => v.acceptN > 0)
+        .map(([date, v]) => ({
+          date,
+          revenueMinor: Math.round(v.acceptSum / v.acceptN),
+          orders: v.acceptN,
+        }))
+        .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+      // Cancellation-reason breakdown for this branch's orders in the window.
+      const cancelGroups = await prisma.cancellation.groupBy({
+        by: ["reasonCode"],
+        where: { order: { branchId: args.branchId }, createdAt: { gte: since } },
+        _count: { reasonCode: true },
+      });
+      const cancelReasons = cancelGroups
+        .map((g) => ({ reason: g.reasonCode, count: g._count.reasonCode }))
+        .sort((a, b) => b.count - a.count);
+
+      const uniqueCustomers = ordersByCustomer.size;
+      const repeatCustomers = [...ordersByCustomer.values()].filter((n) => n > 1).length;
+      const repeatCustomerRate = uniqueCustomers ? repeatCustomers / uniqueCustomers : 0;
 
       const totalOrders = orders.length;
       return {
@@ -410,6 +545,12 @@ builder.queryFields((t) => ({
         ordersByDayOfWeek,
         ordersByHour,
         topItems,
+        bottomItems,
+        revenueByDay,
+        avgAcceptSeconds: acceptN ? Math.round(acceptSum / acceptN) : null,
+        acceptSecondsTrend,
+        cancelReasons,
+        repeatCustomerRate,
       };
     },
   }),

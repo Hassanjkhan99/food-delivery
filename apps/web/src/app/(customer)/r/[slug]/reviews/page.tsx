@@ -41,6 +41,11 @@ const ReviewsQuery = graphql(`
           tags
           comment
           createdAt
+          response {
+            id
+            body
+            createdAt
+          }
         }
       }
     }
@@ -53,6 +58,7 @@ type ReviewRow = {
   tags: string[];
   comment?: string | null;
   createdAt: string;
+  response?: { id: string; body: string; createdAt: string } | null;
 };
 
 function Stars({ n, className }: { n: number; className?: string }) {
@@ -195,6 +201,25 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
                 </div>
               )}
               {rev.comment && <p className="mt-2 text-sm opacity-80">{rev.comment}</p>}
+              {rev.response && (
+                <div
+                  className="mt-3 rounded-xl p-3"
+                  style={{
+                    backgroundColor: "color-mix(in srgb, var(--brand-primary) 8%, transparent)",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: "var(--brand-primary)" }}
+                    >
+                      Response from {r.name}
+                    </span>
+                    <span className="text-xs opacity-50">{relativeDate(rev.response.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 text-sm opacity-80">{rev.response.body}</p>
+                </div>
+              )}
             </li>
           ))}
         </ul>

@@ -10,6 +10,17 @@ type Address {
   text: String!
 }
 
+type AnalyticsCancelReason {
+  count: Int!
+  reason: String!
+}
+
+type AnalyticsRevenueDay {
+  date: String!
+  orders: Int!
+  revenueMinor: Int!
+}
+
 type AnalyticsTopItem {
   name: String!
   qty: Int!
@@ -287,6 +298,7 @@ type Mutation {
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  respondToRating(body: String!, ratingId: String!): RatingResponse!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
@@ -444,6 +456,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  restaurantReviews(limit: Int, offset: Int, restaurantId: String!): [Rating!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -487,8 +500,16 @@ type Rating {
   comment: String
   createdAt: DateTime!
   id: ID!
+  response: RatingResponse
   stars: Int!
   tags: [String!]!
+}
+
+type RatingResponse {
+  body: String!
+  createdAt: DateTime!
+  id: ID!
+  updatedAt: DateTime!
 }
 
 type Refund {
@@ -517,9 +538,15 @@ type Restaurant {
 }
 
 type RestaurantAnalytics {
+  acceptSecondsTrend: [AnalyticsRevenueDay!]!
+  avgAcceptSeconds: Int
   avgOrderValueMinor: Int!
+  bottomItems: [AnalyticsTopItem!]!
+  cancelReasons: [AnalyticsCancelReason!]!
   ordersByDayOfWeek: [Int!]!
   ordersByHour: [Int!]!
+  repeatCustomerRate: Float!
+  revenueByDay: [AnalyticsRevenueDay!]!
   topItems: [AnalyticsTopItem!]!
   totalOrders: Int!
   totalRevenueMinor: Int!
