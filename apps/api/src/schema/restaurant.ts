@@ -4,6 +4,7 @@ import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
+import { publishOrderChanged } from "../pubsub.js";
 import { accountBalance } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { builder } from "./builder.js";
@@ -440,6 +441,13 @@ builder.mutationFields((t) => ({
       await prisma.deliveryEvent.create({
         data: { taskId: task.id, type: "offered", actorUserId: ctx.userId },
       });
+      // Push to the rider's job feed so the full-screen offer alert (#47) surfaces
+      // immediately, instead of waiting for the 30s poll fallback. The order itself
+      // stays ready_for_pickup — only the rider's queue changed.
+      publishOrderChanged(
+        { orderId: order.id, branchId: order.branchId, status: order.status },
+        args.riderId,
+      );
       return prisma.deliveryTask.findUniqueOrThrow({ ...query, where: { id: task.id } });
     },
   }),

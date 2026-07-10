@@ -151,6 +151,10 @@ export default function RiderHomePage() {
     if (res.error) {
       // e.g. "Offer is no longer available" when re-offered/taken concurrently.
       setOfferError(res.error.graphQLErrors[0]?.message ?? "Could not accept this job.");
+    } else {
+      // The accept promoted this task offered→assigned. Mark it acknowledged so the
+      // refetch doesn't immediately re-surface it as a "fresh assignment" alert.
+      acknowledge(taskId);
     }
     refetch({ requestPolicy: "network-only" });
   }

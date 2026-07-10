@@ -78,6 +78,11 @@ export function AssignmentAlert({
   const [remaining, setRemaining] = useState(timeoutSeconds);
   // Fire the chime once per distinct job (guard against re-render loops).
   const alerted = useRef<string | null>(null);
+  // Latest `busy` for the countdown tick to read without resetting the deadline.
+  const busyRef = useRef(busy);
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     if (alerted.current === job.id) return;
@@ -97,7 +102,10 @@ export function AssignmentAlert({
       setRemaining(left);
       if (left <= 0) {
         clearInterval(t);
-        onDecline();
+        // If a response (accept/decline) is already in flight, don't fire the
+        // auto-decline — it would race the in-flight acceptTask and could decline a
+        // job the rider actually tapped Accept on.
+        if (!busyRef.current) onDecline();
       }
     };
     const t = setInterval(tick, 1_000);

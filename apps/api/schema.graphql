@@ -380,7 +380,7 @@ type Query {
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
-  myCashSummary: RiderCashSummary!
+  myCashSummary: RiderCashSummary
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
