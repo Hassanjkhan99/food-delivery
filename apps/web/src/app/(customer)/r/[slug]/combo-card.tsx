@@ -19,7 +19,7 @@ export type ComboForCard = {
   originalPriceMinor: number;
   isAvailable: boolean;
   imageUrl?: string | null;
-  items: { id: string; qty: number; menuItem: { id: string; name: string } }[];
+  items: { id: string; qty: number; menuItem: { id: string; name: string; isAvailable: boolean } }[];
 };
 
 /** Whole-number % off for a combo vs its a-la-carte total, or null if no saving. */

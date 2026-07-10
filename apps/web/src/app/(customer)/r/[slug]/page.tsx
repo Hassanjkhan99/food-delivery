@@ -101,6 +101,7 @@ const BranchQuery = graphql(`
             menuItem {
               id
               name
+              isAvailable
             }
           }
         }
@@ -186,7 +187,13 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
   // above Popular. Combos come from the active menu; discounted items are scanned out of
   // the real categories (deduped, available only). Guarded so a missing menu can't crash.
   const combos = useMemo<ComboForCard[]>(
-    () => (branch?.activeMenu?.combos ?? []).filter((c) => c.isAvailable) as ComboForCard[],
+    () =>
+      (branch?.activeMenu?.combos ?? []).filter(
+        // Hide a combo if it's unavailable OR any of its component items is unavailable —
+        // quoteCart rejects such combos server-side, so showing them as addable would only
+        // surface the failure at checkout.
+        (c) => c.isAvailable && c.items.every((ci) => ci.menuItem.isAvailable),
+      ) as ComboForCard[],
     [branch],
   );
   const discountedItems = useMemo<ItemForCard[]>(() => {
@@ -485,7 +492,18 @@ export default function RestaurantPage({ params }: { params: Promise<{ slug: str
       )}
 
       {conflict && (
-        <Dialog open onOpenChange={(open) => !open && setConflict(null)}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            // Dismissing via the close/escape/overlay path must also drop any stashed
+            // combo, else a later item-conflict's "Clear cart & add" would re-add the
+            // stale combo instead of the item named in the dialog.
+            if (!open) {
+              pendingCombo.current = null;
+              setConflict(null);
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
               <DialogTitle>Start a new cart?</DialogTitle>

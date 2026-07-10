@@ -653,8 +653,13 @@ builder.mutationFields((t) => ({
       if (item.category.menu.status !== "draft")
         throw new GraphQLError("Only draft items can be deleted");
       await assertBranchMember(ctx, item.category.menu.branchId);
-      await prisma.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
-      await prisma.menuItem.delete({ where: { id: args.itemId } });
+      await prisma.$transaction(async (tx) => {
+        // Remove the item's join rows first, including any combo (#53) it belongs to —
+        // ComboItem.menuItem is a required FK, so Postgres rejects the delete otherwise.
+        await tx.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
+        await tx.comboItem.deleteMany({ where: { menuItemId: args.itemId } });
+        await tx.menuItem.delete({ where: { id: args.itemId } });
+      });
       return true;
     },
   }),
@@ -938,13 +943,16 @@ builder.mutationFields((t) => ({
       });
       if (!item || item.category.menuId !== combo.menuId)
         throw new GraphQLError("Item not in this draft menu");
-      const qty = Math.max(1, args.qty ?? 1);
       const existing = await prisma.comboItem.findFirst({
         where: { comboId: args.comboId, menuItemId: args.menuItemId },
       });
       if (existing) {
-        await prisma.comboItem.update({ where: { id: existing.id }, data: { qty } });
+        // An explicit qty sets the row; an omitted qty (the picker's re-select) bumps by
+        // one so a deal can hold two of the same item without a dedicated qty control.
+        const nextQty = args.qty != null ? Math.max(1, args.qty) : existing.qty + 1;
+        await prisma.comboItem.update({ where: { id: existing.id }, data: { qty: nextQty } });
       } else {
+        const qty = Math.max(1, args.qty ?? 1);
         const sortOrder = await prisma.comboItem.count({ where: { comboId: args.comboId } });
         await prisma.comboItem.create({
           data: { comboId: args.comboId, menuItemId: args.menuItemId, qty, sortOrder },

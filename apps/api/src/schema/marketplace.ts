@@ -203,7 +203,10 @@ builder.prismaObject("Branch", {
         });
         const tally = new Map<string, number>();
         for (const row of rows) {
-          const snap = row.menuSnapshotJson as { name?: string } | null;
+          const snap = row.menuSnapshotJson as { name?: string; kind?: string } | null;
+          // Popular resolves names back to MenuItem rows, so only tally item lines —
+          // combo (#53) snapshots share a top-level name that isn't a menu item.
+          if (snap?.kind === "combo") continue;
           const name = snap?.name;
           if (name) tally.set(name, (tally.get(name) ?? 0) + row.qty);
         }
