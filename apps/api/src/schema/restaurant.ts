@@ -376,6 +376,13 @@ builder.mutationFields((t) => ({
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
       }
+      // Cash-variance auto-disable (#25): a rider flagged for repeated short remittance
+      // can't be handed COD orders until an admin clears them.
+      if (order.paymentMode === "cod" && rider.codDisabled) {
+        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+          extensions: { code: "rider_cod_disabled" },
+        });
+      }
       await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
         update: { riderId: args.riderId, status: "assigned", assignedAt: new Date() },
@@ -424,8 +431,14 @@ builder.mutationFields((t) => ({
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
       }
+      // Fraud control (#25): a rider whose COD was auto-disabled can't take cash orders.
+      if (order.paymentMode === "cod" && rider.codDisabled) {
+        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+          extensions: { code: "rider_cod_disabled" },
+        });
+      }
       // Don't clobber a task that has already progressed (assigned/picked up/etc.);
-      // only a fresh (unassigned) or re-offerable (offered) task may be (re)offered.
+      // only a fresh (unassigned) or re-offerable (offered) task may be (re)offered. (#21)
       const existing = await prisma.deliveryTask.findUnique({
         where: { orderId: args.orderId },
         select: { status: true },

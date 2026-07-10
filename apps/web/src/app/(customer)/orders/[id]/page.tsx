@@ -25,6 +25,7 @@ const OrderQuery = graphql(`
       acceptDeadlineAt
       prepEtaMinutes
       placedAt
+      pickupPin
       addressSnapshotJson
       branch {
         restaurant {
@@ -113,6 +114,10 @@ const TERMINAL_UNHAPPY: Record<string, { label: string; tone: "danger" | "warnin
 
 // Statuses at which the rider is actively delivering — surface rider contact.
 const OUT_FOR_DELIVERY_STATUSES = ["picked_up", "out_for_delivery"];
+
+// Statuses at which the pickup PIN is still relevant (a rider may be at/en route to the
+// counter). Once picked up the handoff is done, so we stop showing it. (#25)
+const PICKUP_PIN_STATUSES = ["accepted", "preparing", "ready_for_pickup", "rider_assigned"];
 
 function stageIndexForStatus(status: string): number {
   const idx = STAGES.findIndex((s) => s.statuses.includes(status));
@@ -311,6 +316,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               Any charge for this order will be refunded to your original payment method.
             </p>
           )}
+        </div>
+      )}
+
+      {/* Pickup PIN — the rider must quote this at the counter to collect the order.
+          Guarded: only rendered when the API returns it (it's null for the rider's own
+          view and once the handoff window has passed). */}
+      {order.pickupPin && PICKUP_PIN_STATUSES.includes(order.status) && (
+        <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4 text-center">
+          <p className="text-sm font-medium text-kd-fg">Pickup PIN</p>
+          <p className="mt-1 font-mono text-3xl font-bold tracking-[0.4em] text-kd-primary">
+            {order.pickupPin}
+          </p>
+          <p className="mt-1 text-xs text-kd-fg-muted">
+            Your rider enters this to confirm they&apos;re collecting the right order.
+          </p>
         </div>
       )}
 

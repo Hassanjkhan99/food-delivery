@@ -1,7 +1,7 @@
 "use client";
 
 // Active job lifecycle: arrived at pickup -> picked up -> delivered (with COD capture).
-import { use, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useClient, useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
@@ -18,6 +18,8 @@ const JobQuery = graphql(`
       id
       status
       codAmountMinor
+      pickupVerifiedAt
+      pickupPinRequired
       order {
         id
         code
@@ -69,6 +71,20 @@ const IncidentMutation = graphql(`
     reportIncident(taskId: $taskId, note: $note)
   }
 `);
+const VerifyPinMutation = graphql(`
+  mutation VerifyPickupPin($taskId: String!, $pin: String!) {
+    verifyPickupPin(taskId: $taskId, pin: $pin)
+  }
+`);
+const PatchLocationMutation = graphql(`
+  mutation PatchRiderLocation($lat: Float!, $lng: Float!, $taskId: String) {
+    patchRiderLocation(lat: $lat, lng: $lng, taskId: $taskId)
+  }
+`);
+
+// Statuses during which the rider is en route — send location heartbeats so the backend
+// can flag GPS anomalies (teleport / mock-location). (#25)
+const EN_ROUTE_STATUSES = ["arrived_pickup", "picked_up"];
 
 export default function RiderJobPage({ params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = use(params);
@@ -82,7 +98,10 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
   const [, pickedUp] = useMutation(PickedUpMutation);
   const [deliveredState, delivered] = useMutation(DeliveredMutation);
   const [, incident] = useMutation(IncidentMutation);
+  const [verifyPinState, verifyPin] = useMutation(VerifyPinMutation);
+  const [, patchLocation] = useMutation(PatchLocationMutation);
   const [codInput, setCodInput] = useState("");
+  const [pinInput, setPinInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   // Proof-of-delivery photo: optional but prominent. Upload via the shared
   // presign -> PUT -> finalize flow, then thread the finalized assetId into riderDelivered.
@@ -104,6 +123,31 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
       setPodUploading(false);
     }
   }
+
+  // Location heartbeat (#25): while en route, ping the backend every 20s with the device
+  // fix so it can flag GPS anomalies. Best-effort — no geolocation permission / no support
+  // just means no heartbeat (the backend simply has fewer points to reason over).
+  const enRoute = EN_ROUTE_STATUSES.includes(
+    data?.myJobs.find((j) => j.id === taskId)?.status ?? "",
+  );
+  useEffect(() => {
+    if (!enRoute || typeof navigator === "undefined" || !navigator.geolocation) return;
+    const ping = () =>
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          void patchLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            taskId,
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 10_000, timeout: 10_000 },
+      );
+    ping();
+    const t = setInterval(ping, 20_000);
+    return () => clearInterval(t);
+  }, [enRoute, taskId, patchLocation]);
 
   const job = data?.myJobs.find((j) => j.id === taskId);
   if (!job) return fetching ? <Skeleton className="h-64 rounded-2xl" /> : <p>Job not found.</p>;
@@ -167,11 +211,62 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
           Arrived at pickup
         </Button>
       )}
+
+      {/* Pickup PIN gate: at the counter the rider asks the restaurant for the order's
+          PIN and enters it here. Verifying unlocks "Picked up". If the API stops sending
+          a PIN (legacy order) the task arrives already verified and this card is skipped. */}
+      {["assigned", "arrived_pickup"].includes(job.status) &&
+        job.pickupPinRequired &&
+        !job.pickupVerifiedAt && (
+        <div className="space-y-3 rounded-2xl border border-kd-border bg-kd-surface p-4">
+          <div>
+            <label className="text-sm font-medium">Pickup PIN</label>
+            <p className="mt-1 text-kd-caption text-kd-fg-muted">
+              Ask the restaurant for the 4-digit PIN on this order and enter it to confirm
+              you&apos;re collecting the right one.
+            </p>
+          </div>
+          <Input
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+            placeholder="••••"
+            className="text-center text-lg tracking-[0.5em]"
+          />
+          <Button
+            className="w-full"
+            disabled={verifyPinState.fetching || pinInput.length === 0}
+            onClick={async () => {
+              setError(null);
+              const r = await verifyPin({ taskId, pin: pinInput });
+              if (r.error) {
+                setError(r.error.graphQLErrors[0]?.message ?? "Incorrect PIN");
+                return;
+              }
+              setPinInput("");
+              refresh();
+            }}
+          >
+            Verify PIN
+          </Button>
+        </div>
+      )}
+
+      {["assigned", "arrived_pickup"].includes(job.status) &&
+        job.pickupPinRequired &&
+        job.pickupVerifiedAt && (
+        <p className="rounded-lg bg-kd-success-soft p-2 text-center text-sm font-medium text-kd-success">
+          Pickup PIN verified
+        </p>
+      )}
+
       {["assigned", "arrived_pickup"].includes(job.status) && (
         <Button
           className="w-full"
           size="lg"
           variant={job.status === "assigned" ? "outline" : "default"}
+          disabled={job.pickupPinRequired && !job.pickupVerifiedAt}
           onClick={async () => {
             const r = await pickedUp({ taskId });
             if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Failed");

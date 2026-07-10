@@ -161,6 +161,8 @@ type DeliveryTask {
   id: ID!
   offeredAt: DateTime
   order: Order!
+  pickupPinRequired: Boolean!
+  pickupVerifiedAt: DateTime
   podMedia: MediaAsset
   status: String!
 }
@@ -286,6 +288,7 @@ type Mutation {
   markReady(id: String!): Order!
   offerTask(orderId: String!, riderId: String!): DeliveryTask!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
+  patchRiderLocation(lat: Float!, lng: Float!, taskId: String): Boolean!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
   postSharedDispatchSplit(orderId: String!): String
   presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
@@ -327,6 +330,7 @@ type Mutation {
   upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
   upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
+  verifyPickupPin(pin: String!, taskId: String!): Boolean!
 }
 
 type Order {
@@ -344,6 +348,7 @@ type Order {
   id: ID!
   items: [OrderItem!]!
   paymentMode: String!
+  pickupPin: String
   placedAt: DateTime!
   platformFeeMinor: Int!
   prepEtaMinutes: Int

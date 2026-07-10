@@ -25,6 +25,7 @@ const BoardQuery = graphql(`
       prepEtaMinutes
       placedAt
       contactPhone
+      pickupPin
       items {
         id
         qty
@@ -119,8 +120,20 @@ type BoardOrder = {
   cutleryRequested: boolean;
   acceptDeadlineAt: unknown;
   prepEtaMinutes?: number | null;
+  pickupPin?: string | null;
   items: Array<{ id: string; qty: number; menuSnapshotJson: unknown }>;
 };
+
+// Handoff PIN shown to staff so they can read it out to the rider at pickup. The rider
+// enters it in their app to confirm they're collecting the right order (#25).
+function PickupPin({ pin }: { pin: string }) {
+  return (
+    <p className="mt-2 rounded-lg bg-kd-surface-muted p-2 text-center text-xs text-kd-fg-muted">
+      Pickup PIN{" "}
+      <span className="font-mono text-sm font-bold tracking-widest text-kd-fg">{pin}</span>
+    </p>
+  );
+}
 
 function OrderCard({ order, children }: { order: BoardOrder; children?: React.ReactNode }) {
   return (
@@ -326,6 +339,7 @@ export default function OrdersBoardPage() {
                     ))}
                   </select>
                 </div>
+                {o.pickupPin && <PickupPin pin={o.pickupPin} />}
               </OrderCard>
             ))}
           </div>
@@ -340,6 +354,7 @@ export default function OrdersBoardPage() {
             {byStatus(["rider_assigned", "picked_up", "out_for_delivery"]).map((o) => (
               <OrderCard key={o.id} order={o}>
                 <p className="mt-1 text-xs text-kd-fg-muted">{o.status.replace(/_/g, " ")}</p>
+                {o.status === "rider_assigned" && o.pickupPin && <PickupPin pin={o.pickupPin} />}
               </OrderCard>
             ))}
           </div>

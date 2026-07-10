@@ -17,6 +17,7 @@ import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
 import { mockProvider } from "./payments/mockProvider.js";
+import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
 export const SYSTEM_ACTOR: Actor = { userId: null, role: "system" };
@@ -40,6 +41,10 @@ export async function placeOrder(
     if (existing.customerId !== customerId) throw new GraphQLError("Idempotency key conflict");
     return existing;
   }
+
+  // Velocity limit (#25): a replay of the same idempotency key is handled above, so this
+  // only counts distinct orders — genuine scripted spam / cost-abuse, not double-taps.
+  await assertOrderVelocity(customerId);
 
   const quote = await quoteCart(input);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
@@ -83,6 +88,7 @@ export async function placeOrder(
           branchId: quote.branchId,
           status: "pending_acceptance",
           idempotencyKey,
+          pickupPin: generatePickupPin(),
           addressSnapshotJson: {
             label: input.addressLabel,
             text: input.addressText,
