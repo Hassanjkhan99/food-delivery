@@ -1423,7 +1423,6 @@ model Waitlist {
   @@map("waitlist")
 }
 
-<<<<<<< HEAD
 // ───────────────────────────── vouchers / promo codes (#52) ─────────────────────────────
 
 // A redeemable promo code. Validation (window, min-order, per-user + total-budget caps,
