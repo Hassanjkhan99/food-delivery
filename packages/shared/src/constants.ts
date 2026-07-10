@@ -69,7 +69,6 @@ export type ReviewTagValue = (typeof REVIEW_TAGS)[number]["value"];
 export const reviewTagLabel = (value: string): string =>
   REVIEW_TAGS.find((t) => t.value === value)?.label ?? value;
 
-<<<<<<< HEAD
 /**
  * Support playbooks from the kickoff research (issue #14). Each ticket category
  * has a first-owner, a first-response target, and a resolution target — both in
