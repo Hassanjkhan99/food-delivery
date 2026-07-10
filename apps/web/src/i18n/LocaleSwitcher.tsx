@@ -24,7 +24,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
       }
     >
       <Languages className="h-5 w-5" aria-hidden />
-      <span className="text-sm font-medium">{LOCALE_LABELS[locale]}</span>
+      <span className="hidden text-sm font-medium sm:inline">{LOCALE_LABELS[locale]}</span>
     </button>
   );
 }

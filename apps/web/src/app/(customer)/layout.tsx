@@ -34,7 +34,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <Link href="/" className="text-lg font-bold tracking-tight text-kd-fg">
             🍜 Khaana<span className="text-kd-primary">Do</span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-3 text-sm sm:gap-4">
             <LocaleSwitcher />
             <Link
               href="/orders"

@@ -14,6 +14,7 @@ export function parseHex(hex: string): [number, number, number] | null {
     const r = parseInt(m[0]! + m[0]!, 16);
     const g = parseInt(m[1]! + m[1]!, 16);
     const b = parseInt(m[2]! + m[2]!, 16);
+    if ([r, g, b].some(Number.isNaN)) return null;
     return [r, g, b];
   }
   if (m.length === 6) {
