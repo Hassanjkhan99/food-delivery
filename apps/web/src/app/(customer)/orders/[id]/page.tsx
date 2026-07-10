@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { ReorderButton } from "@/components/ReorderButton";
+import type { OrderItemSnapshot } from "@/lib/cart";
 
 const OrderQuery = graphql(`
   query OrderDetail($id: String!) {
@@ -27,8 +29,10 @@ const OrderQuery = graphql(`
       placedAt
       addressSnapshotJson
       branch {
+        id
         restaurant {
           name
+          slug
         }
       }
       items {
@@ -387,6 +391,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>Total ({order.paymentMode === "cod" ? "cash on delivery" : "paid by card"})</span>
           <span>{formatRs(order.grandTotalMinor)}</span>
         </div>
+      </div>
+
+      {/* Reorder — rebuild the cart from this order's items. Availability and
+          pricing are re-validated at checkout via quoteCart. */}
+      <div className="mt-4">
+        <ReorderButton
+          size="default"
+          variant="outline"
+          className="w-full"
+          source={{
+            branch: {
+              id: order.branch.id,
+              slug: order.branch.restaurant.slug,
+              name: order.branch.restaurant.name,
+            },
+            items: order.items.map((i) => ({
+              qty: i.qty,
+              notes: i.notes,
+              menuSnapshotJson: i.menuSnapshotJson as OrderItemSnapshot["menuSnapshotJson"],
+            })),
+          }}
+        >
+          Reorder these items
+        </ReorderButton>
       </div>
 
       {address?.text && (
