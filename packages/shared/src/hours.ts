@@ -1,0 +1,81 @@
+/**
+ * Branch opening-hours evaluation (issue #36 closed-state overlay). The seed stores
+ * hours as `{ open: "HH:MM", close: "HH:MM", days: number[] }` where `days` are
+ * JS day-of-week numbers (0 = Sunday … 6 = Saturday).
+ *
+ * All comparisons are done in Pakistan Standard Time (UTC+5, no DST) so the result
+ * is independent of the server's timezone. This is the single source of truth for
+ * "is this branch open right now" — the client renders the label the server returns.
+ */
+export type BranchHours =
+  { open?: string | null; close?: string | null; days?: number[] | null } | null | undefined;
+
+const PKT_OFFSET_MINUTES = 5 * 60;
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+export type OpenState = { isOpen: boolean; opensAtLabel: string | null };
+
+/**
+ * @param hours branch `hoursJson`
+ * @param nowMs current time in epoch ms (pass `Date.now()`)
+ */
+export function branchOpenState(hours: BranchHours, nowMs: number): OpenState {
+  // No hours recorded → treat as always open (don't hide/dim on missing data).
+  if (!hours || !hours.open || !hours.close) return { isOpen: true, opensAtLabel: null };
+  const openM = toMinutes(hours.open);
+  const closeM = toMinutes(hours.close);
+  if (openM == null || closeM == null) return { isOpen: true, opensAtLabel: null };
+
+  const days = hours.days && hours.days.length ? hours.days : ALL_DAYS;
+
+  // Shift into PKT wall-clock, then read UTC getters so no local TZ leaks in.
+  const pkt = new Date(nowMs + PKT_OFFSET_MINUTES * 60_000);
+  const day = pkt.getUTCDay();
+  const mins = pkt.getUTCHours() * 60 + pkt.getUTCMinutes();
+
+  const spansMidnight = closeM <= openM;
+  let isOpen = false;
+  if (days.includes(day)) {
+    // For an overnight window the current day owns ONLY the evening segment
+    // (>= openM). The early-morning segment (< closeM) belongs to the PREVIOUS
+    // day's window and is handled by the spill-over check below — otherwise a
+    // window like {open:22:00, close:02:00, days:[Tue]} would wrongly report open
+    // at 01:00 Tue, before Tuesday's 22:00 opening.
+    isOpen = spansMidnight ? mins >= openM : mins >= openM && mins < closeM;
+  }
+  // Early-morning spill-over: the previous day's overnight window is still running.
+  if (!isOpen && spansMidnight && days.includes((day + 6) % 7) && mins < closeM) {
+    isOpen = true;
+  }
+
+  if (isOpen) return { isOpen, opensAtLabel: null };
+
+  // Closed → find the next day the branch actually opens so the label reads e.g.
+  // "Mon 09:00" instead of assuming today. If it opens later TODAY (closed only because
+  // it's before opening time), show just the time. Otherwise prefix the weekday. — #36
+  // review round 2.
+  const opensToday = days.includes(day) && mins < openM;
+  if (opensToday) return { isOpen, opensAtLabel: hours.open };
+
+  // Scan forward up to 7 days for the next opening day.
+  for (let ahead = 1; ahead <= 7; ahead++) {
+    const d = (day + ahead) % 7;
+    if (days.includes(d)) {
+      const label = ahead === 1 ? `tomorrow ${hours.open}` : `${DAY_NAMES[d]} ${hours.open}`;
+      return { isOpen, opensAtLabel: label };
+    }
+  }
+
+  // Shouldn't happen (days is non-empty), but fall back to the bare time.
+  return { isOpen, opensAtLabel: hours.open };
+}

@@ -5,7 +5,7 @@
 // when there's none. Consumers never branch on source — they pass `photo` and a
 // name. Sizing is caller-controlled via className (the box owns the aspect ratio,
 // so there is no layout shift while the image loads).
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { fallbackGradient, initials } from "./fallback";
@@ -22,6 +22,7 @@ export function RestaurantImage({
   tint,
   className,
   sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
+  overlay,
 }: {
   photo?: BranchPhoto;
   name: string;
@@ -29,6 +30,13 @@ export function RestaurantImage({
   tint?: string | null;
   className?: string;
   sizes?: string;
+  /**
+   * Optional overlay (e.g. a closed/paused scrim). Rendered inside this container
+   * BEFORE the Google attribution so the ToS-required credit stays visible on top of
+   * it — see #36 review. Callers must not paint their own scrim as a sibling of this
+   * component, or it would cover the attribution.
+   */
+  overlay?: ReactNode;
 }) {
   const [errored, setErrored] = useState(false);
   const show = photo && !errored;
@@ -39,29 +47,31 @@ export function RestaurantImage({
       style={show ? undefined : { background: fallbackGradient(name, tint) }}
     >
       {show ? (
-        <>
-          <Image
-            src={photo.url}
-            alt={name}
-            fill
-            sizes={sizes}
-            className="object-cover"
-            // Google photos must not be cached by Next's optimizer (ToS): serve as-is.
-            unoptimized={photo.source === "google"}
-            onError={() => setErrored(true)}
-          />
-          {photo.source === "google" && photo.attributionHtml && (
-            <span
-              className="absolute right-1 bottom-1 max-w-[75%] truncate rounded bg-black/55 px-1.5 py-0.5 text-[10px] leading-tight text-white/90 [&_a]:underline"
-              // Displaying Google's attribution markup is required by the Places ToS.
-              dangerouslySetInnerHTML={{ __html: photo.attributionHtml }}
-            />
-          )}
-        </>
+        <Image
+          src={photo.url}
+          alt={name}
+          fill
+          sizes={sizes}
+          className="object-cover"
+          // Google photos must not be cached by Next's optimizer (ToS): serve as-is.
+          unoptimized={photo.source === "google"}
+          onError={() => setErrored(true)}
+        />
       ) : (
         <span className="absolute inset-0 flex select-none items-center justify-center text-3xl font-bold text-white/90 drop-shadow-sm">
           {initials(name)}
         </span>
+      )}
+
+      {/* Scrim first, attribution last: the credit must render above any overlay. */}
+      {overlay}
+
+      {show && photo.source === "google" && photo.attributionHtml && (
+        <span
+          className="absolute right-1 bottom-1 z-10 max-w-[75%] truncate rounded bg-black/55 px-1.5 py-0.5 text-[10px] leading-tight text-white/90 [&_a]:underline"
+          // Displaying Google's attribution markup is required by the Places ToS.
+          dangerouslySetInnerHTML={{ __html: photo.attributionHtml }}
+        />
       )}
     </div>
   );

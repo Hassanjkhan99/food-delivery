@@ -6,6 +6,9 @@ import { resolve } from "node:path";
 loadEnv({ path: resolve(__dirname, "../../.env"), quiet: true });
 
 const nextConfig: NextConfig = {
+  // Allow an isolated build/output dir via env, so a parallel preview server can build
+  // without colliding with a running `next dev` that holds the default ".next". Default ".next".
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Internal workspace packages ship TS source; Next transpiles them.
   transpilePackages: ["@fd/shared"],
   images: {

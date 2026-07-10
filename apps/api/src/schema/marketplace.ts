@@ -1,6 +1,6 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
-import { haversineMeters } from "@fd/shared";
+import { branchOpenState, haversineMeters } from "@fd/shared";
 import { builder } from "./builder.js";
 
 builder.prismaObject("RestaurantTheme", {
@@ -39,6 +39,7 @@ builder.prismaObject("Restaurant", {
     slug: t.exposeString("slug"),
     status: t.exposeString("status"),
     tier: t.exposeString("tier"),
+    cuisineTags: t.exposeStringList("cuisineTags"),
     theme: t.relation("theme", { nullable: true }),
     branches: t.relation("branches"),
     avgRating: t.float({
@@ -86,6 +87,15 @@ builder.prismaObject("Branch", {
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     isAcceptingOrders: t.exposeBoolean("isAcceptingOrders"),
     hoursJson: t.field({ type: "JSON", nullable: true, resolve: (b) => b.hoursJson }),
+    // Server-computed open/closed state from hoursJson (evaluated in PKT). The home
+    // feed shows a "Closed — opens HH:MM" overlay instead of hiding closed branches.
+    isOpenNow: t.boolean({
+      resolve: (b) => branchOpenState(b.hoursJson as never, Date.now()).isOpen,
+    }),
+    opensAtLabel: t.string({
+      nullable: true,
+      resolve: (b) => branchOpenState(b.hoursJson as never, Date.now()).opensAtLabel,
+    }),
     restaurant: t.relation("restaurant"),
     // Image pipeline (#50): uploaded restaurant hero -> Google Places venue photo
     // -> null (client fallback). All secret/ToS-bound work stays server-side.
@@ -229,7 +239,36 @@ BranchSearchResult.implement({
   }),
 });
 
+builder.prismaObject("HomeBanner", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    title: t.exposeString("title"),
+    imageUrl: t.exposeString("imageUrl"),
+    linkHref: t.exposeString("linkHref", { nullable: true }),
+  }),
+});
+
 builder.queryFields((t) => ({
+  // Active promo banners for the home carousel, ordered by sortOrder. The active
+  // window (startsAt/endsAt) is enforced here so the client never sees expired ones.
+  homeBanners: t.prismaField({
+    type: ["HomeBanner"],
+    resolve: (query) => {
+      const now = new Date();
+      return prisma.homeBanner.findMany({
+        ...query,
+        where: {
+          isActive: true,
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+          ],
+        },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      });
+    },
+  }),
+
   browseBranches: t.field({
     type: [BranchSearchResult],
     args: {
