@@ -21,6 +21,7 @@ const MyNotificationsQuery = graphql(`
       read
       createdAt
     }
+    unreadNotificationCount
   }
 `);
 
@@ -45,7 +46,9 @@ export default function NotificationsPage() {
   const [, markRead] = useMutation(MarkReadMutation);
 
   const items = data?.myNotifications ?? [];
-  const hasUnread = items.some((n) => !n.read);
+  // Base the mark-all action on the real unread count, not just the capped inbox list:
+  // a user can have older unread rows beyond the 50 newest that this page can't show.
+  const hasUnread = (data?.unreadNotificationCount ?? 0) > 0 || items.some((n) => !n.read);
 
   return (
     <main className="mx-auto max-w-lg">
@@ -103,9 +106,12 @@ export default function NotificationsPage() {
             </div>
           );
 
-          const onOpen = () => {
+          const onOpen = async () => {
             if (!n.read) {
-              markRead({ id: n.id });
+              await markRead({ id: n.id });
+              // Refresh so the row/badge reflect the read state even when there's no
+              // link to navigate away to (promo blasts may omit linkHref).
+              refetch({ requestPolicy: "network-only" });
             }
           };
 

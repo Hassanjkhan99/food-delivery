@@ -28,13 +28,17 @@ const STATUS_COPY: Partial<Record<OrderStatus, { title: string; body: string }>>
   delivered: { title: "Delivered — enjoy!", body: "Your order has been delivered. Bon appétit!" },
   rejected: { title: "Order not accepted", body: "The restaurant couldn't accept your order." },
   auto_expired: {
+    // Card orders are captured up front and refunded on auto-expiry, so avoid claiming
+    // the customer was never charged — cover both the cash and refunded-card cases.
     title: "Order not accepted in time",
-    body: "The restaurant didn't respond in time. You haven't been charged.",
+    body: "The restaurant didn't respond in time. Any payment has been refunded.",
   },
   cancelled: { title: "Order cancelled", body: "Your order was cancelled." },
 };
 
-async function publishUnread(userId: string) {
+// Recompute and broadcast a user's unread count so the header bell badge updates live.
+// Exported so read mutations (mark one / mark all) can refresh the badge too.
+export async function publishUnread(userId: string) {
   const unreadCount = await prisma.notification.count({ where: { userId, readAt: null } });
   publishNotification({ userId, unreadCount });
 }

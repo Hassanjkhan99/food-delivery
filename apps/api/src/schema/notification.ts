@@ -3,7 +3,7 @@
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
-import { blastPromo, type PromoSegment } from "../services/notificationService.js";
+import { blastPromo, publishUnread, type PromoSegment } from "../services/notificationService.js";
 import { builder } from "./builder.js";
 
 builder.prismaObject("Notification", {
@@ -44,11 +44,20 @@ builder.queryFields((t) => ({
   }),
 }));
 
+// Promo links must be safe in-app destinations: a single leading slash, no protocol,
+// no protocol-relative "//host" and no back-slash tricks. This prevents a blast from
+// sending customers to an arbitrary external or javascript: URL when they tap a notice.
+const inAppPath = z
+  .string()
+  .trim()
+  .max(512)
+  .regex(/^\/(?!\/)[^\\]*$/, "linkHref must be a relative in-app path (e.g. /offers)");
+
 const promoBlastSchema = z.object({
   segment: z.enum(["all", "new", "lapsed"]),
   title: z.string().trim().min(1).max(120),
   body: z.string().trim().min(1).max(500),
-  linkHref: z.string().trim().max(512).optional(),
+  linkHref: inAppPath.optional(),
   restaurantId: z.string().trim().max(64).optional(),
 });
 
@@ -59,10 +68,12 @@ builder.mutationFields((t) => ({
     authScopes: { loggedIn: true },
     args: { id: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
-      await prisma.notification.updateMany({
+      const res = await prisma.notification.updateMany({
         where: { id: args.id, userId: ctx.userId!, readAt: null },
         data: { readAt: new Date() },
       });
+      // Refresh the live bell badge only if a row actually flipped to read.
+      if (res.count > 0) await publishUnread(ctx.userId!);
       return true;
     },
   }),
@@ -74,6 +85,7 @@ builder.mutationFields((t) => ({
         where: { userId: ctx.userId!, readAt: null },
         data: { readAt: new Date() },
       });
+      if (res.count > 0) await publishUnread(ctx.userId!);
       return res.count;
     },
   }),

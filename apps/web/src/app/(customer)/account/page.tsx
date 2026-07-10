@@ -40,9 +40,12 @@ const SetMarketingOptOutMutation = graphql(`
 
 export default function AccountPage() {
   const router = useRouter();
-  const [{ data }] = useQuery({ query: AccountViewerQuery, requestPolicy: "network-only" });
+  const [{ data }, refetchAccount] = useQuery({
+    query: AccountViewerQuery,
+    requestPolicy: "network-only",
+  });
   const [, logout] = useMutation(LogoutMutation);
-  const [, setMarketingOptOut] = useMutation(SetMarketingOptOutMutation);
+  const [{ fetching: optOutPending }, setMarketingOptOut] = useMutation(SetMarketingOptOutMutation);
   const viewer = data?.viewer;
   const optedOut = viewer?.user?.marketingOptOut ?? false;
 
@@ -79,7 +82,13 @@ export default function AccountPage() {
           variant={optedOut ? "outline" : "default"}
           size="sm"
           className="shrink-0"
-          onClick={() => setMarketingOptOut({ optOut: !optedOut })}
+          disabled={optOutPending}
+          onClick={async () => {
+            const res = await setMarketingOptOut({ optOut: !optedOut });
+            // Refetch unless the normalized cache already reflected the new value, so
+            // the label and the next toggle payload never derive from stale state.
+            if (!res.data?.setMarketingOptOut) refetchAccount({ requestPolicy: "network-only" });
+          }}
         >
           {optedOut ? "Opted out" : "On"}
         </Button>

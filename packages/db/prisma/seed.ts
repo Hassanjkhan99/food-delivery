@@ -54,6 +54,7 @@ async function wipe() {
     "fee_configs",
     "branches",
     "user_roles",
+    "notifications",
     "restaurants",
     "tax_profiles",
     "users",
