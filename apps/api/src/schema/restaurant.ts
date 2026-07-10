@@ -415,9 +415,23 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Only orders still awaiting a rider can be offered. Guards against offering a
+      // pending/cancelled/delivered order and surfacing a bogus job to the rider.
+      if (order.status !== "ready_for_pickup") {
+        throw new GraphQLError("Order is not ready for pickup");
+      }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      // Don't clobber a task that has already progressed (assigned/picked up/etc.);
+      // only a fresh (unassigned) or re-offerable (offered) task may be (re)offered.
+      const existing = await prisma.deliveryTask.findUnique({
+        where: { orderId: args.orderId },
+        select: { status: true },
+      });
+      if (existing && existing.status !== "unassigned" && existing.status !== "offered") {
+        throw new GraphQLError("This delivery is already in progress");
       }
       const task = await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
@@ -758,20 +772,30 @@ builder.mutationFields((t) => ({
       await assertBranchMember(ctx, group.menu.branchId);
       if (!args.name.trim()) throw new GraphQLError("Option name is required");
       if (args.priceDeltaMinor < 0) throw new GraphQLError("Price delta cannot be negative");
-      const data = {
-        name: args.name,
-        priceDeltaMinor: args.priceDeltaMinor,
-        isAvailable: args.isAvailable ?? true,
-      };
       if (args.id) {
         const existing = await prisma.modifierOption.findUnique({ where: { id: args.id } });
         if (!existing || existing.groupId !== args.groupId)
           throw new GraphQLError("Option not in group");
-        return prisma.modifierOption.update({ where: { id: args.id }, data });
+        // On edit, only touch isAvailable when the caller explicitly sends it — omitting
+        // it must NOT silently restock an option the restaurant had disabled.
+        return prisma.modifierOption.update({
+          where: { id: args.id },
+          data: {
+            name: args.name,
+            priceDeltaMinor: args.priceDeltaMinor,
+            ...(args.isAvailable != null ? { isAvailable: args.isAvailable } : {}),
+          },
+        });
       }
       const sortOrder = await prisma.modifierOption.count({ where: { groupId: args.groupId } });
       return prisma.modifierOption.create({
-        data: { groupId: args.groupId, ...data, sortOrder },
+        data: {
+          groupId: args.groupId,
+          name: args.name,
+          priceDeltaMinor: args.priceDeltaMinor,
+          isAvailable: args.isAvailable ?? true,
+          sortOrder,
+        },
       });
     },
   }),

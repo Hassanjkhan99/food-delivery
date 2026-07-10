@@ -76,9 +76,17 @@ export default function CheckoutPage() {
   const [saveNewAddress, setSaveNewAddress] = useState(false);
   const [, runSaveAddress] = useMutation(SaveAddressMutation);
 
+  // When a saved address is picked, its own coordinates must drive the quote and
+  // the order snapshot — not the current browsing location, which may point at a
+  // different place. Null while entering a new address (falls back to `loc`).
+  const [savedCoords, setSavedCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const deliveryLat = savedCoords?.lat ?? loc.lat;
+  const deliveryLng = savedCoords?.lng ?? loc.lng;
+
   function selectSavedAddress(addr: SavedAddress) {
     setSelectedAddressId(addr.id);
     setAddressText(addr.text);
+    setSavedCoords({ lat: addr.lat, lng: addr.lng });
     if (addr.phone) setContactPhone(addr.phone);
     if (addr.notes) setNote(addr.notes);
     setSaveNewAddress(false);
@@ -88,6 +96,7 @@ export default function CheckoutPage() {
     setSelectedAddressId(null);
     setAddressText("");
     setNote("");
+    setSavedCoords(null);
   }
 
   const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
@@ -116,10 +125,10 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
-      input: { branchId, lines: cartLines, deliveryLat: loc.lat, deliveryLng: loc.lng, tipAmount },
+      input: { branchId, lines: cartLines, deliveryLat, deliveryLng, tipAmount },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, loc.lat, loc.lng, tipAmount]);
+  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -146,8 +155,8 @@ export default function CheckoutPage() {
         input: {
           label: addressText.slice(0, 40) || "Address",
           text: addressText,
-          lat: loc.lat,
-          lng: loc.lng,
+          lat: deliveryLat,
+          lng: deliveryLng,
           phone: contactPhone.trim() || undefined,
           notes: note.trim() || undefined,
         },
@@ -159,8 +168,8 @@ export default function CheckoutPage() {
       input: {
         branchId: branchId!,
         lines: cartLines,
-        deliveryLat: loc.lat,
-        deliveryLng: loc.lng,
+        deliveryLat,
+        deliveryLng,
         addressText,
         contactPhone,
         customerNote: note.trim() || undefined,

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const BranchHoursQuery = graphql(`
-  query BranchHours($branchId: String!) {
+  query BranchHours {
     myRestaurants {
       id
       branches {
@@ -71,7 +71,6 @@ const DEFAULT_ROW: DayRow = { open: "09:00", close: "22:00", closed: true };
 export function HoursEditor({ branchId }: { branchId: string }) {
   const [{ data, fetching }, refetch] = useQuery({
     query: BranchHoursQuery,
-    variables: { branchId },
     requestPolicy: "cache-and-network",
   });
   const [saveState, saveHours] = useMutation(SetBranchHoursMutation);

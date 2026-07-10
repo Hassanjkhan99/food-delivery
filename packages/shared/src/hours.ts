@@ -100,10 +100,17 @@ export function branchHoursOpenState(rows: BranchHoursRow[], nowMs: number): Ope
     }
   }
 
-  // Closed now → label the next opening time (today's remaining windows, else the whole week).
-  const todays = rows
-    .filter((r) => r.dayOfWeek === day && r.openMinute > mins)
-    .sort((a, b) => a.openMinute - b.openMinute);
-  const next = todays[0] ?? [...rows].sort((a, b) => a.openMinute - b.openMinute)[0];
+  // Closed now → label the next opening time. Pick the window with the smallest
+  // forward weekday distance from today, breaking ties by earliest openMinute. A
+  // window later TODAY has distance 0; any window whose day is today but already
+  // passed rolls a full week forward (distance 7), so a Saturday-night opening is
+  // chosen over a Monday-morning one on Friday instead of sorting on openMinute alone.
+  const forwardDistance = (r: BranchHoursRow): number => {
+    if (r.dayOfWeek === day) return r.openMinute > mins ? 0 : 7;
+    return (r.dayOfWeek - day + 7) % 7;
+  };
+  const next = [...rows].sort(
+    (a, b) => forwardDistance(a) - forwardDistance(b) || a.openMinute - b.openMinute,
+  )[0];
   return { isOpen: false, opensAtLabel: next ? minutesToLabel(next.openMinute) : null };
 }
