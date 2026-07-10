@@ -11,10 +11,13 @@ import { GraphQLError } from "graphql";
 import { validateVoucher, VoucherError, type AppliedVoucher } from "./voucherService.js";
 
 export type ResolvedLine = {
-  menuItemId: string;
+  // Present for a normal menu-item line; null for a combo line (#53).
+  menuItemId: string | null;
+  // Present for a combo line; null for a menu-item line.
+  comboId: string | null;
   name: string;
   qty: number;
-  unitPriceMinor: number; // base + selected modifier deltas
+  unitPriceMinor: number; // base + selected modifier deltas, or the combo bundle price
   lineTotalMinor: number;
   notes?: string;
   // Customer's "if unavailable" preference (#39), snapshotted onto the order item.
@@ -24,6 +27,14 @@ export type ResolvedLine = {
     optionId: string;
     optionName: string;
     priceDeltaMinor: number;
+  }>;
+  // Frozen component list for a combo line (empty for menu-item lines). Mirrors the
+  // menuSnapshotJson pattern so the order never depends on the live combo.
+  comboComponents: Array<{
+    menuItemId: string;
+    name: string;
+    qty: number;
+    unitPriceMinor: number;
   }>;
 };
 
@@ -82,9 +93,10 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   const inRadius = distanceM <= branch.deliveryRadiusM;
 
   // Resolve items against the ACTIVE menu only (stale carts re-priced or rejected).
+  const itemIds = input.lines.map((l) => l.menuItemId).filter((id): id is string => Boolean(id));
   const items = await prisma.menuItem.findMany({
     where: {
-      id: { in: input.lines.map((l) => l.menuItemId) },
+      id: { in: itemIds },
       category: { menuId: branch.activeMenuId },
     },
     include: {
@@ -93,8 +105,48 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   });
   const byId = new Map(items.map((i) => [i.id, i]));
 
+  // Combos referenced in the cart (#53), resolved against the active menu with their
+  // component items so availability can be validated at quote time.
+  const comboIds = input.lines.map((l) => l.comboId).filter((id): id is string => Boolean(id));
+  const combos = comboIds.length
+    ? await prisma.combo.findMany({
+        where: { id: { in: comboIds }, menuId: branch.activeMenuId },
+        include: { items: { include: { menuItem: true }, orderBy: { sortOrder: "asc" } } },
+      })
+    : [];
+  const comboById = new Map(combos.map((c) => [c.id, c]));
+
   const lines: ResolvedLine[] = input.lines.map((line) => {
-    const item = byId.get(line.menuItemId);
+    // ── combo line (#53): one bundled, server-priced line with a frozen component list ──
+    if (line.comboId) {
+      const combo = comboById.get(line.comboId);
+      if (!combo) throw new GraphQLError(`Deal no longer available`);
+      if (!combo.isAvailable) throw new GraphQLError(`'${combo.name}' is currently unavailable`);
+      if (combo.items.length === 0) throw new GraphQLError(`'${combo.name}' has no items`);
+      const unavailable = combo.items.find((ci) => !ci.menuItem.isAvailable);
+      if (unavailable) {
+        throw new GraphQLError(`'${combo.name}' includes '${unavailable.menuItem.name}', which is unavailable`);
+      }
+      const comboComponents = combo.items.map((ci) => ({
+        menuItemId: ci.menuItemId,
+        name: ci.menuItem.name,
+        qty: ci.qty,
+        unitPriceMinor: ci.menuItem.priceMinor,
+      }));
+      return {
+        menuItemId: null,
+        comboId: combo.id,
+        name: combo.name,
+        qty: line.qty,
+        unitPriceMinor: combo.priceMinor,
+        lineTotalMinor: combo.priceMinor * line.qty,
+        notes: line.notes,
+        modifiers: [],
+        comboComponents,
+      };
+    }
+
+    const item = line.menuItemId ? byId.get(line.menuItemId) : undefined;
     if (!item) throw new GraphQLError(`Item no longer on the menu`);
     if (!item.isAvailable) throw new GraphQLError(`'${item.name}' is currently unavailable`);
 
@@ -126,9 +178,11 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       throw new GraphQLError(`'${item.name}': unknown modifier option selected`);
     }
 
+    // priceMinor is always the charged price; compareAtPriceMinor (#53) is display-only.
     const unit = item.priceMinor + delta;
     return {
       menuItemId: item.id,
+      comboId: null,
       name: item.name,
       qty: line.qty,
       unitPriceMinor: unit,
@@ -136,6 +190,7 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       notes: line.notes,
       unavailabilityPreference: line.unavailabilityPreference,
       modifiers,
+      comboComponents: [],
     };
   });
 

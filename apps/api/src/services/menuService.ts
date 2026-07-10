@@ -37,6 +37,7 @@ export async function cloneMenu(
     include: {
       categories: { include: { items: { include: { modGroups: true } } } },
       modGroups: { include: { options: true } },
+      combos: { include: { items: true } },
     },
   });
 
@@ -73,6 +74,8 @@ export async function cloneMenu(
       groupIdMap.set(g.id, created.id);
     }
 
+    // Map old item id -> cloned item id so combos can be repointed at the new rows.
+    const itemIdMap = new Map<string, string>();
     for (const cat of source.categories) {
       const createdCat = await tx.menuCategory.create({
         data: {
@@ -90,12 +93,14 @@ export async function cloneMenu(
             name: item.name,
             description: item.description,
             priceMinor: item.priceMinor,
+            compareAtPriceMinor: item.compareAtPriceMinor,
             isAvailable: item.isAvailable,
             imageAssetId: item.imageAssetId,
             badges: item.badges,
             sortOrder: item.sortOrder,
           },
         });
+        itemIdMap.set(item.id, createdItem.id);
         for (const join of item.modGroups) {
           const mappedGroup = groupIdMap.get(join.groupId);
           if (mappedGroup) {
@@ -103,6 +108,36 @@ export async function cloneMenu(
               data: { itemId: createdItem.id, groupId: mappedGroup, sortOrder: join.sortOrder },
             });
           }
+        }
+      }
+    }
+
+    // Combos (#53): clone the bundle + its components, repointing each component at the
+    // freshly-cloned MenuItem. A component whose item didn't clone (shouldn't happen —
+    // combos only reference items in the same menu) is dropped defensively.
+    for (const combo of source.combos) {
+      const createdCombo = await tx.combo.create({
+        data: {
+          menuId: menu.id,
+          name: combo.name,
+          description: combo.description,
+          priceMinor: combo.priceMinor,
+          isAvailable: combo.isAvailable,
+          imageAssetId: combo.imageAssetId,
+          sortOrder: combo.sortOrder,
+        },
+      });
+      for (const ci of combo.items) {
+        const mappedItem = itemIdMap.get(ci.menuItemId);
+        if (mappedItem) {
+          await tx.comboItem.create({
+            data: {
+              comboId: createdCombo.id,
+              menuItemId: mappedItem,
+              qty: ci.qty,
+              sortOrder: ci.sortOrder,
+            },
+          });
         }
       }
     }

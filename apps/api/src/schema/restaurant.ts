@@ -832,6 +832,9 @@ builder.mutationFields((t) => ({
       name: t.arg.string({ required: true }),
       description: t.arg.string({ required: false }),
       priceMinor: t.arg.int({ required: true }),
+      // Item-level offer (#53): original "was" price for a strike-through + % badge.
+      // Pass a value > priceMinor to run an offer, or null/0 to clear it.
+      compareAtPriceMinor: t.arg.int({ required: false }),
       badges: t.arg.stringList({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
@@ -841,11 +844,18 @@ builder.mutationFields((t) => ({
       if (!category || category.menuId !== draft.id)
         throw new GraphQLError("Category not in draft");
       if (args.priceMinor <= 0) throw new GraphQLError("Price must be positive");
+      const compareAt = args.compareAtPriceMinor && args.compareAtPriceMinor > 0
+        ? args.compareAtPriceMinor
+        : null;
+      if (compareAt != null && compareAt <= args.priceMinor) {
+        throw new GraphQLError("The 'was' price must be higher than the current price");
+      }
       const data = {
         categoryId: args.categoryId,
         name: args.name,
         description: args.description,
         priceMinor: args.priceMinor,
+        compareAtPriceMinor: compareAt,
         badges: args.badges ?? [],
       };
       if (args.id) {
@@ -909,8 +919,13 @@ builder.mutationFields((t) => ({
       if (item.category.menu.status !== "draft")
         throw new GraphQLError("Only draft items can be deleted");
       await assertBranchMember(ctx, item.category.menu.branchId);
-      await prisma.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
-      await prisma.menuItem.delete({ where: { id: args.itemId } });
+      await prisma.$transaction(async (tx) => {
+        // Remove the item's join rows first, including any combo (#53) it belongs to —
+        // ComboItem.menuItem is a required FK, so Postgres rejects the delete otherwise.
+        await tx.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
+        await tx.comboItem.deleteMany({ where: { menuItemId: args.itemId } });
+        await tx.menuItem.delete({ where: { id: args.itemId } });
+      });
       return true;
     },
   }),
@@ -1099,6 +1114,145 @@ builder.mutationFields((t) => ({
         where: { id: args.menuItemId },
         data: { imageAssetId: args.mediaId ?? null },
       });
+    },
+  }),
+
+  // ── combo / meal-deal CRUD (#53, operates on the draft) ───────────────────
+  // Combos are menu-scoped (Combo.menuId) and cloned on publish (cloneMenu), so every
+  // mutation only touches the branch draft. Component items must belong to the same draft
+  // menu. v1 is fixed bundles (a set item list); choose-N-from-group is deferred.
+
+  upsertCombo: t.prismaField({
+    type: "Combo",
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      id: t.arg.string({ required: false }),
+      name: t.arg.string({ required: true }),
+      description: t.arg.string({ required: false }),
+      priceMinor: t.arg.int({ required: true }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const draft = await ensureDraft(args.branchId);
+      if (!args.name.trim()) throw new GraphQLError("Deal name is required");
+      if (args.priceMinor <= 0) throw new GraphQLError("Price must be positive");
+      const data = {
+        name: args.name,
+        description: args.description,
+        priceMinor: args.priceMinor,
+      };
+      if (args.id) {
+        const existing = await prisma.combo.findUnique({ where: { id: args.id } });
+        if (!existing || existing.menuId !== draft.id)
+          throw new GraphQLError("Deal not in draft");
+        return prisma.combo.update({ where: { id: args.id }, data });
+      }
+      const sortOrder = await prisma.combo.count({ where: { menuId: draft.id } });
+      return prisma.combo.create({ data: { menuId: draft.id, ...data, sortOrder } });
+    },
+  }),
+
+  setComboAvailability: t.prismaField({
+    type: "Combo",
+    authScopes: { restaurantMember: true },
+    args: {
+      comboId: t.arg.string({ required: true }),
+      available: t.arg.boolean({ required: true }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      const combo = await prisma.combo.findUnique({
+        where: { id: args.comboId },
+        include: { menu: true },
+      });
+      if (!combo) throw new GraphQLError("Deal not found");
+      await assertBranchMember(ctx, combo.menu.branchId);
+      return prisma.combo.update({
+        where: { id: args.comboId },
+        data: { isAvailable: args.available },
+      });
+    },
+  }),
+
+  deleteCombo: t.field({
+    type: "Boolean",
+    authScopes: { restaurantMember: true },
+    args: { comboId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const combo = await prisma.combo.findUnique({
+        where: { id: args.comboId },
+        include: { menu: true },
+      });
+      if (!combo) throw new GraphQLError("Deal not found");
+      if (combo.menu.status !== "draft")
+        throw new GraphQLError("Only draft deals can be deleted");
+      await assertBranchMember(ctx, combo.menu.branchId);
+      await prisma.$transaction(async (tx) => {
+        await tx.comboItem.deleteMany({ where: { comboId: args.comboId } });
+        await tx.combo.delete({ where: { id: args.comboId } });
+      });
+      return true;
+    },
+  }),
+
+  // Add a component item to a draft combo, or bump its qty if already present.
+  addComboItem: t.prismaField({
+    type: "Combo",
+    authScopes: { restaurantMember: true },
+    args: {
+      comboId: t.arg.string({ required: true }),
+      menuItemId: t.arg.string({ required: true }),
+      qty: t.arg.int({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const combo = await prisma.combo.findUnique({
+        where: { id: args.comboId },
+        include: { menu: true },
+      });
+      if (!combo) throw new GraphQLError("Deal not found");
+      if (combo.menu.status !== "draft")
+        throw new GraphQLError("Only draft deals can be edited");
+      await assertBranchMember(ctx, combo.menu.branchId);
+      const item = await prisma.menuItem.findUnique({
+        where: { id: args.menuItemId },
+        include: { category: true },
+      });
+      if (!item || item.category.menuId !== combo.menuId)
+        throw new GraphQLError("Item not in this draft menu");
+      const existing = await prisma.comboItem.findFirst({
+        where: { comboId: args.comboId, menuItemId: args.menuItemId },
+      });
+      if (existing) {
+        // An explicit qty sets the row; an omitted qty (the picker's re-select) bumps by
+        // one so a deal can hold two of the same item without a dedicated qty control.
+        const nextQty = args.qty != null ? Math.max(1, args.qty) : existing.qty + 1;
+        await prisma.comboItem.update({ where: { id: existing.id }, data: { qty: nextQty } });
+      } else {
+        const qty = Math.max(1, args.qty ?? 1);
+        const sortOrder = await prisma.comboItem.count({ where: { comboId: args.comboId } });
+        await prisma.comboItem.create({
+          data: { comboId: args.comboId, menuItemId: args.menuItemId, qty, sortOrder },
+        });
+      }
+      return prisma.combo.findUniqueOrThrow({ ...query, where: { id: args.comboId } });
+    },
+  }),
+
+  removeComboItem: t.prismaField({
+    type: "Combo",
+    authScopes: { restaurantMember: true },
+    args: { comboItemId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const ci = await prisma.comboItem.findUnique({
+        where: { id: args.comboItemId },
+        include: { combo: { include: { menu: true } } },
+      });
+      if (!ci) throw new GraphQLError("Deal item not found");
+      if (ci.combo.menu.status !== "draft")
+        throw new GraphQLError("Only draft deals can be edited");
+      await assertBranchMember(ctx, ci.combo.menu.branchId);
+      await prisma.comboItem.delete({ where: { id: args.comboItemId } });
+      return prisma.combo.findUniqueOrThrow({ ...query, where: { id: ci.comboId } });
     },
   }),
 

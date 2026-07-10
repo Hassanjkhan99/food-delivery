@@ -223,7 +223,10 @@ export default function CheckoutPage() {
   const cartLines = useMemo(
     () =>
       lines.map((l) => ({
-        menuItemId: l.menuItemId,
+        // Combo lines (#53) carry comboId instead of menuItemId; the server prices and
+        // snapshots them as one bundled line. Exactly one id is present per line.
+        menuItemId: l.menuItemId ?? null,
+        comboId: l.comboId ?? null,
         qty: l.qty,
         modifierOptionIds: l.modifierOptionIds,
         notes: l.notes,

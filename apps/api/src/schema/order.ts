@@ -9,9 +9,12 @@ import { builder } from "./builder.js";
 
 // ── input types ─────────────────────────────────────────────────────────────
 
+// A cart line is either a menu item (menuItemId) or a combo/meal deal (comboId, #53).
+// Exactly one must be set — enforced by cartLineSchema server-side.
 const CartLineInput = builder.inputType("CartLineInput", {
   fields: (t) => ({
-    menuItemId: t.string({ required: true }),
+    menuItemId: t.string({ required: false }),
+    comboId: t.string({ required: false }),
     qty: t.int({ required: true }),
     modifierOptionIds: t.stringList({ required: false }),
     notes: t.string({ required: false }),
@@ -76,7 +79,8 @@ const UpdateAddressInput = builder.inputType("UpdateAddressInput", {
 });
 
 type RawLines = Array<{
-  menuItemId: string;
+  menuItemId?: string | null;
+  comboId?: string | null;
   qty: number;
   modifierOptionIds?: string[] | null;
   notes?: string | null;
@@ -84,7 +88,8 @@ type RawLines = Array<{
 }>;
 const normalizeLines = (lines: RawLines) =>
   lines.map((l) => ({
-    menuItemId: l.menuItemId,
+    menuItemId: l.menuItemId ?? undefined,
+    comboId: l.comboId ?? undefined,
     qty: l.qty,
     modifierOptionIds: l.modifierOptionIds ?? [],
     notes: l.notes ?? undefined,
@@ -97,7 +102,8 @@ const normalizeLines = (lines: RawLines) =>
 const QuoteLineType = builder.objectRef<QuoteResult["lines"][number]>("QuoteLine");
 QuoteLineType.implement({
   fields: (t) => ({
-    menuItemId: t.exposeString("menuItemId"),
+    menuItemId: t.exposeString("menuItemId", { nullable: true }),
+    comboId: t.exposeString("comboId", { nullable: true }),
     name: t.exposeString("name"),
     qty: t.exposeInt("qty"),
     unitPriceMinor: t.exposeInt("unitPriceMinor"),

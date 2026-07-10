@@ -464,6 +464,7 @@ model Menu {
   branch     Branch          @relation(fields: [branchId], references: [id])
   categories MenuCategory[]
   modGroups  ModifierGroup[]
+  combos     Combo[]
 
   @@unique([branchId, version])
   @@map("menus")
@@ -491,6 +492,12 @@ model MenuItem {
   name         String
   description  String?
   priceMinor   Int
+  // Optional "was" price for an item-level offer (#53). When set and strictly greater
+  // than priceMinor, the customer sees a strike-through original + a "% off" badge, and
+  // priceMinor is the charged (discounted) price. Never affects what the server charges —
+  // quoteService always prices at priceMinor — it is display metadata only. Cleared to
+  // null to end the offer.
+  compareAtPriceMinor Int?
   isAvailable  Boolean  @default(true)
   // Timed 86 (#46): when a vendor marks an item unavailable "until end of day" from the
   // order board, this records when it should come back so the UI can surface it (and a
@@ -503,9 +510,50 @@ model MenuItem {
   category   MenuCategory            @relation(fields: [categoryId], references: [id])
   imageAsset MediaAsset?             @relation("ItemImage", fields: [imageAssetId], references: [id])
   modGroups  MenuItemModifierGroup[]
+  comboItems ComboItem[]
 
   @@index([categoryId])
   @@map("menu_items")
+}
+
+// Combo / meal deal (#53): a bundle of menu items sold at a single fixed price
+// ("Burger + Fries + Drink Rs 650"). Menu-scoped like ModifierGroup, so it is cloned
+// on publish (cloneMenu) and lives only on the branch draft until published. v1 is
+// FIXED bundles only (a set list of component items, each with a quantity); the richer
+// "choose N from a group" semantics from the spec are deferred (see comboService TODO).
+// Server prices a combo at priceMinor and freezes a component snapshot into the order,
+// mirroring how MenuItem lines freeze menuSnapshotJson.
+model Combo {
+  id           String  @id @default(cuid())
+  menuId       String
+  name         String
+  description  String?
+  priceMinor   Int
+  isAvailable  Boolean @default(true)
+  imageAssetId String?
+  sortOrder    Int     @default(0)
+
+  menu       Menu        @relation(fields: [menuId], references: [id])
+  imageAsset MediaAsset? @relation("ComboImage", fields: [imageAssetId], references: [id])
+  items      ComboItem[]
+
+  @@index([menuId])
+  @@map("combos")
+}
+
+// One component of a combo: a menu item and how many of it the bundle includes.
+model ComboItem {
+  id         String @id @default(cuid())
+  comboId    String
+  menuItemId String
+  qty        Int    @default(1)
+  sortOrder  Int    @default(0)
+
+  combo    Combo    @relation(fields: [comboId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([comboId])
+  @@map("combo_items")
 }
 
 model ModifierGroup {
@@ -1078,6 +1126,7 @@ model MediaAsset {
   themeHeros      RestaurantTheme[] @relation("ThemeHero")
   categoryHeaders MenuCategory[]    @relation("CategoryHeader")
   itemImages      MenuItem[]        @relation("ItemImage")
+  comboImages     Combo[]           @relation("ComboImage")
   sourceDocs      MenuSourceDoc[]
   podTasks        DeliveryTask[]    @relation("PodMedia")
   riderDocs       RiderVerificationDoc[] @relation("RiderDocAsset")

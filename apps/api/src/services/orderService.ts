@@ -124,14 +124,26 @@ export async function placeOrder(
           paymentMode: input.paymentMode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),
           items: {
-            create: quote.lines.map((l) => ({
-              menuSnapshotJson: {
-                menuItemId: l.menuItemId,
-                name: l.name,
-                unitPriceMinor: l.unitPriceMinor,
-                modifiers: l.modifiers,
-                unavailabilityPreference: l.unavailabilityPreference,
-              },
+              // Freeze the line. For a combo (#53) we also freeze the component list so
+              // the order never depends on the live combo/menu; kind distinguishes them.
+              // Item snapshots also carry the per-line "if unavailable" preference (#39).
+              menuSnapshotJson: l.comboId
+                ? {
+                    kind: "combo",
+                    comboId: l.comboId,
+                    name: l.name,
+                    unitPriceMinor: l.unitPriceMinor,
+                    components: l.comboComponents,
+                    unavailabilityPreference: l.unavailabilityPreference,
+                  }
+                : {
+                    kind: "item",
+                    menuItemId: l.menuItemId,
+                    name: l.name,
+                    unitPriceMinor: l.unitPriceMinor,
+                    modifiers: l.modifiers,
+                    unavailabilityPreference: l.unavailabilityPreference,
+                  },
               qty: l.qty,
               unitPriceMinor: l.unitPriceMinor,
               lineTotalMinor: l.lineTotalMinor,

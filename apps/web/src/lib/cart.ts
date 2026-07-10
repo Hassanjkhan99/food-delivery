@@ -10,10 +10,12 @@ import {
 
 export type CartLine = {
   lineId: string;
-  menuItemId: string;
+  // A line is either a menu item or a combo/meal deal (#53). Exactly one id is set.
+  menuItemId?: string;
+  comboId?: string;
   name: string;
   qty: number;
-  unitPriceMinor: number; // base + modifier deltas (client estimate)
+  unitPriceMinor: number; // base + modifier deltas, or the combo bundle price (client estimate)
   modifierOptionIds: string[];
   modifierNames: string[];
   notes?: string;

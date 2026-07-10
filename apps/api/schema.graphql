@@ -44,7 +44,6 @@ type Branch {
   opensAtLabel: String
   photo: BranchPhoto
   popularItems(limit: Int): [MenuItem!]!
-  prepBufferMinutes: Int!
   restaurant: Restaurant!
 }
 
@@ -71,23 +70,6 @@ type BranchSearchResult {
   branch: Branch!
   distanceM: Int!
   etaMinutes: Int!
-  priceBand: Int!
-}
-
-input BrowseFilter {
-  cuisineTags: [String!]
-  freeDelivery: Boolean
-  maxPriceBand: Int
-  minRating: Float
-  openNow: Boolean
-}
-
-enum BrowseSort {
-  distance
-  eta
-  popularity
-  rating
-  relevance
 }
 
 input CardInput {
@@ -99,9 +81,27 @@ input CardInput {
 }
 
 input CartLineInput {
-  menuItemId: String!
+  comboId: String
+  menuItemId: String
   modifierOptionIds: [String!]
   notes: String
+  qty: Int!
+}
+
+type Combo {
+  description: String
+  id: ID!
+  imageUrl: String
+  isAvailable: Boolean!
+  items: [ComboItem!]!
+  name: String!
+  originalPriceMinor: Int!
+  priceMinor: Int!
+}
+
+type ComboItem {
+  id: ID!
+  menuItem: MenuItem!
   qty: Int!
 }
 
@@ -180,6 +180,7 @@ type MediaAsset {
 
 type Menu {
   categories: [MenuCategory!]!
+  combos: [Combo!]!
   id: ID!
   layoutJson: JSON
   status: String!
@@ -196,6 +197,7 @@ type MenuCategory {
 
 type MenuItem {
   badges: [String!]!
+  compareAtPriceMinor: Int
   description: String
   id: ID!
   imageUrl: String
@@ -203,7 +205,6 @@ type MenuItem {
   modifierGroups: [ModifierGroup!]!
   name: String!
   priceMinor: Int!
-  unavailableUntil: DateTime
 }
 
 type MenuSourceDoc {
@@ -233,14 +234,15 @@ type ModifierOption {
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   acceptTask(taskId: String!): DeliveryTask!
+  addComboItem(comboId: String!, menuItemId: String!, qty: Int): Combo!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
   cancelOrder(id: String!, reason: String): Order!
-  createVoucher(input: VoucherInput!): Voucher!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
+  deleteCombo(comboId: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
   deleteModifierOption(id: String!): Boolean!
@@ -260,23 +262,22 @@ type Mutation {
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
+  removeComboItem(comboItemId: String!): Combo!
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
-  riderPing(lat: Float!, lng: Float!): Boolean!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
-  setBusyMode(branchId: String!, bufferMinutes: Int!): Branch!
-  setItemAvailability(available: Boolean!, itemId: String!, until: String): MenuItem!
+  setComboAvailability(available: Boolean!, comboId: String!): Combo!
+  setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
-  setVoucherActive(active: Boolean!, id: String!): Voucher!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
@@ -285,9 +286,9 @@ type Mutation {
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
-  updateVoucher(id: String!, input: VoucherInput!): Voucher!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
-  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
+  upsertCombo(branchId: String!, description: String, id: String, name: String!, priceMinor: Int!): Combo!
+  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, compareAtPriceMinor: Int, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
   upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
@@ -303,7 +304,6 @@ type Order {
   cutleryRequested: Boolean!
   deliveredAt: DateTime
   deliveryFeeMinor: Int!
-  discountMinor: Int!
   events: [OrderEvent!]!
   grandTotalMinor: Int!
   id: ID!
@@ -384,7 +384,6 @@ input PlaceOrderInput {
   paymentMethodId: String
   paymentMode: String!
   tipAmount: Int
-  voucherCode: String
 }
 
 type PresignResult {
@@ -395,18 +394,16 @@ type PresignResult {
 type Query {
   allRestaurants: [Restaurant!]!
   auditLogs(take: Int): [AuditLog!]!
-  availableVouchers(restaurantId: String): [Voucher!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
-  browseBranches(filter: BrowseFilter, lat: Float!, lng: Float!, sort: BrowseSort): [BranchSearchResult!]!
+  browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
-  myCashSummary: RiderCashSummary
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
@@ -421,10 +418,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
-  todaySummary(branchId: String!): TodaySummary!
   viewer: Viewer
-  voucher(id: String!): Voucher
-  vouchers: [Voucher!]!
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
 }
@@ -432,7 +426,6 @@ type Query {
 type Quote {
   branchId: String!
   deliveryFeeMinor: Int!
-  discountMinor: Int!
   distanceM: Int!
   grandTotalMinor: Int!
   inRadius: Boolean!
@@ -443,8 +436,6 @@ type Quote {
   subtotalMinor: Int!
   taxTotalMinor: Int!
   tipAmount: Int!
-  voucherCode: String
-  voucherError: String
 }
 
 input QuoteCartInput {
@@ -453,12 +444,12 @@ input QuoteCartInput {
   deliveryLng: Float!
   lines: [CartLineInput!]!
   tipAmount: Int
-  voucherCode: String
 }
 
 type QuoteLine {
+  comboId: String
   lineTotalMinor: Int!
-  menuItemId: String!
+  menuItemId: String
   name: String!
   qty: Int!
   unitPriceMinor: Int!
@@ -527,12 +518,6 @@ type Rider {
   verificationStatus: String!
 }
 
-type RiderCashSummary {
-  cashLimitMinor: Int!
-  deliveriesToday: Int!
-  todayCodCollectedMinor: Int!
-}
-
 type RiderEarnings {
   codCollectedMinor: Int!
   deliveredCount: Int!
@@ -568,7 +553,6 @@ type RiderPayoutRow {
 }
 
 type RiderProfile {
-  cashLimitMinor: Int!
   isOnline: Boolean!
   riderId: String!
   riderType: String!
@@ -595,13 +579,6 @@ type Subscription {
   riderJobFeed: OrderChanged!
 }
 
-type TodaySummary {
-  acceptanceSlaPct: Int!
-  orders: Int!
-  revenueMinor: Int!
-  topItems: [AnalyticsTopItem!]!
-}
-
 input UpdateAddressInput {
   isDefault: Boolean
   label: String
@@ -623,49 +600,6 @@ type Viewer {
   home: String!
   roles: [RoleBinding!]!
   user: User!
-}
-
-type Voucher {
-  active: Boolean!
-  code: String!
-  createdAt: DateTime!
-  description: String
-  endsAt: DateTime
-  firstOrderOnly: Boolean!
-  funder: String!
-  id: ID!
-  maxDiscountMinor: Int
-  minOrderMinor: Int!
-  perUserLimit: Int
-  remainingBudgetMinor: Int
-  restaurantId: String
-  scope: String!
-  startsAt: DateTime
-  totalBudgetMinor: Int
-  type: String!
-  usedBudgetMinor: Int!
-  usedCount: Int!
-  valueBps: Int!
-  valueMinor: Int!
-}
-
-input VoucherInput {
-  active: Boolean
-  code: String!
-  description: String
-  endsAt: DateTime
-  firstOrderOnly: Boolean
-  funder: String
-  maxDiscountMinor: Int
-  minOrderMinor: Int
-  perUserLimit: Int
-  restaurantId: String
-  scope: String
-  startsAt: DateTime
-  totalBudgetMinor: Int
-  type: String!
-  valueBps: Int
-  valueMinor: Int
 }
 
 type Waitlist {

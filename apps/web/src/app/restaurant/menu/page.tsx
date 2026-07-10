@@ -23,6 +23,22 @@ const DraftQuery = graphql(`
       version
       status
       layoutJson
+      combos {
+        id
+        name
+        description
+        priceMinor
+        originalPriceMinor
+        isAvailable
+        items {
+          id
+          qty
+          menuItem {
+            id
+            name
+          }
+        }
+      }
       categories {
         id
         name
@@ -32,6 +48,7 @@ const DraftQuery = graphql(`
           name
           description
           priceMinor
+          compareAtPriceMinor
           isAvailable
           badges
           imageUrl
@@ -69,6 +86,7 @@ const UpsertItemMutation = graphql(`
     $name: String!
     $description: String
     $priceMinor: Int!
+    $compareAtPriceMinor: Int
   ) {
     upsertMenuItem(
       branchId: $branchId
@@ -77,6 +95,7 @@ const UpsertItemMutation = graphql(`
       name: $name
       description: $description
       priceMinor: $priceMinor
+      compareAtPriceMinor: $compareAtPriceMinor
     ) {
       id
     }
@@ -118,12 +137,67 @@ const UpdateLayoutMutation = graphql(`
     }
   }
 `);
+const UpsertComboMutation = graphql(`
+  mutation UpsertCombo(
+    $branchId: String!
+    $id: String
+    $name: String!
+    $description: String
+    $priceMinor: Int!
+  ) {
+    upsertCombo(
+      branchId: $branchId
+      id: $id
+      name: $name
+      description: $description
+      priceMinor: $priceMinor
+    ) {
+      id
+    }
+  }
+`);
+const DeleteComboMutation = graphql(`
+  mutation DeleteCombo($comboId: String!) {
+    deleteCombo(comboId: $comboId)
+  }
+`);
+const SetComboAvailabilityMutation = graphql(`
+  mutation SetComboAvailability($comboId: String!, $available: Boolean!) {
+    setComboAvailability(comboId: $comboId, available: $available) {
+      id
+      isAvailable
+    }
+  }
+`);
+const AddComboItemMutation = graphql(`
+  mutation AddComboItem($comboId: String!, $menuItemId: String!, $qty: Int) {
+    addComboItem(comboId: $comboId, menuItemId: $menuItemId, qty: $qty) {
+      id
+    }
+  }
+`);
+const RemoveComboItemMutation = graphql(`
+  mutation RemoveComboItem($comboItemId: String!) {
+    removeComboItem(comboItemId: $comboItemId) {
+      id
+    }
+  }
+`);
 
 const DISPLAY_MODES = ["list", "grid", "compact"] as const;
 
 type ItemDraft = {
   id?: string;
   categoryId: string;
+  name: string;
+  description: string;
+  priceRs: string;
+  // Optional "was" price for an item-level offer (#53). Blank = no offer.
+  compareAtRs: string;
+};
+
+type ComboDraft = {
+  id?: string;
   name: string;
   description: string;
   priceRs: string;
@@ -154,8 +228,14 @@ export default function MenuManagerPage() {
   const [, setItemPhoto] = useMutation(SetItemPhotoMutation);
   const [publishState, publish] = useMutation(PublishMutation);
   const [, updateLayout] = useMutation(UpdateLayoutMutation);
+  const [, upsertCombo] = useMutation(UpsertComboMutation);
+  const [, deleteCombo] = useMutation(DeleteComboMutation);
+  const [, setComboAvailability] = useMutation(SetComboAvailabilityMutation);
+  const [, addComboItem] = useMutation(AddComboItemMutation);
+  const [, removeComboItem] = useMutation(RemoveComboItemMutation);
 
   const [editing, setEditing] = useState<ItemDraft | null>(null);
+  const [editingCombo, setEditingCombo] = useState<ComboDraft | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -177,6 +257,14 @@ export default function MenuManagerPage() {
     ? menu?.categories.flatMap((c) => c.items).find((i) => i.id === editing.id)
     : undefined;
 
+  // The live draft combo open in the dialog (its component list is keyed off the id, so
+  // items can only be added once the combo has been saved). All draft items feed the
+  // "add item" picker.
+  const editingComboRow = editingCombo?.id
+    ? menu?.combos.find((c) => c.id === editingCombo.id)
+    : undefined;
+  const allDraftItems = menu?.categories.flatMap((c) => c.items) ?? [];
+
   async function handlePhotoUpload(menuItemId: string, file: File) {
     setMessage(null);
     setUploadingPhoto(true);
@@ -195,6 +283,11 @@ export default function MenuManagerPage() {
   async function saveItem() {
     if (!editing || !branch) return;
     const priceMinor = Math.round(Number(editing.priceRs) * 100);
+    // Item-level offer (#53): blank clears the offer (null); a value is validated
+    // server-side to be strictly greater than priceMinor.
+    const compareRs = Number(editing.compareAtRs);
+    const compareAtPriceMinor =
+      editing.compareAtRs.trim() && compareRs > 0 ? Math.round(compareRs * 100) : null;
     const result = await upsertItem({
       branchId: branch.id,
       categoryId: editing.categoryId,
@@ -202,12 +295,33 @@ export default function MenuManagerPage() {
       name: editing.name,
       description: editing.description || undefined,
       priceMinor,
+      compareAtPriceMinor,
     });
     if (result.error) {
       setMessage(result.error.graphQLErrors[0]?.message ?? "Save failed");
       return;
     }
     setEditing(null);
+    refresh();
+  }
+
+  async function saveCombo() {
+    if (!editingCombo || !branch) return;
+    const priceMinor = Math.round(Number(editingCombo.priceRs) * 100);
+    const result = await upsertCombo({
+      branchId: branch.id,
+      id: editingCombo.id,
+      name: editingCombo.name,
+      description: editingCombo.description || undefined,
+      priceMinor,
+    });
+    if (result.error) {
+      setMessage(result.error.graphQLErrors[0]?.message ?? "Save failed");
+      return;
+    }
+    // Keep the editor open on the persisted combo so components can be added.
+    const newId = result.data?.upsertCombo?.id;
+    if (newId) setEditingCombo({ ...editingCombo, id: newId });
     refresh();
   }
 
@@ -285,7 +399,13 @@ export default function MenuManagerPage() {
                 size="xs"
                 variant="outline"
                 onClick={() =>
-                  setEditing({ categoryId: cat.id, name: "", description: "", priceRs: "" })
+                  setEditing({
+                    categoryId: cat.id,
+                    name: "",
+                    description: "",
+                    priceRs: "",
+                    compareAtRs: "",
+                  })
                 }
               >
                 + Add item
@@ -318,6 +438,9 @@ export default function MenuManagerPage() {
                         name: item.name,
                         description: item.description ?? "",
                         priceRs: String(item.priceMinor / 100),
+                        compareAtRs: item.compareAtPriceMinor
+                          ? String(item.compareAtPriceMinor / 100)
+                          : "",
                       })
                     }
                   >
@@ -367,6 +490,96 @@ export default function MenuManagerPage() {
         + Add category
       </Button>
 
+      {/* Combos / meal deals (#53). Draft-scoped; publish with the menu. */}
+      <section className="mt-8 rounded-xl border border-kd-border bg-kd-surface p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Deals &amp; combos</h2>
+            <p className="text-xs text-kd-fg-muted">
+              Bundle items at one price — shown in a &ldquo;Deals&rdquo; section on your page.
+            </p>
+          </div>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => setEditingCombo({ name: "", description: "", priceRs: "" })}
+          >
+            + New deal
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {(menu?.combos ?? []).map((combo) => (
+            <div
+              key={combo.id}
+              className="flex items-center justify-between gap-2 rounded-lg border border-kd-border px-3 py-2 text-sm"
+            >
+              <div className="min-w-0">
+                <span className="font-medium">{combo.name}</span>{" "}
+                <span className="text-kd-fg-muted">{formatRs(combo.priceMinor)}</span>{" "}
+                {combo.originalPriceMinor > combo.priceMinor && (
+                  <span className="text-xs text-kd-fg-subtle line-through">
+                    {formatRs(combo.originalPriceMinor)}
+                  </span>
+                )}
+                <span className="ml-2 text-xs text-kd-fg-subtle">
+                  {combo.items.length} item{combo.items.length === 1 ? "" : "s"}
+                </span>
+                {!combo.isAvailable && (
+                  <Badge variant="secondary" className="ml-2">
+                    Unavailable
+                  </Badge>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={() =>
+                    setEditingCombo({
+                      id: combo.id,
+                      name: combo.name,
+                      description: combo.description ?? "",
+                      priceRs: String(combo.priceMinor / 100),
+                    })
+                  }
+                >
+                  Edit
+                </Button>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={async () => {
+                    await setComboAvailability({
+                      comboId: combo.id,
+                      available: !combo.isAvailable,
+                    });
+                    refresh();
+                  }}
+                >
+                  {combo.isAvailable ? "Hide" : "Show"}
+                </Button>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="text-kd-danger"
+                  onClick={async () => {
+                    if (confirm(`Delete deal '${combo.name}'?`)) {
+                      await deleteCombo({ comboId: combo.id });
+                      refresh();
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))}
+          {(menu?.combos ?? []).length === 0 && (
+            <p className="text-xs text-kd-fg-subtle">No deals yet.</p>
+          )}
+        </div>
+      </section>
+
       {editing && (
         <Dialog open onOpenChange={(o) => !o && setEditing(null)}>
           <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
@@ -399,6 +612,19 @@ export default function MenuManagerPage() {
                   onChange={(e) => setEditing({ ...editing, priceRs: e.target.value })}
                   className="mt-1"
                 />
+              </div>
+              <div>
+                <Label>Original price (Rs) — optional</Label>
+                <Input
+                  inputMode="decimal"
+                  placeholder="Was e.g. 800 (leave blank for no offer)"
+                  value={editing.compareAtRs}
+                  onChange={(e) => setEditing({ ...editing, compareAtRs: e.target.value })}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-kd-fg-subtle">
+                  Set higher than the price to show a strike-through and a % off badge.
+                </p>
               </div>
               <Button
                 className="w-full"
@@ -476,6 +702,114 @@ export default function MenuManagerPage() {
               ) : (
                 <p className="border-t border-kd-border pt-3 text-xs text-kd-fg-subtle">
                   Save the item first to add a photo and modifier groups.
+                </p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {editingCombo && (
+        <Dialog open onOpenChange={(o) => !o && setEditingCombo(null)}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingCombo.id ? "Edit deal" : "New deal"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Name</Label>
+                <Input
+                  value={editingCombo.name}
+                  onChange={(e) => setEditingCombo({ ...editingCombo, name: e.target.value })}
+                  className="mt-1"
+                  placeholder="e.g. Burger + Fries + Drink"
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={editingCombo.description}
+                  onChange={(e) =>
+                    setEditingCombo({ ...editingCombo, description: e.target.value })
+                  }
+                  rows={2}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Bundle price (Rs)</Label>
+                <Input
+                  inputMode="decimal"
+                  value={editingCombo.priceRs}
+                  onChange={(e) => setEditingCombo({ ...editingCombo, priceRs: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={saveCombo}
+                disabled={!editingCombo.name || !Number(editingCombo.priceRs)}
+              >
+                Save to draft
+              </Button>
+
+              {editingComboRow ? (
+                <div className="border-t border-kd-border pt-3">
+                  <Label>Items in this deal</Label>
+                  <div className="mt-1 space-y-1">
+                    {editingComboRow.items.map((ci) => (
+                      <div
+                        key={ci.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-kd-border px-3 py-1.5 text-sm"
+                      >
+                        <span className="min-w-0 truncate">
+                          {ci.menuItem.name}
+                          {ci.qty > 1 ? ` ×${ci.qty}` : ""}
+                        </span>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="text-kd-danger"
+                          onClick={async () => {
+                            await removeComboItem({ comboItemId: ci.id });
+                            refresh();
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    {editingComboRow.items.length === 0 && (
+                      <p className="text-xs text-kd-fg-subtle">No items yet — add some below.</p>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <Label>Add an item</Label>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-kd-border px-2 py-2 text-sm"
+                      value=""
+                      onChange={async (e) => {
+                        if (!e.target.value || !editingCombo.id) return;
+                        await addComboItem({
+                          comboId: editingCombo.id,
+                          menuItemId: e.target.value,
+                        });
+                        e.target.value = "";
+                        refresh();
+                      }}
+                    >
+                      <option value="">Choose an item…</option>
+                      {allDraftItems.map((it) => (
+                        <option key={it.id} value={it.id}>
+                          {it.name} — {formatRs(it.priceMinor)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <p className="border-t border-kd-border pt-3 text-xs text-kd-fg-subtle">
+                  Save the deal first, then add items to it.
                 </p>
               )}
             </div>

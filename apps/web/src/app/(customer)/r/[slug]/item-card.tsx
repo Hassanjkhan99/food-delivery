@@ -17,7 +17,20 @@ export type ItemForCard = MenuItemForModal & {
   isAvailable: boolean;
   badges: string[];
   imageUrl?: string | null;
+  // Item-level offer (#53): original "was" price. Server only sends it when it's a real
+  // discount (> priceMinor), so we can render the strike-through + % badge unconditionally.
+  compareAtPriceMinor?: number | null;
 };
+
+/** Whole-number % off for an item offer, or null when there's no valid discount. */
+export function percentOff(item: {
+  priceMinor: number;
+  compareAtPriceMinor?: number | null;
+}): number | null {
+  const was = item.compareAtPriceMinor;
+  if (was == null || was <= item.priceMinor) return null;
+  return Math.round(((was - item.priceMinor) / was) * 100);
+}
 
 /** No modifier group forces a choice → we can add straight to the cart. */
 export function canQuickAdd(item: ItemForCard): boolean {
@@ -44,6 +57,7 @@ export function ItemCard({
   const disabled = !item.isAvailable || !accepting;
   const showQuickAdd = !disabled && canQuickAdd(item);
   const tilt = cardStyle === "tilt3d" && !compact;
+  const off = percentOff(item);
 
   const inner = (
     <>
@@ -53,6 +67,11 @@ export function ItemCard({
       <div className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{item.name}</span>
+          {off != null && (
+            <span className="rounded-full bg-kd-danger px-2 py-0.5 text-[10px] font-semibold text-white">
+              {off}% OFF
+            </span>
+          )}
           {item.badges.map((b) => (
             <span
               key={b}
@@ -70,8 +89,15 @@ export function ItemCard({
         )}
         {!item.isAvailable && <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>}
       </div>
-      <span className="shrink-0 font-semibold" style={{ color: "var(--brand-primary)" }}>
-        {formatRs(item.priceMinor)}
+      <span className="flex shrink-0 flex-col items-end">
+        {off != null && (
+          <span className="text-xs line-through opacity-50">
+            {formatRs(item.compareAtPriceMinor!)}
+          </span>
+        )}
+        <span className="font-semibold" style={{ color: "var(--brand-primary)" }}>
+          {formatRs(item.priceMinor)}
+        </span>
       </span>
     </>
   );
