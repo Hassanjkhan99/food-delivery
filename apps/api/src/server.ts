@@ -29,7 +29,7 @@ const CORS_HEADERS: Record<string, string> = {
 // A real S3/MinIO deployment replaces these with the bucket's own endpoints.
 const server = createServer(async (req, res) => {
   const url = req.url ?? "/";
-  if (url.startsWith("/uploads") || url.startsWith("/files/")) {
+  if (url.startsWith("/api/uploads") || url.startsWith("/files/")) {
     const { handleLocalUploadPut, handleLocalFileGet } =
       await import("./services/storage/objectStore.js");
     const chunks: Buffer[] = [];
@@ -43,7 +43,7 @@ const server = createServer(async (req, res) => {
     const response =
       req.method === "OPTIONS"
         ? new Response(null, { status: 204 })
-        : req.method === "PUT" && url.startsWith("/uploads")
+        : req.method === "PUT" && url.startsWith("/api/uploads")
           ? await handleLocalUploadPut(request)
           : req.method === "GET" && url.startsWith("/files/")
             ? handleLocalFileGet(request)

@@ -1,4 +1,4 @@
-# KhaanaDo Theme & UI Guide
+# Herald Theme & UI Guide
 
 The canonical maintainability guide for the theme revamp. Migration agents and
 future devs follow this doc. The design system lives in
@@ -59,7 +59,7 @@ markup instead of ad-hoc `text-2xl`/`leading-*` pairs.
 
 ## Color -> token mapping
 
-> KhaanaDo token mapping (existing tokens in `apps/web/src/app/globals.css` — DO NOT add new ones unless foundation added them):
+> Herald token mapping (existing tokens in `apps/web/src/app/globals.css` — DO NOT add new ones unless foundation added them):
 >
 > STRUCTURAL NEUTRALS (warm Stone):
 > ```

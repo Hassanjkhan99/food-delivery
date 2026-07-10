@@ -8,7 +8,7 @@ body:
       value: |
         For feedback from restaurant partners using the **restaurant console** — usability,
         onboarding, menu upload, order handling, payouts, or feature gaps you hit while
-        running your business on KhaanaDo.
+        running your business on Herald.
   - type: input
     id: restaurant
     attributes:

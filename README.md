@@ -1,4 +1,4 @@
-# KhaanaDo — restaurant-first delivery marketplace
+# Herald — restaurant-first delivery marketplace
 
 Restaurants own fulfillment (menu, prices, acceptance, riders); the platform owns
 discovery, ordering UX, tracking, payments, and the money ledger. Four role UIs live in
@@ -72,7 +72,7 @@ data fully outsourced to the PSP (tokens only — the schema already enforces th
 
 ## License & governance
 
-KhaanaDo is a **dual-licensed monorepo**:
+Herald is a **dual-licensed monorepo**:
 
 - **Core** (`apps/api`, `apps/web`, `packages/db`, `packages/config`) —
   **GNU AGPL-3.0-or-later** ([`LICENSE`](./LICENSE)). Network copyleft: run a modified

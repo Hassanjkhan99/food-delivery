@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Cinzel } from "next/font/google";
 import { GraphQLProvider } from "@/lib/urql";
 import { I18nProvider } from "@/i18n/provider";
 import { PwaSetup } from "@/components/PwaSetup";
@@ -15,8 +15,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Herald brand serif (inscriptional Roman) — used only by the Wordmark component.
+const cinzel = Cinzel({
+  variable: "--font-herald",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "KhaanaDo — Food Delivery",
+  title: "Herald — Food Delivery",
   description: "Restaurant-first delivery marketplace",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
@@ -34,7 +41,7 @@ export default function RootLayout({
   return (
     // lang/dir default to en/ltr for SSR; I18nProvider updates them on the client
     // when the stored locale is Urdu (RTL). See src/i18n for the scaffolding note.
-    <html lang="en" dir="ltr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" dir="ltr" className={`${geistSans.variable} ${geistMono.variable} ${cinzel.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <I18nProvider>
           <GraphQLProvider>{children}</GraphQLProvider>

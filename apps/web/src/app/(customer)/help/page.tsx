@@ -40,8 +40,8 @@ export default function HelpPage() {
 
       <p className="mt-6 text-center text-xs text-kd-fg-subtle">
         Still stuck? Reach us at{" "}
-        <a href="mailto:support@khaanado.com" className="underline hover:text-kd-fg">
-          support@khaanado.com
+        <a href="mailto:support@herald.com" className="underline hover:text-kd-fg">
+          support@herald.com
         </a>
         .
       </p>

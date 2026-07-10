@@ -47,9 +47,9 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* KhaanaDo Design System brand tokens (--kd-*). Mirrored here so Tailwind emits
+  /* Herald Design System brand tokens (--kd-*). Mirrored here so Tailwind emits
      kd-* color utilities (bg-kd-primary, text-kd-fg-muted, …). Raw values live in
-     :root/.dark below. Source: claude.ai/design "KhaanaDo Design System". */
+     :root/.dark below. Source: claude.ai/design "Herald Design System". */
   --color-kd-primary: var(--kd-primary);
   --color-kd-primary-hover: var(--kd-primary-hover);
   --color-kd-primary-soft: var(--kd-primary-soft);
@@ -70,7 +70,7 @@
   --color-kd-info: var(--kd-info);
   --color-kd-info-soft: var(--kd-info-soft);
 
-  /* KhaanaDo semantic type scale (--text-kd-*). Additive/opt-in Tailwind v4
+  /* Herald semantic type scale (--text-kd-*). Additive/opt-in Tailwind v4
      font-size tokens (emit text-kd-display … text-kd-caption). Names are
      namespaced to avoid colliding with Tailwind's default text-* sizes. */
   --text-kd-display: 2.25rem;
@@ -121,8 +121,8 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* KhaanaDo brand — light (primary). Rose brand, amber accent, emerald success,
-     warm Stone neutrals. See the KhaanaDo Design System project. */
+  /* Herald brand — light (primary). Rose brand, amber accent, emerald success,
+     warm Stone neutrals. See the Herald Design System project. */
   --kd-primary: #e11d48;
   --kd-primary-hover: #be123c;
   --kd-primary-soft: #ffe4e6;
@@ -177,7 +177,7 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* KhaanaDo brand — dark. */
+  /* Herald brand — dark. */
   --kd-primary: #fb7185;
   --kd-primary-hover: #f43f5e;
   --kd-primary-soft: #4c0519;

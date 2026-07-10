@@ -31,11 +31,11 @@ export const localDiskStore: ObjectStore = {
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("15m")
       .sign(secret());
-    return `http://localhost:${env.apiPort}/uploads?token=${encodeURIComponent(token)}`;
+    return `${env.objectStoreBaseUrl}/api/uploads?token=${encodeURIComponent(token)}`;
   },
 
   publicUrl(objectKey) {
-    return `http://localhost:${env.apiPort}/files/${objectKey}`;
+    return `${env.objectStoreBaseUrl}/files/${objectKey}`;
   },
 
   async head(objectKey) {

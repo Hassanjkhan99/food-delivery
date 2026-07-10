@@ -90,6 +90,12 @@ importers:
       '@base-ui/react':
         specifier: ^1.6.0
         version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@fd/api':
+        specifier: workspace:*
+        version: link:../api
+      '@fd/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@fd/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -99,6 +105,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.0
         version: 5.4.0(react-hook-form@7.81.0(react@19.2.4))
+      '@whatwg-node/server-plugin-cookies':
+        specifier: ^1.0.7
+        version: 1.0.7(@whatwg-node/server@0.11.0)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -117,6 +126,9 @@ importers:
       graphql-sse:
         specifier: ^2.5.4
         version: 2.6.0(graphql@16.14.2)
+      graphql-yoga:
+        specifier: ^5.16.0
+        version: 5.21.2(graphql@16.14.2)
       jose:
         specifier: ^6.0.0
         version: 6.2.3

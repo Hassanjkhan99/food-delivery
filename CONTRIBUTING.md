@@ -1,10 +1,10 @@
-# Contributing to KhaanaDo
+# Contributing to Herald
 
-Thanks for your interest in improving KhaanaDo. This document covers how we branch,
+Thanks for your interest in improving Herald. This document covers how we branch,
 commit, sign off, and license contributions. Please read it before opening a pull
 request.
 
-> **Status note:** KhaanaDo is not yet accepting outside contributions publicly. The
+> **Status note:** Herald is not yet accepting outside contributions publicly. The
 > processes below are the ones we intend to run once the repository is opened (see the
 > timing caution in [`NOTICE`](./NOTICE)). Internal contributors follow them today.
 
@@ -16,7 +16,7 @@ contact listed there.
 
 ## Licensing & file headers
 
-KhaanaDo is a **dual-licensed monorepo** — read [`NOTICE`](./NOTICE) for the exact
+Herald is a **dual-licensed monorepo** — read [`NOTICE`](./NOTICE) for the exact
 boundary. In short:
 
 | Area | License | SPDX identifier |
@@ -39,14 +39,14 @@ Core files (`apps/**`, `packages/db/**`, `packages/config/**`):
 
 ```ts
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (c) 2026 KhaanaDo contributors
+// Copyright (c) 2026 Herald contributors
 ```
 
 SDK files (`packages/shared/**`):
 
 ```ts
 // SPDX-License-Identifier: Apache-2.0
-// Copyright (c) 2026 KhaanaDo contributors
+// Copyright (c) 2026 Herald contributors
 ```
 
 Headers are guidance, not a hard CI gate today. Do not mass-rewrite existing files just

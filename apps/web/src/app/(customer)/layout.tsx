@@ -8,6 +8,7 @@ import { useCart } from "@/lib/cart";
 import { useI18n } from "@/i18n/provider";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
+import { Wordmark } from "@/components/brand/Wordmark";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -32,8 +33,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     <div className="flex min-h-screen flex-col bg-kd-bg">
       <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
-          <Link href="/" className="text-lg font-bold tracking-tight text-kd-fg">
-            🍜 Khaana<span className="text-kd-primary">Do</span>
+          <Link href="/" className="text-lg text-kd-fg" aria-label="Herald home">
+            <Wordmark />
           </Link>
           <nav className="flex items-center gap-3 text-sm sm:gap-4">
             <LocaleSwitcher />
