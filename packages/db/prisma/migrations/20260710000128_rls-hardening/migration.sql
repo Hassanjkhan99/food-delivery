@@ -154,19 +154,36 @@ CREATE POLICY tenant_isolation ON "modifier_options"
     WHERE g."id" = "modifier_options"."groupId" AND b."restaurantId" = app_current_restaurant_id()
   ));
 
+-- Join table: authorize BOTH sides. The itemId path guarantees the item is ours; the groupId path
+-- (modifier_groups → menus → branches) guarantees the linked group is ours too, so a tenant cannot
+-- link its own item to another tenant's modifier group and still pass RLS.
 ALTER TABLE "menu_item_modifier_groups" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "menu_item_modifier_groups" FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON "menu_item_modifier_groups"
-  USING (EXISTS (
-    SELECT 1 FROM "menu_items" i JOIN "menu_categories" c ON c."id" = i."categoryId"
-      JOIN "menus" m ON m."id" = c."menuId" JOIN "branches" b ON b."id" = m."branchId"
-    WHERE i."id" = "menu_item_modifier_groups"."itemId" AND b."restaurantId" = app_current_restaurant_id()
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM "menu_items" i JOIN "menu_categories" c ON c."id" = i."categoryId"
-      JOIN "menus" m ON m."id" = c."menuId" JOIN "branches" b ON b."id" = m."branchId"
-    WHERE i."id" = "menu_item_modifier_groups"."itemId" AND b."restaurantId" = app_current_restaurant_id()
-  ));
+  USING (
+    EXISTS (
+      SELECT 1 FROM "menu_items" i JOIN "menu_categories" c ON c."id" = i."categoryId"
+        JOIN "menus" m ON m."id" = c."menuId" JOIN "branches" b ON b."id" = m."branchId"
+      WHERE i."id" = "menu_item_modifier_groups"."itemId" AND b."restaurantId" = app_current_restaurant_id()
+    )
+    AND EXISTS (
+      SELECT 1 FROM "modifier_groups" g JOIN "menus" m ON m."id" = g."menuId"
+        JOIN "branches" b ON b."id" = m."branchId"
+      WHERE g."id" = "menu_item_modifier_groups"."groupId" AND b."restaurantId" = app_current_restaurant_id()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM "menu_items" i JOIN "menu_categories" c ON c."id" = i."categoryId"
+        JOIN "menus" m ON m."id" = c."menuId" JOIN "branches" b ON b."id" = m."branchId"
+      WHERE i."id" = "menu_item_modifier_groups"."itemId" AND b."restaurantId" = app_current_restaurant_id()
+    )
+    AND EXISTS (
+      SELECT 1 FROM "modifier_groups" g JOIN "menus" m ON m."id" = g."menuId"
+        JOIN "branches" b ON b."id" = m."branchId"
+      WHERE g."id" = "menu_item_modifier_groups"."groupId" AND b."restaurantId" = app_current_restaurant_id()
+    )
+  );
 
 -- ─────────────────────────── app role hardening (run ONCE as superuser) ───────────────────────────
 -- FORCE RLS above already applies policies even to the table owner. The line below removes any
