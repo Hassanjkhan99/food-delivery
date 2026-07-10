@@ -16,8 +16,8 @@ import { useConsole } from "../useConsole";
 const PAGE = 20;
 
 const ReviewsQuery = graphql(`
-  query ConsoleReviews($restaurantId: String!, $limit: Int) {
-    restaurantReviews(restaurantId: $restaurantId, limit: $limit) {
+  query ConsoleReviews($restaurantId: String!, $limit: Int, $offset: Int) {
+    restaurantReviews(restaurantId: $restaurantId, limit: $limit, offset: $offset) {
       id
       stars
       tags
@@ -197,16 +197,15 @@ function ReviewCard({
   );
 }
 
-// Server clamps a page to 50 rows; we grow `limit` from 0 for "Load more" (simpler
-// than accumulating pages in state, and refetch-after-reply updates rows in place).
-const MAX = 50;
-
 export default function ConsoleReviewsPage() {
   const { restaurant } = useConsole();
-  const [limit, setLimit] = useState(PAGE);
+  // Offset pagination: the server clamps each page to 50 rows, so we page through with
+  // Previous/Next by advancing `offset` — this reaches reviews beyond the first 50.
+  // Showing one page at a time keeps a reply-refetch updating the visible rows in place.
+  const [offset, setOffset] = useState(0);
   const [{ data, fetching, error }, refetch] = useQuery({
     query: ReviewsQuery,
-    variables: { restaurantId: restaurant?.id ?? "", limit },
+    variables: { restaurantId: restaurant?.id ?? "", limit: PAGE, offset },
     pause: !restaurant,
     requestPolicy: "cache-and-network",
   });
@@ -219,7 +218,10 @@ export default function ConsoleReviewsPage() {
   if (!restaurant)
     return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
-  const canLoadMore = reviews.length >= limit && limit < MAX;
+  const page = Math.floor(offset / PAGE) + 1;
+  const hasPrev = offset > 0;
+  // A next page is likely available whenever this page filled PAGE rows.
+  const hasNext = reviews.length >= PAGE;
 
   return (
     <main className="max-w-3xl">
@@ -237,7 +239,9 @@ export default function ConsoleReviewsPage() {
       {fetching && reviews.length === 0 && <Skeleton className="h-40 rounded-2xl" />}
 
       {!fetching && reviews.length === 0 && !error && (
-        <p className="text-sm text-kd-fg-subtle">No reviews yet.</p>
+        <p className="text-sm text-kd-fg-subtle">
+          {offset > 0 ? "No more reviews." : "No reviews yet."}
+        </p>
       )}
 
       <ul className="space-y-3">
@@ -250,14 +254,22 @@ export default function ConsoleReviewsPage() {
         ))}
       </ul>
 
-      {canLoadMore && (
-        <div className="mt-5 flex justify-center">
+      {(hasPrev || hasNext) && (
+        <div className="mt-5 flex items-center justify-between">
           <Button
             variant="outline"
-            disabled={fetching}
-            onClick={() => setLimit((l) => Math.min(l + PAGE, MAX))}
+            disabled={fetching || !hasPrev}
+            onClick={() => setOffset((o) => Math.max(o - PAGE, 0))}
           >
-            {fetching ? "Loading…" : "Load more"}
+            Previous
+          </Button>
+          <span className="text-xs text-kd-fg-subtle">Page {page}</span>
+          <Button
+            variant="outline"
+            disabled={fetching || !hasNext}
+            onClick={() => setOffset((o) => o + PAGE)}
+          >
+            {fetching ? "Loading…" : "Next"}
           </Button>
         </div>
       )}
