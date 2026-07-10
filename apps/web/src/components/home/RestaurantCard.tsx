@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Clock, Heart, Star } from "lucide-react";
+import { Clock, Heart, Star, Tag } from "lucide-react";
 import { formatRs } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { cn } from "@/lib/utils";
@@ -76,10 +76,19 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             }
           />
 
-          {hit.deliveryFeeMinor === 0 && !avail.closed && (
-            <span className="absolute left-3 top-3 rounded-full bg-kd-success px-2.5 py-1 text-xs font-bold leading-none text-white shadow-sm">
-              Free delivery
+          {/* Promoted badge takes the top-left slot; else free-delivery. Promotions are
+              always clearly labeled so paid placement is transparent (#22). */}
+          {hit.promoted ? (
+            <span className="absolute left-3 top-3 rounded-full bg-kd-primary px-2.5 py-1 text-xs font-bold uppercase leading-none tracking-wide text-white shadow-sm">
+              Promoted
             </span>
+          ) : (
+            hit.deliveryFeeMinor === 0 &&
+            !avail.closed && (
+              <span className="absolute left-3 top-3 rounded-full bg-kd-success px-2.5 py-1 text-xs font-bold leading-none text-white shadow-sm">
+                Free delivery
+              </span>
+            )
           )}
 
           <FavoriteButton />
@@ -95,6 +104,13 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
 
         <div className="p-4">
           <h3 className="font-semibold leading-tight tracking-tight text-kd-fg">{r.name}</h3>
+
+          {r.dealBadge && (
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-kd-primary-soft px-2 py-0.5 text-xs font-semibold text-kd-primary">
+              <Tag className="h-3 w-3" />
+              {r.dealBadge}
+            </span>
+          )}
 
           {r.cuisineTags.length > 0 && (
             <p className="mt-0.5 truncate text-sm text-kd-fg-muted">{r.cuisineTags.join(" · ")}</p>

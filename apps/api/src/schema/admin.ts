@@ -84,6 +84,8 @@ builder.prismaObject("FeeConfig", {
     smallBusinessPlatformFeeMinor: t.exposeInt("smallBusinessPlatformFeeMinor"),
     chainCommissionBps: t.exposeInt("chainCommissionBps"),
     chainPlatformFeeMinor: t.exposeInt("chainPlatformFeeMinor"),
+    featuredSlotDailyRateSmallMinor: t.exposeInt("featuredSlotDailyRateSmallMinor"),
+    featuredSlotDailyRateChainMinor: t.exposeInt("featuredSlotDailyRateChainMinor"),
     createdAt: t.field({ type: "DateTime", resolve: (f) => f.createdAt }),
   }),
 });
@@ -419,15 +421,30 @@ builder.mutationFields((t) => ({
       smallBusinessPlatformFeeMinor: t.arg.int({ required: true }),
       chainCommissionBps: t.arg.int({ required: true }),
       chainPlatformFeeMinor: t.arg.int({ required: true }),
+      // Featured-slot daily rates (#22). Optional so existing callers keep working;
+      // when omitted they carry forward from the current config version.
+      featuredSlotDailyRateSmallMinor: t.arg.int({ required: false }),
+      featuredSlotDailyRateChainMinor: t.arg.int({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
       for (const [k, v] of Object.entries(args)) {
-        if (v < 0 || v > 100_000) throw new GraphQLError(`${k} out of range`);
+        if (v != null && (v < 0 || v > 100_000)) throw new GraphQLError(`${k} out of range`);
       }
+      const current = await prisma.feeConfig.findFirst({ orderBy: { createdAt: "desc" } });
+      const data = {
+        smallBusinessCommissionBps: args.smallBusinessCommissionBps,
+        smallBusinessPlatformFeeMinor: args.smallBusinessPlatformFeeMinor,
+        chainCommissionBps: args.chainCommissionBps,
+        chainPlatformFeeMinor: args.chainPlatformFeeMinor,
+        featuredSlotDailyRateSmallMinor:
+          args.featuredSlotDailyRateSmallMinor ?? current?.featuredSlotDailyRateSmallMinor ?? 0,
+        featuredSlotDailyRateChainMinor:
+          args.featuredSlotDailyRateChainMinor ?? current?.featuredSlotDailyRateChainMinor ?? 50_000,
+      };
       const created = await prisma.feeConfig.create({
-        data: { ...args, createdByUserId: ctx.userId },
+        data: { ...data, createdByUserId: ctx.userId },
       });
-      await audit(ctx.userId, "fees.update", "FeeConfig", created.id, null, args);
+      await audit(ctx.userId, "fees.update", "FeeConfig", created.id, null, data);
       return created;
     },
   }),

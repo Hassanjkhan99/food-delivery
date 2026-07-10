@@ -27,7 +27,11 @@ export type FeedHit = {
     ratingCount: number;
     cuisineTags: string[];
     primaryColor?: string | null;
+    // Promoted deals (#22): label of an active deal_badge campaign, else null.
+    dealBadge?: string | null;
   };
+  // True when this hit is shown via a paid featured-slot placement (#22).
+  promoted?: boolean;
 };
 
 export type HomeBanner = {

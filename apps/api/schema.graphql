@@ -72,6 +72,27 @@ type BranchSearchResult {
   etaMinutes: Int!
 }
 
+type Campaign {
+  approvedAt: DateTime
+  createdAt: DateTime!
+  dailyRateMinor: Int!
+  endsAt: DateTime
+  id: ID!
+  label: String
+  rejectedReason: String
+  restaurant: Restaurant!
+  startsAt: DateTime
+  status: String!
+  type: String!
+}
+
+type CampaignAccrualResult {
+  amountMinor: Int!
+  campaignId: String!
+  ended: Boolean!
+  restaurantId: String!
+}
+
 input CardInput {
   cvc: String!
   expMonth: Int!
@@ -144,10 +165,19 @@ type DeliveryTask {
   status: String!
 }
 
+type FeaturedPlacement {
+  branch: Branch!
+  campaignId: String!
+  label: String
+  slaCapped: Boolean!
+}
+
 type FeeConfig {
   chainCommissionBps: Int!
   chainPlatformFeeMinor: Int!
   createdAt: DateTime!
+  featuredSlotDailyRateChainMinor: Int!
+  featuredSlotDailyRateSmallMinor: Int!
   id: ID!
   smallBusinessCommissionBps: Int!
   smallBusinessPlatformFeeMinor: Int!
@@ -234,9 +264,12 @@ type Mutation {
   acceptSharedOffer(offerId: String!): DeliveryOffer!
   acceptTask(taskId: String!): DeliveryTask!
   addPaymentMethod(card: CardInput!): PaymentMethod!
+  approveCampaign(id: String!): Campaign!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
+  cancelCampaign(id: String!): Campaign!
   cancelOrder(id: String!, reason: String): Order!
+  createCampaign(endsAt: DateTime, label: String, restaurantId: String!, startsAt: DateTime, type: String!): Campaign!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineSharedOffer(offerId: String!, reason: String): Boolean!
   declineTask(reason: String, taskId: String!): Boolean!
@@ -261,6 +294,7 @@ type Mutation {
   quoteCart(input: QuoteCartInput!): Quote!
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
+  rejectCampaign(id: String!, reason: String!): Campaign!
   rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
@@ -268,6 +302,7 @@ type Mutation {
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
+  runCampaignAccrual: [CampaignAccrualResult!]!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
@@ -279,10 +314,11 @@ type Mutation {
   setRiderSharedOptIn(optIn: Boolean!): Boolean!
   setSharedRiderPolicy(codTrustThreshold: Int, maxActiveJobs: Int, maxIncrementalDelaySec: Int, maxPickupMeters: Int, restaurantId: String!, sharingEnabled: Boolean, vetoActive: Boolean): SharedRiderPolicy!
   startPreparing(id: String!): Order!
+  submitCampaign(id: String!): Campaign!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
-  updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
+  updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, featuredSlotDailyRateChainMinor: Int, featuredSlotDailyRateSmallMinor: Int, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
@@ -397,12 +433,16 @@ type Query {
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   browseBranches(lat: Float!, lng: Float!): [BranchSearchResult!]!
+  campaignApprovalQueue: [Campaign!]!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
+  featuredBranches: [FeaturedPlacement!]!
+  featuredSlotRate(restaurantId: String!): Int!
   homeBanners: [HomeBanner!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
+  myCampaigns(restaurantId: String!): [Campaign!]!
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
@@ -479,6 +519,7 @@ type Restaurant {
   avgRating: Float
   branches: [Branch!]!
   cuisineTags: [String!]!
+  dealBadge: String
   id: ID!
   name: String!
   ratingCount: Int!

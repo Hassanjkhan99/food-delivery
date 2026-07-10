@@ -43,6 +43,29 @@ builder.prismaObject("Restaurant", {
     status: t.exposeString("status"),
     tier: t.exposeString("tier"),
     cuisineTags: t.exposeStringList("cuisineTags"),
+    // Promoted deals (#22): the label of the restaurant's active in-window deal_badge
+    // campaign, or null. Cards render this as a "deal" pill. Kept lightweight (one
+    // findFirst) so it can be selected per-card without a dedicated query.
+    dealBadge: t.string({
+      nullable: true,
+      resolve: async (r) => {
+        const now = new Date();
+        const c = await prisma.campaign.findFirst({
+          where: {
+            restaurantId: r.id,
+            type: "deal_badge",
+            status: "active",
+            AND: [
+              { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+              { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+            ],
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        if (!c) return null;
+        return c.label?.trim() || "Deal";
+      },
+    }),
     theme: t.relation("theme", { nullable: true }),
     branches: t.relation("branches"),
     avgRating: t.float({

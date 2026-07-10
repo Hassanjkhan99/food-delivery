@@ -1008,11 +1008,21 @@ model Campaign {
   startsAt         DateTime?      @db.Timestamptz()
   endsAt           DateTime?      @db.Timestamptz()
   approvedByUserId String?
+  // Promoted deals (#22) additions:
+  //  - label: short copy shown on the deal badge / featured slot (e.g. "20% off").
+  //  - approvedAt/rejectedReason: audited admin decision metadata.
+  //  - lastAccruedAt: date (UTC midnight) the daily fee was last debited, so the
+  //    accrual job is idempotent and never double-charges a running campaign.
+  label            String?
+  approvedAt       DateTime?      @db.Timestamptz()
+  rejectedReason   String?
+  lastAccruedAt    DateTime?      @db.Timestamptz()
   createdAt        DateTime       @default(now()) @db.Timestamptz()
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
 
   @@index([restaurantId])
+  @@index([status])
   @@map("campaigns")
 }
 
