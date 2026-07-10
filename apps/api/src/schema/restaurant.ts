@@ -46,12 +46,33 @@ const BranchHoursInput = builder.inputType("BranchHoursInput", {
   }),
 });
 
+builder.prismaObject("RiderVerificationDoc", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    kind: t.exposeString("kind"),
+    createdAt: t.field({ type: "DateTime", resolve: (d) => d.createdAt }),
+    asset: t.relation("asset"),
+  }),
+});
+
 builder.prismaObject("Rider", {
   fields: (t) => ({
     id: t.exposeID("id"),
     riderType: t.exposeString("riderType"),
     verificationStatus: t.exposeString("verificationStatus"),
+    trustScore: t.exposeInt("trustScore"),
+    vehicleType: t.exposeString("vehicleType", { nullable: true }),
+    vehiclePlate: t.exposeString("vehiclePlate", { nullable: true }),
+    trainingCompleted: t.exposeBoolean("trainingCompleted"),
+    agreementAccepted: t.exposeBoolean("agreementAccepted"),
+    sharedModeEnabled: t.exposeBoolean("sharedModeEnabled"),
+    verifiedAt: t.field({ type: "DateTime", nullable: true, resolve: (r) => r.verifiedAt }),
+    rejectionReason: t.exposeString("rejectionReason", { nullable: true }),
     user: t.relation("user"),
+    // Identity documents (CNIC/photo) are the admin review queue's concern only. The
+    // restaurant roster (branchRiders) shares this Rider type but must never expose these
+    // URLs to restaurant owners/staff, so gate the field to admins.
+    verificationDocs: t.relation("verificationDocs", { authScopes: { admin: true } }),
     isOnline: t.boolean({
       resolve: async (rider) => {
         const a = await prisma.riderAvailability.findUnique({ where: { riderId: rider.id } });
@@ -376,6 +397,10 @@ builder.mutationFields((t) => ({
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
       }
+      // Rider verification gate (#28): a rejected rider can't be assigned jobs.
+      if (rider.verificationStatus === "rejected") {
+        throw new GraphQLError("Rider has been rejected and cannot be assigned jobs");
+      }
       // Cash-variance auto-disable (#25): a rider flagged for repeated short remittance
       // can't be handed COD orders until an admin clears them.
       if (order.paymentMode === "cod" && rider.codDisabled) {
@@ -430,6 +455,10 @@ builder.mutationFields((t) => ({
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      // Rider verification gate (#28): a rejected rider can't be offered jobs.
+      if (rider.verificationStatus === "rejected") {
+        throw new GraphQLError("Rider has been rejected and cannot be offered jobs");
       }
       // Fraud control (#25): a rider whose COD was auto-disabled can't take cash orders.
       if (order.paymentMode === "cod" && rider.codDisabled) {

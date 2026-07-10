@@ -6,6 +6,8 @@ import type { OrderStatus } from "@fd/shared";
 import { transition } from "../services/orderService.js";
 import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
+import { recomputeTrustScore } from "../services/riderTrustService.js";
+import { missingRequirements } from "../services/riderVerificationService.js";
 import { builder } from "./builder.js";
 
 async function audit(
@@ -174,6 +176,41 @@ builder.queryFields((t) => ({
     resolve: (query) => prisma.restaurant.findMany({ ...query, orderBy: { createdAt: "asc" } }),
   }),
 
+  // Rider verification queue — mirrors restaurantApprovalQueue. Riders awaiting review
+  // (verificationStatus = pending), oldest first, with their uploaded docs.
+  riderVerificationQueue: t.prismaField({
+    type: ["Rider"],
+    authScopes: { admin: true },
+    resolve: (query) =>
+      prisma.rider.findMany({
+        ...query,
+        where: { verificationStatus: "pending" },
+        orderBy: { createdAt: "asc" },
+      }),
+  }),
+
+  allRiders: t.prismaField({
+    type: ["Rider"],
+    authScopes: { admin: true },
+    resolve: (query) => prisma.rider.findMany({ ...query, orderBy: { createdAt: "asc" } }),
+  }),
+
+  // Unmet onboarding requirements for one rider (empty => ready to verify). Lets the
+  // admin UI show what's missing before approving a shared/independent rider.
+  riderMissingRequirements: t.field({
+    type: ["String"],
+    authScopes: { admin: true },
+    args: { riderId: t.arg.string({ required: true }) },
+    resolve: async (_root, args) => {
+      const rider = await prisma.rider.findUnique({
+        where: { id: args.riderId },
+        include: { verificationDocs: true },
+      });
+      if (!rider) throw new GraphQLError("Rider not found");
+      return missingRequirements(rider);
+    },
+  }),
+
   refundQueue: t.prismaField({
     type: ["Refund"],
     authScopes: { admin: true },
@@ -286,6 +323,87 @@ builder.mutationFields((t) => ({
         { tier: args.tier },
       );
       return updated;
+    },
+  }),
+
+  // Approve a rider after docs are reviewed. For shared/independent riders the onboarding
+  // requirements must be complete (CNIC + photo + vehicle + plate + training + agreement);
+  // restaurant riders have only soft requirements. Audited like restaurant approval.
+  approveRider: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_q, _root, args, ctx) => {
+      const before = await prisma.rider.findUnique({
+        where: { id: args.id },
+        include: { verificationDocs: true },
+      });
+      if (!before) throw new GraphQLError("Rider not found");
+      const missing = missingRequirements(before);
+      if (missing.length > 0) {
+        throw new GraphQLError(`Cannot verify — missing: ${missing.join(", ")}`);
+      }
+      const updated = await prisma.rider.update({
+        where: { id: args.id },
+        data: { verificationStatus: "verified", verifiedAt: new Date(), rejectionReason: null },
+      });
+      await audit(
+        ctx.userId,
+        "rider.approve",
+        "Rider",
+        args.id,
+        { verificationStatus: before.verificationStatus },
+        { verificationStatus: "verified" },
+      );
+      return updated;
+    },
+  }),
+
+  rejectRider: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }), reason: t.arg.string({ required: true }) },
+    resolve: async (_q, _root, args, ctx) => {
+      const before = await prisma.rider.findUniqueOrThrow({ where: { id: args.id } });
+      const updated = await prisma.rider.update({
+        where: { id: args.id },
+        // Rejecting also pulls shared eligibility — a rejected rider gets no offers.
+        data: {
+          verificationStatus: "rejected",
+          rejectionReason: args.reason,
+          sharedModeEnabled: false,
+        },
+      });
+      await audit(
+        ctx.userId,
+        "rider.reject",
+        "Rider",
+        args.id,
+        { verificationStatus: before.verificationStatus },
+        { verificationStatus: "rejected", reason: args.reason },
+      );
+      return updated;
+    },
+  }),
+
+  // Recompute one rider's trust score on demand (the nightly job calls the service for
+  // all riders). Auto-disables shared mode when the score falls below threshold.
+  recomputeRiderTrust: t.prismaField({
+    type: "Rider",
+    authScopes: { admin: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const before = await prisma.rider.findUniqueOrThrow({ where: { id: args.id } });
+      const breakdown = await recomputeTrustScore(args.id);
+      await audit(
+        ctx.userId,
+        "rider.trust_recompute",
+        "Rider",
+        args.id,
+        { trustScore: before.trustScore },
+        { trustScore: breakdown.score },
+      );
+      return prisma.rider.findUniqueOrThrow({ ...query, where: { id: args.id } });
     },
   }),
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BadgeDollarSign,
+  Bike,
   FileClock,
   Gauge,
   HandCoins,
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/admin/restaurants", label: "Restaurants", icon: Store },
   { href: "/admin/tickets", label: "Support", icon: LifeBuoy },
   { href: "/admin/campaigns", label: "Promotions", icon: Megaphone },
+  { href: "/admin/riders", label: "Riders", icon: Bike },
   { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
   { href: "/admin/payouts", label: "Payouts", icon: HandCoins },
   { href: "/admin/fees", label: "Fees", icon: BadgeDollarSign },

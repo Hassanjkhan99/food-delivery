@@ -4,7 +4,17 @@ import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition } from "../services/orderService.js";
 import { recordCashVariance, recordRiderLocation } from "../services/fraudService.js";
+import { missingRequirements } from "../services/riderVerificationService.js";
 import { builder } from "./builder.js";
+
+// Valid rider document kinds (mirrors the RiderDocKind enum in the Prisma schema).
+const RIDER_DOC_KINDS = [
+  "cnic_front",
+  "cnic_back",
+  "photo",
+  "vehicle_registration",
+  "license",
+] as const;
 
 async function assertMyTask(ctx: AppContext, taskId: string) {
   const task = await prisma.deliveryTask.findUnique({
@@ -116,12 +126,33 @@ function isoWeekWindow(when: Date): { key: string; start: Date; end: Date } {
 builder.queryFields((t) => ({
   myRiderProfile: t.field({
     type: builder
-      .objectRef<{ riderId: string; isOnline: boolean; riderType: string }>("RiderProfile")
+      .objectRef<{
+        riderId: string;
+        isOnline: boolean;
+        riderType: string;
+        verificationStatus: string;
+        trustScore: number;
+        sharedModeEnabled: boolean;
+        trainingCompleted: boolean;
+        agreementAccepted: boolean;
+        rejectionReason: string | null;
+        missingRequirements: string[];
+      }>("RiderProfile")
       .implement({
         fields: (f) => ({
           riderId: f.exposeString("riderId"),
           isOnline: f.exposeBoolean("isOnline"),
           riderType: f.exposeString("riderType"),
+          verificationStatus: f.exposeString("verificationStatus"),
+          trustScore: f.exposeInt("trustScore"),
+          sharedModeEnabled: f.exposeBoolean("sharedModeEnabled"),
+          trainingCompleted: f.exposeBoolean("trainingCompleted"),
+          agreementAccepted: f.exposeBoolean("agreementAccepted"),
+          rejectionReason: f.exposeString("rejectionReason", { nullable: true }),
+          missingRequirements: f.field({
+            type: ["String"],
+            resolve: (p) => p.missingRequirements,
+          }),
         }),
       }),
     nullable: true,
@@ -130,13 +161,20 @@ builder.queryFields((t) => ({
       if (!ctx.riderId) return null;
       const rider = await prisma.rider.findUnique({
         where: { id: ctx.riderId },
-        include: { availability: true },
+        include: { availability: true, verificationDocs: true },
       });
       if (!rider) return null;
       return {
         riderId: rider.id,
         isOnline: rider.availability?.isOnline ?? false,
         riderType: rider.riderType,
+        verificationStatus: rider.verificationStatus,
+        trustScore: rider.trustScore,
+        sharedModeEnabled: rider.sharedModeEnabled,
+        trainingCompleted: rider.trainingCompleted,
+        agreementAccepted: rider.agreementAccepted,
+        rejectionReason: rider.rejectionReason,
+        missingRequirements: missingRequirements(rider),
       };
     },
   }),
@@ -552,6 +590,77 @@ builder.mutationFields((t) => ({
         taskId,
       });
       return anomaly;
+    },
+  }),
+
+  // Rider uploads a verification document. The MediaAsset must already be finalized
+  // (same presign→finalize flow as menu/theme/POD images). Re-submitting the same kind
+  // replaces the prior doc so the admin queue always sees the latest. Submitting while
+  // rejected/verified moves the rider back to `pending` for re-review.
+  submitRiderDoc: t.prismaField({
+    type: "RiderVerificationDoc",
+    authScopes: { rider: true },
+    args: {
+      kind: t.arg.string({ required: true }),
+      assetId: t.arg.string({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      if (!ctx.riderId) throw new GraphQLError("No rider profile");
+      if (!RIDER_DOC_KINDS.includes(args.kind as never)) {
+        throw new GraphQLError("Invalid document kind");
+      }
+      const asset = await prisma.mediaAsset.findUnique({ where: { id: args.assetId } });
+      if (!asset || asset.status !== "finalized") {
+        throw new GraphQLError("Document upload is not finalized");
+      }
+      // The asset must belong to the submitting user (ownerId is set at presign). Without
+      // this a rider could attach someone else's finalized upload to satisfy a doc gate.
+      if (asset.ownerId !== ctx.userId) {
+        throw new GraphQLError("Document upload is not finalized");
+      }
+      // Replace any existing doc of the same kind for this rider.
+      await prisma.riderVerificationDoc.deleteMany({
+        where: { riderId: ctx.riderId, kind: args.kind as never },
+      });
+      const doc = await prisma.riderVerificationDoc.create({
+        data: { riderId: ctx.riderId, kind: args.kind as never, assetId: args.assetId },
+      });
+      // A new/updated doc re-opens review unless already pending.
+      await prisma.rider.updateMany({
+        where: { id: ctx.riderId, verificationStatus: { not: "pending" } },
+        data: { verificationStatus: "pending" },
+      });
+      return prisma.riderVerificationDoc.findUniqueOrThrow({ ...query, where: { id: doc.id } });
+    },
+  }),
+
+  // Rider sets vehicle details + completes training / accepts the agreement. Any field is
+  // optional so the onboarding form can save incrementally.
+  updateRiderOnboarding: t.prismaField({
+    type: "Rider",
+    authScopes: { rider: true },
+    args: {
+      vehicleType: t.arg.string({ required: false }),
+      vehiclePlate: t.arg.string({ required: false }),
+      trainingCompleted: t.arg.boolean({ required: false }),
+      agreementAccepted: t.arg.boolean({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      if (!ctx.riderId) throw new GraphQLError("No rider profile");
+      return prisma.rider.update({
+        ...query,
+        where: { id: ctx.riderId },
+        data: {
+          ...(args.vehicleType != null ? { vehicleType: args.vehicleType } : {}),
+          ...(args.vehiclePlate != null ? { vehiclePlate: args.vehiclePlate } : {}),
+          ...(args.trainingCompleted != null
+            ? { trainingCompleted: args.trainingCompleted }
+            : {}),
+          ...(args.agreementAccepted != null
+            ? { agreementAccepted: args.agreementAccepted }
+            : {}),
+        },
+      });
     },
   }),
 }));
