@@ -3,10 +3,11 @@
 import { use, useEffect, useState } from "react";
 import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
-import { formatRs } from "@fd/shared";
+import { formatRs, REVIEW_TAGS } from "@fd/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 const OrderQuery = graphql(`
   query OrderDetail($id: String!) {
@@ -66,8 +67,8 @@ const OrderStatusSubscription = graphql(`
 `);
 
 const RateMutation = graphql(`
-  mutation RateOrder($orderId: String!, $stars: Int!, $comment: String) {
-    rateOrder(orderId: $orderId, stars: $stars, comment: $comment) {
+  mutation RateOrder($orderId: String!, $stars: Int!, $tags: [String!], $comment: String) {
+    rateOrder(orderId: $orderId, stars: $stars, tags: $tags, comment: $comment) {
       id
       stars
     }
@@ -128,8 +129,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [, cancel] = useMutation(CancelMutation);
   const [rateState, rate] = useMutation(RateMutation);
   const [stars, setStars] = useState(0);
+  const [reviewTags, setReviewTags] = useState<string[]>([]);
+  const [comment, setComment] = useState("");
   const [rated, setRated] = useState(false);
   const order = data?.order;
+
+  const toggleTag = (value: string) =>
+    setReviewTags((prev) =>
+      prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value],
+    );
 
   // Live status via SSE; a slow poll remains as a reconnect safety net.
   useSubscription(
@@ -251,11 +259,47 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             ))}
           </div>
+          {stars > 0 && (
+            <>
+              <div className="mb-3 flex flex-wrap justify-center gap-2">
+                {REVIEW_TAGS.map((tag) => {
+                  const on = reviewTags.includes(tag.value);
+                  return (
+                    <button
+                      key={tag.value}
+                      type="button"
+                      onClick={() => toggleTag(tag.value)}
+                      aria-pressed={on}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        on
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-200 text-neutral-600 hover:border-neutral-400"
+                      }`}
+                    >
+                      {tag.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Textarea
+                placeholder="Add a comment (optional)"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={2}
+                className="mb-3"
+              />
+            </>
+          )}
           <Button
             size="sm"
             disabled={stars === 0 || rateState.fetching}
             onClick={async () => {
-              const r = await rate({ orderId: order.id, stars });
+              const r = await rate({
+                orderId: order.id,
+                stars,
+                tags: reviewTags.length > 0 ? reviewTags : undefined,
+                comment: comment.trim() || undefined,
+              });
               if (!r.error) setRated(true);
             }}
           >

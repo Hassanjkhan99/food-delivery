@@ -56,6 +56,39 @@ builder.prismaObject("Restaurant", {
       resolve: (r) =>
         prisma.rating.count({ where: { restaurantId: r.id, moderationStatus: "approved" } }),
     }),
+    // Count of approved ratings per star, index 0 => 1★ … index 4 => 5★.
+    // Powers the distribution bars on the reviews page.
+    ratingDistribution: t.field({
+      type: ["Int"],
+      resolve: async (r) => {
+        const rows = await prisma.rating.groupBy({
+          by: ["stars"],
+          where: { restaurantId: r.id, moderationStatus: "approved" },
+          _count: { stars: true },
+        });
+        const buckets = [0, 0, 0, 0, 0];
+        for (const row of rows) {
+          if (row.stars >= 1 && row.stars <= 5) buckets[row.stars - 1] = row._count.stars;
+        }
+        return buckets;
+      },
+    }),
+    // Paginated approved reviews, newest first (offset pagination — the house style).
+    ratings: t.prismaField({
+      type: ["Rating"],
+      args: {
+        limit: t.arg.int({ required: false }),
+        offset: t.arg.int({ required: false }),
+      },
+      resolve: (query, r, args) =>
+        prisma.rating.findMany({
+          ...query,
+          where: { restaurantId: r.id, moderationStatus: "approved" },
+          orderBy: { createdAt: "desc" },
+          take: Math.min(Math.max(args.limit ?? 10, 1), 50),
+          skip: Math.max(args.offset ?? 0, 0),
+        }),
+    }),
   }),
 });
 
@@ -135,6 +168,56 @@ builder.prismaObject("Branch", {
         branch.activeMenuId
           ? prisma.menu.findUnique({ ...query, where: { id: branch.activeMenuId } })
           : null,
+    }),
+    // "Popular" pseudo-category: top items by quantity across the last 30 days of
+    // delivered orders at this branch, resolved back to their *current* menu items
+    // (so removed/unavailable items drop out gracefully). New branches with no order
+    // history simply return [] and the client omits the section.
+    //
+    // We tally by the snapshot *name*, not menuItemId: publishing a menu draft clones
+    // it into fresh MenuItem rows with new ids (cloneMenu), so old snapshot ids would
+    // stop matching the active menu and Popular would reset on every publish. Names are
+    // stable across clones, so popularity survives edits. MVP is fully computed; a
+    // future curated override (#38 "hybrid") would fetch pinned items first here.
+    popularItems: t.prismaField({
+      type: ["MenuItem"],
+      args: { limit: t.arg.int({ required: false }) },
+      resolve: async (query, branch, args) => {
+        if (!branch.activeMenuId) return [];
+        const limit = Math.min(Math.max(args.limit ?? 8, 1), 20);
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const rows = await prisma.orderItem.findMany({
+          where: {
+            order: { branchId: branch.id, status: "delivered", placedAt: { gte: since } },
+          },
+          select: { qty: true, menuSnapshotJson: true },
+        });
+        const tally = new Map<string, number>();
+        for (const row of rows) {
+          const snap = row.menuSnapshotJson as { name?: string } | null;
+          const name = snap?.name;
+          if (name) tally.set(name, (tally.get(name) ?? 0) + row.qty);
+        }
+        const topNames = [...tally.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit)
+          .map(([name]) => name);
+        if (topNames.length === 0) return [];
+        const items = await prisma.menuItem.findMany({
+          ...query,
+          where: {
+            name: { in: topNames },
+            isAvailable: true,
+            category: { menuId: branch.activeMenuId },
+          },
+        });
+        // Rank by tally order; dedupe if two current items share a popular name.
+        const rank = new Map(topNames.map((name, i) => [name, i]));
+        const seen = new Set<string>();
+        return items
+          .filter((it) => (seen.has(it.name) ? false : (seen.add(it.name), true)))
+          .sort((a, b) => (rank.get(a.name) ?? 99) - (rank.get(b.name) ?? 99));
+      },
     }),
   }),
 });

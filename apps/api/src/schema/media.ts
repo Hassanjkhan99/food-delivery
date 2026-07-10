@@ -250,5 +250,6 @@ builder.prismaObject("Rating", {
     stars: t.exposeInt("stars"),
     tags: t.exposeStringList("tags"),
     comment: t.exposeString("comment", { nullable: true }),
+    createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
   }),
 });
