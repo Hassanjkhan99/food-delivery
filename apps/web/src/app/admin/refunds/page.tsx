@@ -25,9 +25,20 @@ const RefundQueueQuery = graphql(`
           }
         }
       }
+      tickets {
+        id
+        category
+        contextJson
+      }
     }
   }
 `);
+
+// Structured intake payload attached to a help ticket (#45): the exact order
+// items a missing/wrong-items complaint is about.
+type TicketContext = {
+  items?: Array<{ name?: string; qty?: number; lineTotalMinor?: number }>;
+};
 
 const DecideRefundMutation = graphql(`
   mutation DecideRefund($id: String!, $approve: Boolean!, $reason: String) {
@@ -67,6 +78,28 @@ export default function AdminRefundsPage() {
             <p className="mt-1 text-xs text-kd-fg-subtle">
               Order total {formatRs(r.order.grandTotalMinor)} · {r.order.paymentMode.toUpperCase()}
             </p>
+            {r.tickets.map((tk) => {
+              const ctx = (tk.contextJson as TicketContext | null) ?? null;
+              if (!ctx?.items?.length) return null;
+              return (
+                <div
+                  key={tk.id}
+                  className="mt-2 rounded-lg bg-kd-surface-muted p-2 text-xs text-kd-fg-muted"
+                >
+                  <p className="font-medium text-kd-fg">Reported items</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {ctx.items.map((it, i) => (
+                      <li key={i} className="flex justify-between">
+                        <span>
+                          {it.qty ?? 1} × {it.name ?? "Item"}
+                        </span>
+                        <span>{formatRs(it.lineTotalMinor ?? 0)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
             <div className="mt-3 flex gap-2">
               <Button
                 size="xs"

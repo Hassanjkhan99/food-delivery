@@ -913,7 +913,8 @@ model Refund {
   decidedAt       DateTime?         @db.Timestamptz()
   createdAt       DateTime          @default(now()) @db.Timestamptz()
 
-  order Order @relation(fields: [orderId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id])
+  tickets SupportTicket[]
 
   @@index([orderId])
   @@map("refunds")
@@ -1057,21 +1058,36 @@ model SupportTicket {
   body           String
   status         TicketStatus @default(open)
   resolutionCode String?
-  // Agent queue ownership + SLA tracking (additive; agent stored by id + name
-  // snapshot to avoid a second User relation on this model).
+  // Agent queue ownership + SLA tracking (#14; agent stored by id + name
+  // snapshot to avoid a second User relation on this model). Additive.
   assignedToUserId String?
   assignedToName   String?
   firstRespondedAt DateTime?  @db.Timestamptz()
   resolvedAt       DateTime?  @db.Timestamptz()
+  // Customer-visible resolution note surfaced on the ticket thread, e.g.
+  // "Refund of Rs 350 approved to your wallet". Written by admin/support on
+  // resolve; null until then. Shared by #14 + #45. Additive.
   resolutionNote   String?
+  // Structured intake payload for the category (e.g. the ids/names of the order
+  // items a missing/wrong-items complaint is about) so support/admin sees
+  // actionable data and the refund workbench can prefill amounts. (#45) Additive.
+  contextJson      Json?
+  // Refund opened by this ticket (missing/wrong items), if any. Lets the customer
+  // see the resolution and the workbench trace it back. (#45) Additive.
+  refundId         String?
   createdAt      DateTime     @default(now()) @db.Timestamptz()
   updatedAt      DateTime     @updatedAt @db.Timestamptz()
 
-  customer User   @relation(fields: [customerId], references: [id])
-  order    Order? @relation(fields: [orderId], references: [id])
+  customer User    @relation(fields: [customerId], references: [id])
+  order    Order?  @relation(fields: [orderId], references: [id])
+  refund   Refund? @relation(fields: [refundId], references: [id])
 
   @@index([status])
   @@index([status, createdAt])
+  // Order-help view lists a customer's tickets for one order, newest first
+  // (help.ts ticketsForOrder). Serve that access pattern from the index instead
+  // of scanning as ticket volume grows. (#45)
+  @@index([customerId, orderId, createdAt])
   @@map("support_tickets")
 }
 

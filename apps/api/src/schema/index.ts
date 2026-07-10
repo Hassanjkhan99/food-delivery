@@ -11,6 +11,7 @@ import "./dispatch.js";
 import "./admin.js";
 import "./support.js";
 import "./campaign.js";
+import "./help.js";
 import "./subscription.js";
 
 export const schema = builder.toSchema();

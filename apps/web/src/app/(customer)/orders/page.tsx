@@ -66,9 +66,9 @@ export default function OrdersPage() {
         {data?.myOrders.map((o) => (
           <div
             key={o.id}
-            className="rounded-xl border border-kd-border bg-kd-surface p-4 hover:border-kd-fg-subtle"
+            className="rounded-xl border border-kd-border bg-kd-surface hover:border-kd-fg-subtle"
           >
-            <Link href={`/orders/${o.id}`} className="flex items-center justify-between">
+            <Link href={`/orders/${o.id}`} className="flex items-center justify-between p-4">
               <div>
                 <p className="font-medium text-kd-fg">{o.branch.restaurant.name}</p>
                 <p className="text-xs text-kd-fg-muted">
@@ -83,7 +83,7 @@ export default function OrdersPage() {
               </div>
             </Link>
             {REORDERABLE_STATUSES.has(o.status) && o.items.length > 0 && (
-              <div className="mt-3 border-t border-kd-border pt-3">
+              <div className="border-t border-kd-border px-4 py-3">
                 <ReorderButton
                   source={{
                     branch: {
@@ -100,6 +100,14 @@ export default function OrdersPage() {
                 />
               </div>
             )}
+            <div className="border-t border-kd-border px-4 py-2 text-right">
+              <Link
+                href={`/help/${o.id}`}
+                className="text-xs font-medium text-kd-fg-muted hover:text-kd-fg"
+              >
+                Get help with this order →
+              </Link>
+            </div>
           </div>
         ))}
       </div>

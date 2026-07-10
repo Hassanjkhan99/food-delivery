@@ -3,7 +3,7 @@
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { OrderStatus, PolicyMatrixRow, CancellationPolicyConfig } from "@fd/shared";
-import { CANCELLATION_POLICY_MATRIX, CANCELLATION_POLICY_CONFIG } from "@fd/shared";
+import { CANCELLATION_POLICY_MATRIX, CANCELLATION_POLICY_CONFIG, formatRs } from "@fd/shared";
 import { transition } from "../services/orderService.js";
 import { recordCancellation } from "../services/policyService.js";
 import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
@@ -66,6 +66,9 @@ builder.prismaObject("Refund", {
     reason: t.exposeString("reason"),
     createdAt: t.field({ type: "DateTime", resolve: (r) => r.createdAt }),
     order: t.relation("order"),
+    // Help tickets that opened this refund (#45) — lets the workbench see the
+    // structured intake (attached items) behind the request.
+    tickets: t.relation("tickets"),
   }),
 });
 
@@ -545,6 +548,17 @@ builder.mutationFields((t) => ({
           where: { id: args.id },
           data: { status: "refund_rejected", decidedByUserId: ctx.userId, decidedAt: new Date() },
         });
+        // Reflect the decision on any help ticket that opened this refund so the
+        // customer sees the outcome on their ticket thread (#45).
+        await prisma.supportTicket.updateMany({
+          where: { refundId: refund.id, status: { not: "closed" } },
+          data: {
+            status: "resolved",
+            resolutionNote: args.reason?.trim()
+              ? `We reviewed your request and couldn't approve a refund: ${args.reason.trim()}`
+              : "We reviewed your request and couldn't approve a refund for this order.",
+          },
+        });
         await audit(
           ctx.userId,
           "refund.reject",
@@ -613,10 +627,20 @@ builder.mutationFields((t) => ({
             { orderId: order.id, refundId: refund.id },
           );
         }
-        return tx.refund.update({
+        const r = await tx.refund.update({
           where: { id: args.id },
           data: { status: "refunded", decidedByUserId: ctx.userId, decidedAt: new Date() },
         });
+        // Surface the approved-refund resolution on any linked help ticket (#45).
+        const dest = refund.destination === "card" ? "your original payment method" : "your wallet";
+        await tx.supportTicket.updateMany({
+          where: { refundId: refund.id, status: { not: "closed" } },
+          data: {
+            status: "resolved",
+            resolutionNote: `Refund of ${formatRs(refund.amountMinor)} approved to ${dest}.`,
+          },
+        });
+        return r;
       });
       await audit(
         ctx.userId,

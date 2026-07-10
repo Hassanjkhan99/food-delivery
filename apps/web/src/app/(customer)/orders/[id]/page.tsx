@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs, REVIEW_TAGS } from "@fd/shared";
@@ -358,8 +359,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </Button>
             ) : (
               // TODO(rider-contact): enable a direct tel: link once the API exposes
-              // the assigned rider's phone on Order. For now route to support.
-              <Button size="sm" variant="outline" render={<a href="#order-help" />}>
+              // the assigned rider's phone on Order. For now route to order help.
+              <Button size="sm" variant="outline" render={<Link href={`/help/${order.id}`} />}>
                 Contact
               </Button>
             )}
@@ -525,7 +526,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </Button>
       )}
 
-      {/* Help / support entry point — always available. */}
+      {/* Help / support entry point — always available. Routes to the
+          order-contextual help center (#45): stage-aware self-service, structured
+          intake, and customer-visible ticket resolutions. */}
       <div
         id="order-help"
         className="mt-8 rounded-xl border border-kd-border bg-kd-surface-muted p-4 text-center"
@@ -534,21 +537,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <p className="mt-1 text-xs text-kd-fg-muted">
           Something wrong with your delivery, payment, or items? We&apos;re here to help.
         </p>
-        {/* TODO(support): point at a real support channel (in-app chat / ticket)
-            once one exists; mailto keeps a working entry point meanwhile. */}
         <Button
           size="sm"
           variant="outline"
           className="mt-3"
-          render={
-            <a
-              href={`mailto:support@khaanado.com?subject=${encodeURIComponent(
-                `Help with order ${order.code}`,
-              )}`}
-            />
-          }
+          render={<Link href={`/help/${order.id}`} />}
         >
-          Get help
+          Get help with this order
         </Button>
       </div>
     </main>
