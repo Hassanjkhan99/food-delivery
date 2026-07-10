@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import {
   formatRs,
+  LOYALTY_MAX_REDEEM_POINTS,
   VOUCHER_REJECTION_MESSAGE,
   type VoucherRejectionCode,
 } from "@fd/shared";
@@ -36,6 +37,9 @@ const QuoteMutation = graphql(`
       meetsMinimum
       inRadius
       distanceM
+      loyaltyPointsBalance
+      loyaltyPointsRedeemed
+      loyaltyDiscountMinor
     }
   }
 `);
@@ -123,6 +127,9 @@ export default function CheckoutPage() {
   const [scheduledLocal, setScheduledLocal] = useState("");
   const [paymentMode, setPaymentMode] = useState<"cod" | "card" | "wallet">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+  // Loyalty: when on, we ask the server to redeem the customer's full eligible balance.
+  // The server clamps to balance + rules and returns what was actually applied (FP-07).
+  const [useLoyalty, setUseLoyalty] = useState(false);
 
   // Promo code (#52). `voucherInput` is the field text; `voucherCode` is the applied
   // code sent to the server (only set on "Apply" so typing doesn't re-quote every keystroke).
@@ -250,6 +257,10 @@ export default function CheckoutPage() {
   // current mode returns, the displayed quote is stale (a Delivery-after-Pickup switch
   // would otherwise show a pickup total + no delivery fee while submit sends delivery).
   const [quotedMode, setQuotedMode] = useState<"delivery" | "pickup">(fulfillmentMode);
+  // Requesting the max-allowed value tells the server "redeem as much as I'm allowed"; it
+  // clamps to the live balance + subtotal ceiling. 0 disables redemption. The sentinel
+  // must stay within the shared schema cap or the quote/place-order input fails validation.
+  const redeemPoints = useLoyalty ? LOYALTY_MAX_REDEEM_POINTS : 0;
 
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
@@ -262,13 +273,14 @@ export default function CheckoutPage() {
         tipAmount,
         voucherCode: voucherCode ?? undefined,
         fulfillmentMode,
+        redeemPoints,
       },
     }).then((res) => {
       // Only mark the mode as quoted once this request's result lands.
       if (res.data?.quoteCart) setQuotedMode(fulfillmentMode);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount, voucherCode, fulfillmentMode]);
+  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount, voucherCode, fulfillmentMode, redeemPoints]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -335,6 +347,7 @@ export default function CheckoutPage() {
         paymentMode,
         paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
         tipAmount,
+        redeemPoints,
         cutleryRequested,
         voucherCode: voucherCode ?? undefined,
         fulfillmentMode,
@@ -547,6 +560,28 @@ export default function CheckoutPage() {
           />
         </div>
 
+        {quote && quote.loyaltyPointsBalance > 0 && (
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-kd-border bg-kd-surface p-4">
+            <span className="text-sm">
+              <span className="font-semibold text-kd-fg">Use loyalty points</span>
+              <span className="mt-0.5 block text-xs text-kd-fg-muted">
+                You have {quote.loyaltyPointsBalance.toLocaleString("en-PK")} points
+                {useLoyalty && quote.loyaltyDiscountMinor > 0
+                  ? ` · redeeming ${quote.loyaltyPointsRedeemed.toLocaleString("en-PK")} for ${formatRs(
+                      quote.loyaltyDiscountMinor,
+                    )} off`
+                  : ""}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={useLoyalty}
+              onChange={(e) => setUseLoyalty(e.target.checked)}
+              className="size-4"
+            />
+          </label>
+        )}
+
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
           <p className="mb-3 text-sm font-semibold">Payment</p>
           <RadioGroup
@@ -699,6 +734,12 @@ export default function CheckoutPage() {
                 <div className="flex justify-between font-medium text-kd-primary">
                   <span>Discount{quote.voucherCode ? ` (${quote.voucherCode})` : ""}</span>
                   <span>−{formatRs(quote.discountMinor)}</span>
+                </div>
+              )}
+              {quote.loyaltyDiscountMinor > 0 && (
+                <div className="flex justify-between text-kd-success">
+                  <span>Loyalty discount</span>
+                  <span>-{formatRs(quote.loyaltyDiscountMinor)}</span>
                 </div>
               )}
               <Separator className="my-2" />

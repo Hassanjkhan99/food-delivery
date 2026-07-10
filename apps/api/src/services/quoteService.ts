@@ -4,6 +4,7 @@ import { prisma } from "@fd/db";
 import {
   applyBps,
   haversineMeters,
+  resolveLoyaltyRedemption,
   type QuoteInput,
   type UnavailabilityPreference,
 } from "@fd/shared";
@@ -54,6 +55,12 @@ export type QuoteResult = {
   voucherCode: string | null;
   voucherError: string | null;
   appliedVoucher: AppliedVoucher | null;
+  // Loyalty redemption resolved server-side (FP-07). loyaltyDiscountMinor is subtracted
+  // from grandTotalMinor; loyaltyPointsRedeemed is what will actually be spent. Both 0
+  // when nothing is redeemed. pointsBalance is the caller's current balance (for UI).
+  loyaltyPointsRedeemed: number;
+  loyaltyDiscountMinor: number;
+  loyaltyPointsBalance: number;
   grandTotalMinor: number;
   minOrderMinor: number;
   meetsMinimum: boolean;
@@ -64,10 +71,10 @@ export type QuoteResult = {
 
 /**
  * Server-authoritative quote. When `userId` is provided and the input carries a
- * voucherCode, the voucher is validated + priced against this cart. In the quote
- * (preview) path an invalid code is reported via voucherError rather than thrown, so a
- * bad code doesn't blow up the whole price preview; placeOrder re-validates and DOES
- * throw so an order can never be placed with a silently-dropped discount.
+ * voucherCode, the voucher is validated + priced against this cart (an invalid code is
+ * reported via voucherError in the preview path rather than thrown; placeOrder re-validates
+ * and DOES throw). `userId` is also used to look up the loyalty balance and clamp point
+ * redemption (FP-07). Anonymous quotes (no userId) still price the cart but can't redeem.
  */
 export async function quoteCart(input: QuoteInput, userId?: string | null): Promise<QuoteResult> {
   const branch = await prisma.branch.findUnique({
@@ -244,6 +251,29 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor,
   );
 
+  // Loyalty redemption (FP-07). Points can only offset the subtotal — fees, tax, and
+  // tip stay fully owed — so the restaurant/rider are never shortchanged by a discount.
+  let loyaltyPointsBalance = 0;
+  let loyaltyPointsRedeemed = 0;
+  let loyaltyDiscountMinor = 0;
+  const requestedRedeem = input.redeemPoints ?? 0;
+  if (userId) {
+    const acct = await prisma.loyaltyAccount.findUnique({ where: { userId } });
+    loyaltyPointsBalance = acct?.pointsBalance ?? 0;
+    if (requestedRedeem > 0) {
+      const r = resolveLoyaltyRedemption(requestedRedeem, loyaltyPointsBalance, subtotal);
+      loyaltyPointsRedeemed = r.points;
+      loyaltyDiscountMinor = r.discountMinor;
+    }
+  }
+
+  // Pickup-aware deliveryFeeMinor (0 for pickup), minus BOTH the voucher discount (#52)
+  // and the loyalty discount (#57). Clamp to 0 so stacked discounts can't go negative.
+  const grandTotalMinor = Math.max(
+    0,
+    subtotal + tax + deliveryFeeMinor + platformFee + tipAmount - discountMinor - loyaltyDiscountMinor,
+  );
+
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
@@ -257,6 +287,9 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     voucherCode: appliedVoucher ? appliedVoucher.voucher.code : null,
     voucherError,
     appliedVoucher,
+    loyaltyPointsRedeemed,
+    loyaltyDiscountMinor,
+    loyaltyPointsBalance,
     grandTotalMinor,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,

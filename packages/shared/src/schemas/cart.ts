@@ -1,6 +1,10 @@
 // Cart/checkout validation shared by the web forms and API resolvers.
 import { z } from "zod";
-import { MAX_CART_LINE_QTY, UNAVAILABILITY_PREFERENCES } from "../constants";
+import {
+  LOYALTY_MAX_REDEEM_POINTS,
+  MAX_CART_LINE_QTY,
+  UNAVAILABILITY_PREFERENCES,
+} from "../constants";
 
 const unavailabilityPreferenceValues = UNAVAILABILITY_PREFERENCES.map((p) => p.value) as [
   "remove_item",
@@ -41,6 +45,10 @@ export const quoteInputSchema = z.object({
   // Fulfillment mode (#54). `pickup` zeroes the delivery fee and skips the radius
   // check; the coordinates are still required (they're used for the distance readout).
   fulfillmentMode: z.enum(["delivery", "pickup"]).default("delivery"),
+  // Loyalty points the customer wants to redeem (FP-07). Server clamps this to the
+  // balance + redemption rules and recomputes the discount; the client value is only a
+  // request. 0 = redeem nothing.
+  redeemPoints: z.number().int().min(0).max(LOYALTY_MAX_REDEEM_POINTS).default(0),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({

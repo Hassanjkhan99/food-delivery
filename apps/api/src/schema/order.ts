@@ -34,6 +34,7 @@ const QuoteCartInput = builder.inputType("QuoteCartInput", {
     voucherCode: t.string({ required: false }),
     // "delivery" (default) | "pickup" — pickup zeroes the delivery fee (#54).
     fulfillmentMode: t.string({ required: false }),
+    redeemPoints: t.int({ required: false }),
   }),
 });
 
@@ -50,6 +51,7 @@ const PlaceOrderInputType = builder.inputType("PlaceOrderInput", {
     paymentMode: t.string({ required: true }),
     paymentMethodId: t.string({ required: false }),
     tipAmount: t.int({ required: false }),
+    redeemPoints: t.int({ required: false }),
     cutleryRequested: t.boolean({ required: false }),
     voucherCode: t.string({ required: false }),
     // Fulfillment (#54): "delivery" (default) | "pickup"; optional future slot ISO string.
@@ -130,6 +132,9 @@ QuoteType.implement({
     voucherCode: t.exposeString("voucherCode", { nullable: true }),
     // Stable rejection code (e.g. "expired") when a supplied code failed; null on success.
     voucherError: t.exposeString("voucherError", { nullable: true }),
+    loyaltyPointsRedeemed: t.exposeInt("loyaltyPointsRedeemed"),
+    loyaltyDiscountMinor: t.exposeInt("loyaltyDiscountMinor"),
+    loyaltyPointsBalance: t.exposeInt("loyaltyPointsBalance"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     minOrderMinor: t.exposeInt("minOrderMinor"),
     meetsMinimum: t.exposeBoolean("meetsMinimum"),
@@ -157,6 +162,8 @@ export const OrderType = builder.prismaObject("Order", {
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
+    loyaltyPointsRedeemed: t.exposeInt("loyaltyPointsRedeemed"),
+    loyaltyDiscountMinor: t.exposeInt("loyaltyDiscountMinor"),
     cutleryRequested: t.exposeBoolean("cutleryRequested"),
     discountMinor: t.exposeInt("discountMinor"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
@@ -256,6 +263,26 @@ builder.prismaObject("Address", {
   }),
 });
 
+// Loyalty wallet + append-only ledger (FP-07).
+builder.prismaObject("LoyaltyAccount", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    pointsBalance: t.exposeInt("pointsBalance"),
+    updatedAt: t.field({ type: "DateTime", resolve: (a) => a.updatedAt }),
+  }),
+});
+
+builder.prismaObject("LoyaltyLedger", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    delta: t.exposeInt("delta"),
+    balanceAfter: t.exposeInt("balanceAfter"),
+    reason: t.exposeString("reason"),
+    memo: t.exposeString("memo", { nullable: true }),
+    createdAt: t.field({ type: "DateTime", resolve: (e) => e.createdAt }),
+  }),
+});
+
 // ── queries ─────────────────────────────────────────────────────────────────
 
 builder.queryFields((t) => ({
@@ -280,6 +307,30 @@ builder.queryFields((t) => ({
         ...query,
         where: { userId: ctx.userId! },
         orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+      }),
+  }),
+
+  // The signed-in customer's loyalty wallet (FP-07). Read-only view: returns null with
+  // a 0 balance implied when the customer has never earned points, so the UI can render
+  // "0 pts" without a write. The account row is created lazily on first earn/redeem.
+  loyaltyAccount: t.prismaField({
+    type: "LoyaltyAccount",
+    nullable: true,
+    authScopes: { loggedIn: true },
+    resolve: (query, _root, _args, ctx) =>
+      prisma.loyaltyAccount.findUnique({ ...query, where: { userId: ctx.userId! } }),
+  }),
+
+  // Recent loyalty points history (earn/redeem/adjust), newest first.
+  loyaltyLedger: t.prismaField({
+    type: ["LoyaltyLedger"],
+    authScopes: { loggedIn: true },
+    resolve: (query, _root, _args, ctx) =>
+      prisma.loyaltyLedger.findMany({
+        ...query,
+        where: { userId: ctx.userId! },
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
   }),
 
@@ -313,8 +364,10 @@ builder.mutationFields((t) => ({
           tipAmount: args.input.tipAmount ?? undefined,
           voucherCode: args.input.voucherCode ?? undefined,
           fulfillmentMode: args.input.fulfillmentMode ?? undefined,
+          redeemPoints: args.input.redeemPoints ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
+        // Anonymous quotes still price the cart; redemption only kicks in when signed in.
         ctx.userId,
       ),
   }),
@@ -333,6 +386,7 @@ builder.mutationFields((t) => ({
         customerNote: args.input.customerNote ?? undefined,
         paymentMethodId: args.input.paymentMethodId ?? undefined,
         tipAmount: args.input.tipAmount ?? undefined,
+        redeemPoints: args.input.redeemPoints ?? undefined,
         cutleryRequested: args.input.cutleryRequested ?? undefined,
         voucherCode: args.input.voucherCode ?? undefined,
         fulfillmentMode: args.input.fulfillmentMode ?? undefined,

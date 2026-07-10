@@ -153,6 +153,21 @@ type LedgerEntry {
   txId: String!
 }
 
+type LoyaltyAccount {
+  id: ID!
+  pointsBalance: Int!
+  updatedAt: DateTime!
+}
+
+type LoyaltyLedger {
+  balanceAfter: Int!
+  createdAt: DateTime!
+  delta: Int!
+  id: ID!
+  memo: String
+  reason: String!
+}
+
 type MediaAsset {
   contentType: String!
   id: ID!
@@ -305,6 +320,8 @@ type Order {
   grandTotalMinor: Int!
   id: ID!
   items: [OrderItem!]!
+  loyaltyDiscountMinor: Int!
+  loyaltyPointsRedeemed: Int!
   paymentMode: String!
   placedAt: DateTime!
   platformFeeMinor: Int!
@@ -380,6 +397,7 @@ input PlaceOrderInput {
   lines: [CartLineInput!]!
   paymentMethodId: String
   paymentMode: String!
+  redeemPoints: Int
   tipAmount: Int
 }
 
@@ -399,6 +417,8 @@ type Query {
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
   homeBanners: [HomeBanner!]!
+  loyaltyAccount: LoyaltyAccount
+  loyaltyLedger: [LoyaltyLedger!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
   myEarnings: RiderEarnings!
@@ -429,6 +449,9 @@ type Quote {
   grandTotalMinor: Int!
   inRadius: Boolean!
   lines: [QuoteLine!]!
+  loyaltyDiscountMinor: Int!
+  loyaltyPointsBalance: Int!
+  loyaltyPointsRedeemed: Int!
   meetsMinimum: Boolean!
   minOrderMinor: Int!
   platformFeeMinor: Int!
@@ -442,6 +465,7 @@ input QuoteCartInput {
   deliveryLat: Float!
   deliveryLng: Float!
   lines: [CartLineInput!]!
+  redeemPoints: Int
   tipAmount: Int
 }
 

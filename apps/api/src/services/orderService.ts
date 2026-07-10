@@ -28,6 +28,7 @@ import {
   reverseRedemptionForOrder,
   validateVoucher,
 } from "./voucherService.js";
+import { onOrderDeliveredLoyalty, onOrderReversalLoyalty, postLoyaltyTx } from "./loyaltyService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
 import { notifyOrderStatus } from "./notificationService.js";
@@ -151,6 +152,8 @@ export async function placeOrder(
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,
           commissionBpsSnapshot: quote.commissionBps,
+          loyaltyPointsRedeemed: quote.loyaltyPointsRedeemed,
+          loyaltyDiscountMinor: quote.loyaltyDiscountMinor,
           tipAmount: quote.tipAmount,
           cutleryRequested: input.cutleryRequested,
           discountMinor: quote.discountMinor,
@@ -233,6 +236,17 @@ export async function placeOrder(
         await recordRedemption(tx, applied, created.id, customerId);
       }
 
+      // Spend redeemed loyalty points now (FP-07). quoteCart already clamped this to the
+      // live balance, but the deduction is inside the placement tx so the cart's unique
+      // idempotency create still arbitrates races. Points are returned if the order is
+      // later reversed (see onOrderReversalLoyalty).
+      if (quote.loyaltyPointsRedeemed > 0) {
+        await postLoyaltyTx(tx, customerId, -quote.loyaltyPointsRedeemed, "redeem", {
+          orderId: created.id,
+          memo: `Redeemed on ${created.code}`,
+        });
+      }
+
       // Wallet: debit prepaid → holding inside the same transaction as the order create.
       // Re-read the balance here so two concurrent orders can't both drain a wallet that
       // only covers one (the serialized ledger writes make the check authoritative). (#55)
@@ -284,6 +298,11 @@ export async function placeOrder(
               reason: `Payment failed: ${result.declineReason}`,
             },
           });
+          // Points were spent inside the placement tx (before the charge attempt). This
+          // decline path cancels the order directly instead of via transition(), so it
+          // must return the redeemed points itself — otherwise the customer loses points
+          // on an order that never succeeded. No-op when nothing was redeemed.
+          await onOrderReversalLoyalty(tx, order, "cancelled");
         });
         throw new GraphQLError(result.declineReason);
       }
@@ -397,10 +416,14 @@ export async function transition(
       await onOrderDelivered(tx, order);
       // Post the voucher discount as a distinct ledger entry against the funder (#52).
       await postDiscountLedger(tx, order);
+      // Earn loyalty points on the delivered order (FP-07 / #57).
+      await onOrderDeliveredLoyalty(tx, order);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
       await onOrderMoneyReversal(tx, order, to, opts.refundMinor);
-      // Free the redemption so it stops counting against the user's limit + budget. (#52)
+      // Free the voucher redemption so it stops counting against the user's limit + budget. (#52)
       await reverseRedemptionForOrder(tx, order.id);
+      // Return any redeemed loyalty points and claw back points earned on this order. (#57)
+      await onOrderReversalLoyalty(tx, order, to);
     }
 
     return tx.order.findUniqueOrThrow({ where: { id: orderId } });

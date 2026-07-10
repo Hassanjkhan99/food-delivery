@@ -105,6 +105,15 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
         ]
       : [];
 
+  // Loyalty is platform-funded (FP-07 / #57): the customer only prepaid the discounted
+  // grandTotal, but the restaurant is owed the full (undiscounted) share. The platform
+  // absorbs the gap (debit platform:revenue) so the legs balance and the restaurant is
+  // never shortchanged. Applies to both prepaid (card) and wallet settlements.
+  const loyaltyLegs: Leg[] =
+    order.loyaltyDiscountMinor > 0
+      ? [{ code: "platform:revenue", ownerType: "platform", debit: order.loyaltyDiscountMinor }]
+      : [];
+
   if (order.paymentMode === "card") {
     // Platform holds the customer's money; release restaurant share, keep fees, pay tip.
     await postLedgerTx(
@@ -125,13 +134,14 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
         ...riderTipLegs,
+        ...loyaltyLegs,
       ],
       { orderId: order.id },
     );
   } else if (order.paymentMode === "wallet") {
     // The grand total is sitting in platform:wallet_holding (moved out of the customer's
     // prepaid balance at placement). Release restaurant share + keep fees + pay tip —
-    // identical to the card economics, only the source leg differs. (#55 + #21)
+    // identical to the card economics, only the source leg differs. (#55 + #21 + #57)
     await postLedgerTx(
       tx,
       `Settlement ${order.code} (wallet)`,
@@ -145,6 +155,7 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
         },
         { code: "platform:revenue", ownerType: "platform", credit: fees },
         ...riderTipLegs,
+        ...loyaltyLegs,
       ],
       { orderId: order.id },
     );
