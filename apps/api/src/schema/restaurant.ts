@@ -69,7 +69,10 @@ builder.prismaObject("Rider", {
     verifiedAt: t.field({ type: "DateTime", nullable: true, resolve: (r) => r.verifiedAt }),
     rejectionReason: t.exposeString("rejectionReason", { nullable: true }),
     user: t.relation("user"),
-    verificationDocs: t.relation("verificationDocs"),
+    // Identity documents (CNIC/photo) are the admin review queue's concern only. The
+    // restaurant roster (branchRiders) shares this Rider type but must never expose these
+    // URLs to restaurant owners/staff, so gate the field to admins.
+    verificationDocs: t.relation("verificationDocs", { authScopes: { admin: true } }),
     isOnline: t.boolean({
       resolve: async (rider) => {
         const a = await prisma.riderAvailability.findUnique({ where: { riderId: rider.id } });
@@ -394,6 +397,9 @@ builder.mutationFields((t) => ({
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
       }
+      if (rider.verificationStatus === "rejected") {
+        throw new GraphQLError("Rider has been rejected and cannot be assigned jobs");
+      }
       await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
         update: { riderId: args.riderId, status: "assigned", assignedAt: new Date() },
@@ -436,6 +442,9 @@ builder.mutationFields((t) => ({
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      if (rider.verificationStatus === "rejected") {
+        throw new GraphQLError("Rider has been rejected and cannot be offered jobs");
       }
       const task = await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },

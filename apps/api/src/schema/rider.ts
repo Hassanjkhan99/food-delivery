@@ -486,6 +486,11 @@ builder.mutationFields((t) => ({
       if (!asset || asset.status !== "finalized") {
         throw new GraphQLError("Document upload is not finalized");
       }
+      // The asset must belong to the submitting user (ownerId is set at presign). Without
+      // this a rider could attach someone else's finalized upload to satisfy a doc gate.
+      if (asset.ownerId !== ctx.userId) {
+        throw new GraphQLError("Document upload is not finalized");
+      }
       // Replace any existing doc of the same kind for this rider.
       await prisma.riderVerificationDoc.deleteMany({
         where: { riderId: ctx.riderId, kind: args.kind as never },

@@ -19,13 +19,16 @@ export type RiderForRequirements = Pick<
 export function missingRequirements(rider: RiderForRequirements): string[] {
   const missing: string[] = [];
   const hasDoc = (kind: string) => rider.verificationDocs.some((d) => d.kind === kind);
+  // Whitespace-only strings are stored raw by updateRiderOnboarding; treat them as missing
+  // so "   " can't satisfy a hard onboarding gate at approval time.
+  const hasText = (v: string | null) => (v ?? "").trim().length > 0;
 
   if (rider.riderType === "shared" || rider.riderType === "independent") {
     if (!hasDoc("cnic_front")) missing.push("CNIC front");
     if (!hasDoc("cnic_back")) missing.push("CNIC back");
     if (!hasDoc("photo")) missing.push("Rider photo");
-    if (!rider.vehicleType) missing.push("Vehicle type");
-    if (!rider.vehiclePlate) missing.push("Vehicle plate");
+    if (!hasText(rider.vehicleType)) missing.push("Vehicle type");
+    if (!hasText(rider.vehiclePlate)) missing.push("Vehicle plate");
     if (!rider.trainingCompleted) missing.push("Training completion");
     if (!rider.agreementAccepted) missing.push("Agreement acceptance");
   }

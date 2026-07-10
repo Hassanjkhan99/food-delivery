@@ -41,10 +41,19 @@ export async function computeTrustScore(riderId: string): Promise<TrustBreakdown
   const failedCount = tasks.filter((t) => t.status === "failed").length;
   const totalTerminal = deliveredCount + failedCount;
 
-  const declinedCount = tasks.reduce(
-    (n, t) => n + t.events.filter((e) => e.type === "declined").length,
-    0,
-  );
+  // Declines are attributed to the rider who declined, not the task's current owner:
+  // declineTask clears DeliveryTask.riderId, so counting declined events on currently-owned
+  // tasks would never penalize the decliner and would mis-charge a later assignee. Count by
+  // the declining user's own decline events instead (actorUserId set at decline time).
+  const rider = await prisma.rider.findUnique({
+    where: { id: riderId },
+    select: { userId: true },
+  });
+  const declinedCount = rider
+    ? await prisma.deliveryEvent.count({
+        where: { type: "declined", actorUserId: rider.userId },
+      })
+    : 0;
   const incidentCount = tasks.reduce(
     (n, t) => n + t.events.filter((e) => e.type === "incident").length,
     0,
