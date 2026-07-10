@@ -126,6 +126,13 @@ export async function onOrderMoneyReversal(
   tx: Tx,
   order: OrderWithMoney,
   to: string,
+  /**
+   * #30: the policy-decided refund amount (minor units). When omitted the whole
+   * captured charge is returned (the historical full-refund behaviour). When the
+   * cancellation policy assesses a fee, the caller passes `grandTotal - fee` here
+   * so the customer keeps only the refundable remainder and the fee is retained.
+   */
+  refundMinor?: number,
 ): Promise<void> {
   if (order.paymentMode === "cod") {
     // Nothing was collected; void the pending payment.
@@ -136,26 +143,38 @@ export async function onOrderMoneyReversal(
     return;
   }
 
-  // Card: refund the captured charge in full.
+  // Card: refund the captured charge (in full, or the policy amount when given).
   if (!order.payment || order.payment.status !== "captured" || !order.payment.providerRef) return;
+
+  // Clamp the policy amount into [0, captured]; default to a full refund.
+  const captured = order.payment.amountMinor;
+  const amount =
+    refundMinor === undefined ? captured : Math.max(0, Math.min(refundMinor, captured));
+
+  // A fully-forfeited refund (fee == total) collects the whole charge: no money moves
+  // back to the customer, and the payment stays captured rather than flipping to refunded.
+  if (amount === 0) return;
 
   const { mockProvider } = await import("./payments/mockProvider.js");
   await mockProvider.refund({
     chargeRef: order.payment.providerRef,
-    amountMinor: order.payment.amountMinor,
+    amountMinor: amount,
     reference: order.code,
   });
 
   await tx.payment.update({
     where: { id: order.payment.id },
-    data: { status: "refunded", refundedMinor: order.payment.amountMinor },
+    data: {
+      status: amount >= captured ? "refunded" : "partially_refunded",
+      refundedMinor: amount,
+    },
   });
 
   const refund = await tx.refund.create({
     data: {
       orderId: order.id,
       status: "refunded",
-      amountMinor: order.payment.amountMinor,
+      amountMinor: amount,
       destination: "card",
       reason: `Automatic refund — order ${to}`,
       decidedAt: new Date(),
@@ -170,9 +189,9 @@ export async function onOrderMoneyReversal(
         code: `customer:${order.customerId}:prepaid`,
         ownerType: "customer",
         ownerId: order.customerId,
-        debit: order.payment.amountMinor,
+        debit: amount,
       },
-      { code: "platform:cash", ownerType: "platform", credit: order.payment.amountMinor },
+      { code: "platform:cash", ownerType: "platform", credit: amount },
     ],
     { orderId: order.id, refundId: refund.id },
   );

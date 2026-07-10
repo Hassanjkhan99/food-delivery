@@ -212,7 +212,16 @@ export async function transition(
   orderId: string,
   to: OrderStatus,
   actor: Actor,
-  opts: { reason?: string; expectedFrom?: OrderStatus; meta?: Record<string, unknown> } = {},
+  opts: {
+    reason?: string;
+    expectedFrom?: OrderStatus;
+    meta?: Record<string, unknown>;
+    /**
+     * #30: policy-decided refund (minor units) applied when moving to a reversal
+     * state. Omitted => full refund of the captured charge (unchanged behaviour).
+     */
+    refundMinor?: number;
+  } = {},
 ) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -269,7 +278,7 @@ export async function transition(
     if (to === "delivered") {
       await onOrderDelivered(tx, order);
     } else if (["rejected", "auto_expired", "cancelled"].includes(to)) {
-      await onOrderMoneyReversal(tx, order, to);
+      await onOrderMoneyReversal(tx, order, to, opts.refundMinor);
     }
 
     return tx.order.findUniqueOrThrow({ where: { id: orderId } });

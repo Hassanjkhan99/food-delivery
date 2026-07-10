@@ -281,6 +281,9 @@ builder.mutationFields((t) => ({
         { userId: ctx.userId, role: "customer" },
         {
           reason: args.reason ?? "Customer cancelled",
+          // #30: the ledger reversal must honour the policy refund, not blanket-refund
+          // the full charge, so a post-grace-window fee is actually collected.
+          refundMinor: decision.refundMinor,
           meta: {
             policyScenario: decision.scenario,
             policyOutcome: decision.outcome,

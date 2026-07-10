@@ -52,6 +52,8 @@ async function wipe() {
     "otp_codes",
     "audit_logs",
     "fee_configs",
+    // #30: RESTRICT FK to branches — must be wiped before branches or re-seed fails.
+    "branch_cancellation_stats",
     "branches",
     "user_roles",
     "restaurants",

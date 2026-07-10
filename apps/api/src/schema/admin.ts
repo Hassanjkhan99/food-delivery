@@ -5,6 +5,7 @@ import { GraphQLError } from "graphql";
 import type { OrderStatus, PolicyMatrixRow, CancellationPolicyConfig } from "@fd/shared";
 import { CANCELLATION_POLICY_MATRIX, CANCELLATION_POLICY_CONFIG } from "@fd/shared";
 import { transition } from "../services/orderService.js";
+import { recordCancellation } from "../services/policyService.js";
 import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
 import { mockProvider } from "../services/payments/mockProvider.js";
 import { builder } from "./builder.js";
@@ -341,14 +342,26 @@ builder.mutationFields((t) => ({
       toStatus: t.arg.string({ required: true }),
       reason: t.arg.string({ required: true }),
     },
-    resolve: (_q, _root, args, ctx) =>
+    resolve: async (_q, _root, args, ctx) => {
+      const toStatus = args.toStatus as OrderStatus;
+      // #30: capture the order before the move so a cancellation policy row can be
+      // written against its pre-transition state (grace-window/timing intact).
+      const before =
+        ["rejected", "auto_expired", "cancelled"].includes(toStatus)
+          ? await prisma.order.findUnique({ where: { id: args.id } })
+          : null;
       // transition() audits admin/system actors internally.
-      transition(
+      const updated = await transition(
         args.id,
-        args.toStatus as OrderStatus,
+        toStatus,
         { userId: ctx.userId, role: "admin" },
         { reason: args.reason },
-      ),
+      );
+      // Admin-driven cancellations still owe a Cancellation audit row (admin_override
+      // scenario, full refund by default). Persist it after the transition succeeds.
+      if (before) await recordCancellation(before, "admin");
+      return updated;
+    },
   }),
 
   decideRefund: t.prismaField({
