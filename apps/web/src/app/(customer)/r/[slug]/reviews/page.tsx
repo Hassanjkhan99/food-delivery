@@ -61,7 +61,7 @@ function Stars({ n, className }: { n: number; className?: string }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`h-4 w-4 ${i <= n ? "fill-amber-400 text-amber-400" : "text-neutral-300"}`}
+          className={`h-4 w-4 ${i <= n ? "fill-kd-warning text-kd-warning" : "text-kd-fg-subtle"}`}
         />
       ))}
     </span>
@@ -115,7 +115,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
       </div>
     );
   }
-  if (!r) return <p className="text-neutral-500">Restaurant not found.</p>;
+  if (!r) return <p className="text-kd-fg-muted">Restaurant not found.</p>;
 
   const dist = r.ratingDistribution; // index 0 => 1★ … index 4 => 5★
   const maxBucket = Math.max(1, ...dist);
@@ -151,7 +151,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
             return (
               <div key={star} className="flex items-center gap-2 text-xs">
                 <span className="w-3 tabular-nums opacity-70">{star}</span>
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                <Star className="h-3 w-3 fill-kd-warning text-kd-warning" />
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/5">
                   <div
                     className="h-full rounded-full"

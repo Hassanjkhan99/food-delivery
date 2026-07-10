@@ -117,9 +117,9 @@ export function ItemModal({
 
         {item.modifierGroups.map((g) => (
           <fieldset key={g.id} className="space-y-2">
-            <legend className="text-sm font-semibold text-neutral-900">
+            <legend className="text-sm font-semibold text-kd-fg">
               {g.name}{" "}
-              <span className="font-normal text-neutral-500">
+              <span className="font-normal text-kd-fg-muted">
                 {g.minSelect > 0 ? "(required)" : "(optional)"}
                 {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ""}
               </span>
@@ -130,7 +130,7 @@ export function ItemModal({
                 <label
                   key={o.id}
                   className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                    checked ? "border-neutral-900 bg-neutral-50" : "border-neutral-200"
+                    checked ? "border-kd-fg bg-kd-surface-muted" : "border-kd-border"
                   } ${!o.isAvailable ? "opacity-40" : ""}`}
                 >
                   <span className="flex items-center gap-2">
@@ -144,7 +144,7 @@ export function ItemModal({
                     {o.name}
                   </span>
                   {o.priceDeltaMinor > 0 && (
-                    <span className="text-neutral-500">+{formatRs(o.priceDeltaMinor)}</span>
+                    <span className="text-kd-fg-muted">+{formatRs(o.priceDeltaMinor)}</span>
                   )}
                 </label>
               );
@@ -160,7 +160,7 @@ export function ItemModal({
         />
 
         <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="flex items-center rounded-lg border border-neutral-200">
+          <div className="flex items-center rounded-lg border border-kd-border">
             <Button variant="ghost" size="sm" onClick={() => setQty(Math.max(1, qty - 1))}>
               −
             </Button>
@@ -178,10 +178,10 @@ export function ItemModal({
             Add {qty} · {formatRs(unitPrice * qty)}
           </Button>
         </div>
-        {validation && <p className="text-xs text-amber-600">{validation}</p>}
+        {validation && <p className="text-xs text-kd-warning">{validation}</p>}
 
         {conflict && (
-          <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="rounded-lg bg-kd-warning-soft p-3 text-sm text-kd-fg">
             Your cart has items from another restaurant.
             <div className="mt-2 flex gap-2">
               <Button size="sm" variant="destructive" onClick={() => addToCart(true)}>

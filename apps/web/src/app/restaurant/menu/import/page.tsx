@@ -123,7 +123,7 @@ export default function MenuImportPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({ categoryId: "", name: "", priceRs: "" });
 
-  if (!branch) return <p className="text-neutral-500">Complete onboarding first.</p>;
+  if (!branch) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   const docs = data?.menuSourceDocs ?? [];
   const draft = data?.draftMenu;
@@ -161,7 +161,7 @@ export default function MenuImportPage() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Bring your menu online</h1>
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-kd-fg-muted">
             Upload your physical menu, then transcribe it — your digital menu mirrors the real one.
           </p>
         </div>
@@ -171,15 +171,15 @@ export default function MenuImportPage() {
       </div>
 
       {message && (
-        <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{message}</p>
+        <p className="mb-4 rounded-lg bg-kd-danger-soft px-3 py-2 text-sm text-kd-danger">{message}</p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left: source documents */}
-        <section className="rounded-xl border border-neutral-200 bg-white p-4">
+        <section className="rounded-xl border border-kd-border bg-kd-surface p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Your menu (reference)</h2>
-            <label className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1 text-xs font-medium hover:bg-neutral-50">
+            <label className="cursor-pointer rounded-lg border border-kd-border px-3 py-1 text-xs font-medium hover:bg-kd-surface-muted">
               + Upload photo/PDF
               <input
                 type="file"
@@ -191,7 +191,7 @@ export default function MenuImportPage() {
           </div>
 
           {docs.length === 0 && (
-            <p className="py-12 text-center text-sm text-neutral-400">
+            <p className="py-12 text-center text-sm text-kd-fg-subtle">
               Upload photos of your in-restaurant menu to transcribe from.
             </p>
           )}
@@ -203,7 +203,7 @@ export default function MenuImportPage() {
                   <button
                     key={d.id}
                     onClick={() => setActiveDoc(d.id)}
-                    className={`rounded px-2 py-1 text-xs ${active?.id === d.id ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}
+                    className={`rounded px-2 py-1 text-xs ${active?.id === d.id ? "bg-kd-primary text-white" : "bg-kd-surface-muted"}`}
                   >
                     {d.kind} {i + 1}
                   </button>
@@ -229,14 +229,14 @@ export default function MenuImportPage() {
 
         {/* Right: transcribe into the draft */}
         <section className="space-y-4">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
             <h2 className="mb-3 font-semibold">Transcribe an item → draft v{draft?.version}</h2>
             <div className="space-y-3 text-sm">
               <div className="flex gap-2">
                 <select
                   value={form.categoryId}
                   onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                  className="flex-1 rounded-lg border border-neutral-300 px-2 py-1.5"
+                  className="flex-1 rounded-lg border border-kd-border px-2 py-1.5"
                 >
                   <option value="">Choose category…</option>
                   {draft?.categories.map((c) => (
@@ -296,7 +296,7 @@ export default function MenuImportPage() {
               >
                 Add to draft
               </Button>
-              <p className="text-xs text-neutral-400">
+              <p className="text-xs text-kd-fg-subtle">
                 Modifiers, photos and descriptions can be added later in the menu manager. Publish
                 from there when you&apos;re done.
               </p>
@@ -304,12 +304,12 @@ export default function MenuImportPage() {
           </div>
 
           {/* CSV import */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
             <h2 className="mb-2 font-semibold">Bulk import (CSV)</h2>
-            <p className="mb-3 text-xs text-neutral-400">
+            <p className="mb-3 text-xs text-kd-fg-subtle">
               Columns: <code>category, name, description, price</code> (price in Rs).
             </p>
-            <label className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:bg-neutral-50">
+            <label className="cursor-pointer rounded-lg border border-kd-border px-3 py-1.5 text-xs font-medium hover:bg-kd-surface-muted">
               Choose CSV…
               <input
                 type="file"
@@ -321,9 +321,9 @@ export default function MenuImportPage() {
 
             {csvRows && (
               <div className="mt-3">
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-neutral-100 text-xs">
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-kd-border text-xs">
                   <table className="w-full">
-                    <thead className="bg-neutral-50 text-left">
+                    <thead className="bg-kd-surface-muted text-left">
                       <tr>
                         <th className="p-1.5">Category</th>
                         <th className="p-1.5">Item</th>
@@ -333,7 +333,7 @@ export default function MenuImportPage() {
                     </thead>
                     <tbody>
                       {csvRows.map((r) => (
-                        <tr key={r.line} className={r.error ? "bg-red-50" : ""}>
+                        <tr key={r.line} className={r.error ? "bg-kd-danger-soft" : ""}>
                           <td className="p-1.5">{r.category}</td>
                           <td className="p-1.5">{r.name}</td>
                           <td className="p-1.5">{r.error ? "—" : formatRs(r.priceMinor)}</td>

@@ -53,7 +53,7 @@ export function FloatingCartBar({ branchId }: { branchId: string }) {
             <span className="flex items-center gap-2.5">
               <span className="relative flex items-center">
                 <ShoppingBag className="h-5 w-5" />
-                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-neutral-900">
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-kd-surface px-1 text-[10px] font-bold text-kd-fg">
                   {count}
                 </span>
               </span>

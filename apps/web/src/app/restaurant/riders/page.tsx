@@ -45,7 +45,7 @@ export default function RidersPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  if (!branch) return <p className="text-neutral-500">Complete onboarding first.</p>;
+  if (!branch) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   return (
     <main className="max-w-xl">
@@ -55,11 +55,11 @@ export default function RidersPage() {
         {data?.branchRiders.map((r) => (
           <div
             key={r.id}
-            className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-3 text-sm"
+            className="flex items-center justify-between rounded-xl border border-kd-border bg-kd-surface p-3 text-sm"
           >
             <div>
               <p className="font-medium">{r.user.name ?? "Unnamed rider"}</p>
-              <p className="text-xs text-neutral-500">{r.user.phone}</p>
+              <p className="text-xs text-kd-fg-muted">{r.user.phone}</p>
             </div>
             <div className="flex gap-2">
               <Badge variant={r.isOnline ? "default" : "secondary"}>
@@ -70,12 +70,12 @@ export default function RidersPage() {
           </div>
         ))}
         {data?.branchRiders.length === 0 && (
-          <p className="text-sm text-neutral-500">No riders yet — invite your first below.</p>
+          <p className="text-sm text-kd-fg-muted">No riders yet — invite your first below.</p>
         )}
       </div>
 
       <form
-        className="mt-8 space-y-3 rounded-xl border border-neutral-200 bg-white p-4"
+        className="mt-8 space-y-3 rounded-xl border border-kd-border bg-kd-surface p-4"
         onSubmit={async (e) => {
           e.preventDefault();
           setError(null);
@@ -102,9 +102,9 @@ export default function RidersPage() {
             className="mt-1"
             required
           />
-          <p className="mt-1 text-xs text-neutral-400">They sign in with this number via OTP.</p>
+          <p className="mt-1 text-xs text-kd-fg-subtle">They sign in with this number via OTP.</p>
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-kd-danger">{error}</p>}
         <Button type="submit" disabled={inviteState.fetching} className="w-full">
           {inviteState.fetching ? "Inviting…" : "Invite rider"}
         </Button>

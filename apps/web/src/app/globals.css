@@ -67,6 +67,24 @@
   --color-kd-warning-soft: var(--kd-warning-soft);
   --color-kd-danger: var(--kd-danger);
   --color-kd-danger-soft: var(--kd-danger-soft);
+  --color-kd-info: var(--kd-info);
+  --color-kd-info-soft: var(--kd-info-soft);
+
+  /* KhaanaDo semantic type scale (--text-kd-*). Additive/opt-in Tailwind v4
+     font-size tokens (emit text-kd-display … text-kd-caption). Names are
+     namespaced to avoid colliding with Tailwind's default text-* sizes. */
+  --text-kd-display: 2.25rem;
+  --text-kd-display--line-height: 2.5rem;
+  --text-kd-heading: 1.5rem;
+  --text-kd-heading--line-height: 2rem;
+  --text-kd-title: 1.125rem;
+  --text-kd-title--line-height: 1.75rem;
+  --text-kd-body: 1rem;
+  --text-kd-body--line-height: 1.5rem;
+  --text-kd-label: 0.875rem;
+  --text-kd-label--line-height: 1.25rem;
+  --text-kd-caption: 0.75rem;
+  --text-kd-caption--line-height: 1rem;
 }
 
 :root {
@@ -122,6 +140,8 @@
   --kd-warning-soft: #fef3c7;
   --kd-danger: #dc2626;
   --kd-danger-soft: #fee2e2;
+  --kd-info: #0284c7;
+  --kd-info-soft: #e0f2fe;
 }
 
 .dark {
@@ -175,6 +195,8 @@
   --kd-warning-soft: #451a03;
   --kd-danger: #f87171;
   --kd-danger-soft: #450a0a;
+  --kd-info: #38bdf8;
+  --kd-info-soft: #082f49;
 }
 
 @layer base {

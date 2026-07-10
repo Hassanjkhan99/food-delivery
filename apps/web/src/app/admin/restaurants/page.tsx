@@ -61,11 +61,11 @@ export default function AdminRestaurantsPage() {
         {data?.allRestaurants.map((r) => (
           <div
             key={r.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white p-4 text-sm"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm"
           >
             <div>
               <p className="font-medium">
-                {r.name} <span className="text-xs text-neutral-400">/{r.slug}</span>
+                {r.name} <span className="text-xs text-kd-fg-subtle">/{r.slug}</span>
               </p>
               <div className="mt-1 flex gap-2">
                 <Badge
@@ -80,7 +80,7 @@ export default function AdminRestaurantsPage() {
                   {r.status}
                 </Badge>
                 {r.avgRating != null && (
-                  <span className="text-xs text-neutral-500">
+                  <span className="text-xs text-kd-fg-muted">
                     ★ {r.avgRating.toFixed(1)} ({r.ratingCount})
                   </span>
                 )}
@@ -89,7 +89,7 @@ export default function AdminRestaurantsPage() {
             <div className="flex items-center gap-2">
               <select
                 value={r.tier}
-                className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
+                className="rounded-lg border border-kd-border px-2 py-1 text-xs"
                 onChange={async (e) => {
                   await setTier({ id: r.id, tier: e.target.value });
                   refresh();

@@ -52,7 +52,7 @@ export default function OnboardingPage() {
     return (
       <main className="mx-auto max-w-md py-16 text-center">
         <h1 className="text-2xl font-bold">Application submitted 🎉</h1>
-        <p className="mt-2 text-neutral-600">
+        <p className="mt-2 text-kd-fg-muted">
           Your restaurant is pending platform approval. You can set up your menu meanwhile — it goes
           live once an admin approves you.
         </p>
@@ -66,7 +66,7 @@ export default function OnboardingPage() {
   return (
     <main className="mx-auto max-w-md">
       <h1 className="mb-1 text-xl font-bold">Bring your restaurant online</h1>
-      <p className="mb-6 text-sm text-neutral-500">
+      <p className="mb-6 text-sm text-kd-fg-muted">
         You keep your kitchen, your riders and your prices — we bring the orders.
       </p>
       <form
@@ -109,7 +109,7 @@ export default function OnboardingPage() {
             rows={2}
             required
           />
-          <p className="mt-1 text-xs text-neutral-400">
+          <p className="mt-1 text-xs text-kd-fg-subtle">
             Pinned near {DEFAULT_LOCATION.label} in this pilot.
           </p>
         </div>
@@ -142,7 +142,7 @@ export default function OnboardingPage() {
             />
           </div>
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-kd-danger">{error}</p>}
         <Button type="submit" className="w-full" disabled={state.fetching}>
           {state.fetching ? "Submitting…" : "Submit for approval"}
         </Button>

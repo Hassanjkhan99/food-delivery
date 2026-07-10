@@ -57,18 +57,18 @@ export default function AdminPayoutsPage() {
         </Button>
       </div>
 
-      {message && <p className="mb-4 rounded-lg bg-neutral-100 px-3 py-2 text-sm">{message}</p>}
+      {message && <p className="mb-4 rounded-lg bg-kd-surface-muted px-3 py-2 text-sm">{message}</p>}
 
       <div className="space-y-2">
         {candidates.map((c) => (
           <div
             key={c.restaurantId}
-            className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4 text-sm"
+            className="flex items-center justify-between rounded-xl border border-kd-border bg-kd-surface p-4 text-sm"
           >
             <span className="font-medium">{c.name}</span>
             <div className="flex items-center gap-3">
               <span
-                className={`font-mono font-semibold ${c.balanceMinor < 0 ? "text-red-600" : ""}`}
+                className={`font-mono font-semibold ${c.balanceMinor < 0 ? "text-kd-danger" : ""}`}
               >
                 {formatRs(c.balanceMinor)}
               </span>
@@ -88,10 +88,10 @@ export default function AdminPayoutsPage() {
           </div>
         ))}
         {candidates.length === 0 && (
-          <p className="text-sm text-neutral-500">All balances settled.</p>
+          <p className="text-sm text-kd-fg-muted">All balances settled.</p>
         )}
       </div>
-      <p className="mt-4 text-xs text-neutral-400">
+      <p className="mt-4 text-xs text-kd-fg-subtle">
         Negative balances are platform receivables (COD fees) that net against future earnings.
       </p>
     </main>

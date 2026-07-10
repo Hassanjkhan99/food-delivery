@@ -29,7 +29,7 @@ export default function AdminAuditPage() {
         {data?.auditLogs.map((a) => (
           <details
             key={a.id}
-            className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm"
+            className="rounded-lg border border-kd-border bg-kd-surface px-3 py-2 text-sm"
           >
             <summary className="flex cursor-pointer items-center justify-between">
               <span>
@@ -37,19 +37,19 @@ export default function AdminAuditPage() {
                   {a.actorRole ?? "system"}
                 </Badge>
                 <span className="font-mono text-xs">{a.action}</span>
-                <span className="ml-2 text-xs text-neutral-400">
+                <span className="ml-2 text-xs text-kd-fg-subtle">
                   {a.subjectType}/{a.subjectId.slice(0, 10)}…
                 </span>
               </span>
-              <span className="text-xs text-neutral-400">
+              <span className="text-xs text-kd-fg-subtle">
                 {new Date(a.createdAt as unknown as string).toLocaleString()}
               </span>
             </summary>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              <pre className="overflow-x-auto rounded bg-red-50 p-2 text-[11px]">
+              <pre className="overflow-x-auto rounded bg-kd-danger-soft p-2 text-[11px]">
                 before: {JSON.stringify(a.beforeJson ?? null, null, 1)}
               </pre>
-              <pre className="overflow-x-auto rounded bg-green-50 p-2 text-[11px]">
+              <pre className="overflow-x-auto rounded bg-kd-success-soft p-2 text-[11px]">
                 after: {JSON.stringify(a.afterJson ?? null, null, 1)}
               </pre>
             </div>

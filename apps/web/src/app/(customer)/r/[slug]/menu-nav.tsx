@@ -74,7 +74,7 @@ export function MenuNav({
                   href={reviewsHref}
                   className="flex shrink-0 items-center gap-1 text-xs font-medium opacity-80 hover:opacity-100"
                 >
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  <Star className="h-3.5 w-3.5 fill-kd-warning text-kd-warning" />
                   {avgRating.toFixed(1)} ({ratingCount})
                 </Link>
               )}
@@ -99,7 +99,7 @@ export function MenuNav({
               type="button"
               aria-label="Clear search"
               onClick={() => onSearch("")}
-              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 hover:bg-black/5"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kd-fg-muted hover:bg-black/5"
             >
               <X className="h-4 w-4" />
             </button>

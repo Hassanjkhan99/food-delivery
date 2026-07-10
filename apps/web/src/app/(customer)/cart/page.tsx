@@ -13,7 +13,7 @@ export default function CartPage() {
   if (lines.length === 0 || !branchId) {
     return (
       <main className="py-16 text-center">
-        <p className="text-lg text-neutral-500">Your cart is empty.</p>
+        <p className="text-lg text-kd-fg-muted">Your cart is empty.</p>
         <Link href="/" className={buttonVariants({ className: "mt-4" })}>
           Browse restaurants
         </Link>
@@ -26,9 +26,9 @@ export default function CartPage() {
   return (
     <main className="mx-auto max-w-lg">
       <h1 className="mb-1 text-2xl font-bold">Your cart</h1>
-      <p className="mb-6 text-sm text-neutral-500">
+      <p className="mb-6 text-sm text-kd-fg-muted">
         From{" "}
-        <Link href={`/r/${branchSlug}`} className="font-medium text-neutral-900 underline">
+        <Link href={`/r/${branchSlug}`} className="font-medium text-kd-fg underline">
           {branchName}
         </Link>
       </p>
@@ -37,16 +37,16 @@ export default function CartPage() {
         {lines.map((l) => (
           <div
             key={l.lineId}
-            className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4"
+            className="flex items-start justify-between gap-3 rounded-xl border border-kd-border bg-kd-surface p-4"
           >
             <div className="min-w-0">
-              <p className="font-medium text-neutral-900">{l.name}</p>
+              <p className="font-medium text-kd-fg">{l.name}</p>
               {l.modifierNames.length > 0 && (
-                <p className="text-xs text-neutral-500">{l.modifierNames.join(", ")}</p>
+                <p className="text-xs text-kd-fg-muted">{l.modifierNames.join(", ")}</p>
               )}
-              {l.notes && <p className="text-xs italic text-neutral-400">“{l.notes}”</p>}
+              {l.notes && <p className="text-xs italic text-kd-fg-subtle">“{l.notes}”</p>}
               <div className="mt-2 flex items-center gap-2">
-                <div className="flex items-center rounded-lg border border-neutral-200">
+                <div className="flex items-center rounded-lg border border-kd-border">
                   <Button variant="ghost" size="sm" onClick={() => setQty(l.lineId, l.qty - 1)}>
                     −
                   </Button>
@@ -56,7 +56,7 @@ export default function CartPage() {
                   </Button>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => removeLine(l.lineId)}>
-                  <Trash2 className="h-4 w-4 text-neutral-400" />
+                  <Trash2 className="h-4 w-4 text-kd-fg-subtle" />
                 </Button>
               </div>
             </div>
@@ -69,10 +69,10 @@ export default function CartPage() {
 
       <div className="space-y-1 text-sm">
         <div className="flex justify-between">
-          <span className="text-neutral-500">Subtotal (estimate)</span>
+          <span className="text-kd-fg-muted">Subtotal (estimate)</span>
           <span>{formatRs(subtotal)}</span>
         </div>
-        <p className="text-xs text-neutral-400">
+        <p className="text-xs text-kd-fg-subtle">
           Tax, delivery and platform fee are computed at checkout.
         </p>
       </div>

@@ -16,8 +16,8 @@ const NAV = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="flex min-h-screen bg-neutral-100">
-      <aside className="hidden w-52 shrink-0 border-r border-neutral-200 bg-neutral-900 p-4 text-white sm:block">
+    <div className="flex min-h-screen bg-kd-surface-muted">
+      <aside className="hidden w-52 shrink-0 border-r border-kd-border bg-neutral-900 p-4 text-white sm:block">
         <Link href="/admin" className="mb-6 block text-lg font-bold">
           ⚙️ Admin
         </Link>
@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <Link href="/" className="mt-8 block text-xs text-neutral-500 hover:text-neutral-300">
+        <Link href="/" className="mt-8 block text-xs text-neutral-300 hover:text-white">
           ← Customer site
         </Link>
       </aside>
