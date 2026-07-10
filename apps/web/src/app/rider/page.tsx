@@ -1,7 +1,7 @@
 "use client";
 
 // Rider home: availability toggle + job queue. Polls 5s (SSE in M10).
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
@@ -20,6 +20,7 @@ const RiderHomeQuery = graphql(`
     myJobs {
       id
       status
+      offeredAt
       codAmountMinor
       order {
         id
@@ -44,6 +45,21 @@ const SetAvailabilityMutation = graphql(`
   }
 `);
 
+const AcceptTaskMutation = graphql(`
+  mutation RiderAcceptTask($taskId: String!) {
+    acceptTask(taskId: $taskId) {
+      id
+      status
+    }
+  }
+`);
+
+const DeclineTaskMutation = graphql(`
+  mutation RiderDeclineTask($taskId: String!) {
+    declineTask(taskId: $taskId)
+  }
+`);
+
 const RiderFeedSubscription = graphql(`
   subscription RiderFeed {
     riderJobFeed {
@@ -61,6 +77,12 @@ export default function RiderHomePage() {
     requestPolicy: "cache-and-network",
   });
   const [, setAvailability] = useMutation(SetAvailabilityMutation);
+  const [, acceptTask] = useMutation(AcceptTaskMutation);
+  const [, declineTask] = useMutation(DeclineTaskMutation);
+  // Tracks the task currently being accepted/declined so we can disable the
+  // controls and show a pending state (prevents double-submit on a swipe).
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
 
   // Live job feed via SSE; slow poll as a reconnect safety net.
   useSubscription(
@@ -85,8 +107,36 @@ export default function RiderHomePage() {
   }
 
   const jobs = data?.myJobs ?? [];
+  // Offered jobs await the rider's accept/decline. Legacy auto-assign creates
+  // "assigned" directly, so those stay in the active list untouched.
+  const offered = jobs.filter((j) => j.status === "offered");
   const active = jobs.filter((j) => ACTIVE.includes(j.status));
-  const past = jobs.filter((j) => !ACTIVE.includes(j.status)).slice(0, 5);
+  const past = jobs.filter(
+    (j) => j.status !== "offered" && !ACTIVE.includes(j.status),
+  ).slice(0, 5);
+
+  async function onAccept(taskId: string) {
+    setPendingId(taskId);
+    setOfferError(null);
+    const res = await acceptTask({ taskId });
+    setPendingId(null);
+    if (res.error) {
+      // e.g. "Offer is no longer available" when re-offered/taken concurrently.
+      setOfferError(res.error.graphQLErrors[0]?.message ?? "Could not accept this job.");
+    }
+    refetch({ requestPolicy: "network-only" });
+  }
+
+  async function onDecline(taskId: string) {
+    setPendingId(taskId);
+    setOfferError(null);
+    const res = await declineTask({ taskId });
+    setPendingId(null);
+    if (res.error) {
+      setOfferError(res.error.graphQLErrors[0]?.message ?? "Could not decline this job.");
+    }
+    refetch({ requestPolicy: "network-only" });
+  }
 
   return (
     <main className="space-y-4">
@@ -105,6 +155,59 @@ export default function RiderHomePage() {
           {profile.isOnline ? "Go offline" : "Go online"}
         </Button>
       </div>
+
+      {offered.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">New offers</h2>
+          {offerError && (
+            <p className="mb-2 rounded-lg bg-kd-danger-soft px-3 py-2 text-sm text-kd-danger">
+              {offerError}
+            </p>
+          )}
+          <div className="space-y-2">
+            {offered.map((j) => {
+              const addr = j.order.addressSnapshotJson as { text?: string };
+              const busy = pendingId === j.id;
+              return (
+                <div
+                  key={j.id}
+                  className="rounded-2xl border border-kd-border bg-kd-surface p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{j.order.code}</span>
+                    <Badge variant="secondary">Offer</Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-kd-fg-muted">
+                    Pickup: {j.order.branch.restaurant.name}
+                  </p>
+                  <p className="text-sm text-kd-fg-muted">Drop: {addr?.text ?? "—"}</p>
+                  {j.codAmountMinor > 0 && (
+                    <p className="mt-1 text-sm font-semibold text-kd-warning">
+                      Collect {formatRs(j.codAmountMinor)} (COD)
+                    </p>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      className="flex-1"
+                      disabled={busy}
+                      onClick={() => onAccept(j.id)}
+                    >
+                      {busy ? "Accepting…" : "Accept"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => onDecline(j.id)}
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">Active jobs</h2>

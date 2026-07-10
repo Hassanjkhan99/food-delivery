@@ -7,12 +7,16 @@ import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { useCart } from "@/lib/cart";
+import { useCartExtras } from "../cart/page";
 import { useDeliveryLocation } from "@/lib/location";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AddressSelector, type SavedAddress } from "../addresses/address-selector";
+import { SaveAddressMutation } from "../addresses/address-graphql";
 
 const QuoteMutation = graphql(`
   mutation CheckoutQuote($input: QuoteCartInput!) {
@@ -53,6 +57,10 @@ const CheckoutMethodsQuery = graphql(`
 export default function CheckoutPage() {
   const router = useRouter();
   const { branchId, branchName, lines, clear } = useCart();
+  // Tip + cutlery collected on the cart page (persisted in `fd-cart-extras`).
+  // The API already accepts both: tipAmount folds into the quote's grandTotal
+  // (untaxed, uncommissioned) and cutleryRequested rides along on placeOrder.
+  const { tipAmount, cutleryRequested, reset: resetExtras } = useCartExtras();
   const loc = useDeliveryLocation();
 
   const [addressText, setAddressText] = useState("");
@@ -61,6 +69,35 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [paymentMode, setPaymentMode] = useState<"cod" | "card">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+
+  // Saved-address book state. selectedAddressId is null while entering a new
+  // address; saveNewAddress persists a fresh manual entry back to the book.
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [, runSaveAddress] = useMutation(SaveAddressMutation);
+
+  // When a saved address is picked, its own coordinates must drive the quote and
+  // the order snapshot — not the current browsing location, which may point at a
+  // different place. Null while entering a new address (falls back to `loc`).
+  const [savedCoords, setSavedCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const deliveryLat = savedCoords?.lat ?? loc.lat;
+  const deliveryLng = savedCoords?.lng ?? loc.lng;
+
+  function selectSavedAddress(addr: SavedAddress) {
+    setSelectedAddressId(addr.id);
+    setAddressText(addr.text);
+    setSavedCoords({ lat: addr.lat, lng: addr.lng });
+    if (addr.phone) setContactPhone(addr.phone);
+    if (addr.notes) setNote(addr.notes);
+    setSaveNewAddress(false);
+  }
+
+  function startNewAddress() {
+    setSelectedAddressId(null);
+    setAddressText("");
+    setNote("");
+    setSavedCoords(null);
+  }
 
   const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
@@ -88,10 +125,10 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
-      input: { branchId, lines: cartLines, deliveryLat: loc.lat, deliveryLng: loc.lng },
+      input: { branchId, lines: cartLines, deliveryLat, deliveryLng, tipAmount },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, loc.lat, loc.lng]);
+  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -110,18 +147,36 @@ export default function CheckoutPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    // Persist a fresh manual entry to the address book before placing the order,
+    // if the customer opted in. Best-effort: a save failure shouldn't block checkout.
+    if (!selectedAddressId && saveNewAddress) {
+      await runSaveAddress({
+        input: {
+          label: addressText.slice(0, 40) || "Address",
+          text: addressText,
+          lat: deliveryLat,
+          lng: deliveryLng,
+          phone: contactPhone.trim() || undefined,
+          notes: note.trim() || undefined,
+        },
+      });
+    }
+
     const result = await runPlace({
       key: idempotencyKey.current,
       input: {
         branchId: branchId!,
         lines: cartLines,
-        deliveryLat: loc.lat,
-        deliveryLng: loc.lng,
+        deliveryLat,
+        deliveryLng,
         addressText,
         contactPhone,
         customerNote: note.trim() || undefined,
         paymentMode,
         paymentMethodId: paymentMode === "card" ? paymentMethodId : undefined,
+        tipAmount,
+        cutleryRequested,
       },
     });
     const order = result.data?.placeOrder;
@@ -135,6 +190,7 @@ export default function CheckoutPage() {
       return;
     }
     clear();
+    resetExtras();
     router.push(`/orders/${order.id}`);
   }
 
@@ -144,38 +200,58 @@ export default function CheckoutPage() {
       <p className="mb-6 text-sm text-kd-fg-muted">Ordering from {branchName}</p>
 
       <form onSubmit={submit} className="space-y-4">
-        <div>
-          <Label htmlFor="address">Delivery address</Label>
-          <Textarea
-            id="address"
-            required
-            minLength={5}
-            placeholder="House, street, sector, landmark…"
-            value={addressText}
-            onChange={(e) => setAddressText(e.target.value)}
-            rows={2}
-            className="mt-1"
-          />
-          <p className="mt-1 text-xs text-kd-fg-subtle">Delivering near {loc.label}</p>
-        </div>
+        <AddressSelector
+          selectedId={selectedAddressId}
+          onSelect={selectSavedAddress}
+          onNew={startNewAddress}
+        />
+
+        {selectedAddressId === null && (
+          <>
+            <div>
+              <Label htmlFor="address">Delivery address</Label>
+              <Textarea
+                id="address"
+                required
+                minLength={5}
+                placeholder="House, street, sector, landmark…"
+                value={addressText}
+                onChange={(e) => setAddressText(e.target.value)}
+                rows={2}
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-kd-fg-subtle">Delivering near {loc.label}</p>
+            </div>
+
+            <div>
+              <Label htmlFor="phone">Contact phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                required
+                placeholder="+923001234567"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-kd-fg">
+              <input
+                type="checkbox"
+                checked={saveNewAddress}
+                onChange={(e) => setSaveNewAddress(e.target.checked)}
+              />
+              Save this address for next time
+            </label>
+          </>
+        )}
 
         <div>
-          <Label htmlFor="phone">Contact phone</Label>
-          <Input
-            id="phone"
-            type="tel"
-            required
-            placeholder="+923001234567"
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="note">Note for the restaurant (optional)</Label>
+          <Label htmlFor="note">Delivery instructions (optional)</Label>
           <Textarea
             id="note"
+            placeholder="Ring the bell, leave at the gate, call on arrival…"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
@@ -184,28 +260,29 @@ export default function CheckoutPage() {
         </div>
 
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
-          <p className="mb-2 text-sm font-semibold">Payment</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="paymode"
-              checked={paymentMode === "cod"}
-              onChange={() => setPaymentMode("cod")}
-            />
-            Cash on delivery
-          </label>
-          <label className="mt-1 flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="paymode"
-              checked={paymentMode === "card"}
-              onChange={() => setPaymentMode("card")}
-            />
-            Pay now by card
-          </label>
+          <p className="mb-3 text-sm font-semibold">Payment</p>
+          <RadioGroup
+            value={paymentMode}
+            onValueChange={(v) => setPaymentMode(v as "cod" | "card")}
+          >
+            <Label
+              htmlFor="pay-cod"
+              className="flex cursor-pointer items-center gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
+            >
+              <RadioGroupItem id="pay-cod" value="cod" />
+              <span className="text-sm font-medium text-kd-fg">Cash on delivery</span>
+            </Label>
+            <Label
+              htmlFor="pay-card"
+              className="flex cursor-pointer items-center gap-3 rounded-lg border border-kd-border p-3 has-data-[checked]:border-kd-primary has-data-[checked]:bg-kd-primary-soft"
+            >
+              <RadioGroupItem id="pay-card" value="card" />
+              <span className="text-sm font-medium text-kd-fg">Pay now by card</span>
+            </Label>
+          </RadioGroup>
           {paymentMode === "card" && (
             <div className="mt-3 space-y-2 border-t border-kd-border pt-3">
-              {methods.length === 0 && (
+              {methods.length === 0 ? (
                 <p className="text-xs text-kd-fg-muted">
                   No saved cards.{" "}
                   <Link href="/payment-methods" className="underline">
@@ -213,18 +290,28 @@ export default function CheckoutPage() {
                   </Link>{" "}
                   first.
                 </p>
+              ) : (
+                <RadioGroup
+                  value={paymentMethodId ?? ""}
+                  onValueChange={(v) => setSelectedMethodId(v)}
+                >
+                  {methods.map((m) => (
+                    <Label
+                      key={m.id}
+                      htmlFor={`pm-${m.id}`}
+                      className="flex cursor-pointer items-center gap-3 text-sm capitalize"
+                    >
+                      <RadioGroupItem id={`pm-${m.id}`} value={m.id} />
+                      {m.brand} •••• {m.last4}
+                      {m.isDefault && (
+                        <span className="rounded bg-kd-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-kd-fg-muted">
+                          default
+                        </span>
+                      )}
+                    </Label>
+                  ))}
+                </RadioGroup>
               )}
-              {methods.map((m) => (
-                <label key={m.id} className="flex items-center gap-2 text-sm capitalize">
-                  <input
-                    type="radio"
-                    name="paymethod"
-                    checked={paymentMethodId === m.id}
-                    onChange={() => setSelectedMethodId(m.id)}
-                  />
-                  {m.brand} •••• {m.last4}
-                </label>
-              ))}
             </div>
           )}
         </div>
@@ -250,6 +337,12 @@ export default function CheckoutPage() {
                 <span className="text-kd-fg-muted">Platform fee</span>
                 <span>{formatRs(quote.platformFeeMinor)}</span>
               </div>
+              {tipAmount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-kd-fg-muted">Rider tip</span>
+                  <span>{formatRs(tipAmount)}</span>
+                </div>
+              )}
               <Separator className="my-2" />
               <div className="flex justify-between text-base font-semibold">
                 <span>Total</span>

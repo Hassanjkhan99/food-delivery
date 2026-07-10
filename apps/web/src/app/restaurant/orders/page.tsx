@@ -20,6 +20,7 @@ const BoardQuery = graphql(`
       paymentMode
       grandTotalMinor
       customerNote
+      cutleryRequested
       acceptDeadlineAt
       prepEtaMinutes
       placedAt
@@ -115,6 +116,7 @@ type BoardOrder = {
   paymentMode: string;
   grandTotalMinor: number;
   customerNote?: string | null;
+  cutleryRequested: boolean;
   acceptDeadlineAt: unknown;
   prepEtaMinutes?: number | null;
   items: Array<{ id: string; qty: number; menuSnapshotJson: unknown }>;
@@ -141,6 +143,9 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
       </ul>
       {order.customerNote && (
         <p className="mt-1 text-xs italic text-kd-fg-subtle">“{order.customerNote}”</p>
+      )}
+      {!order.cutleryRequested && (
+        <p className="mt-1 text-xs font-medium text-kd-warning">No cutlery / napkins</p>
       )}
       {children}
     </div>

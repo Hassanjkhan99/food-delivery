@@ -2,10 +2,12 @@
 
 // Menu manager: edits the DRAFT in place; Publish clones it into the live version.
 import { useState } from "react";
-import { useMutation, useQuery } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
+import { uploadFile } from "@/lib/upload";
 import { useConsole } from "../useConsole";
+import { ModifierGroupsEditor } from "./ModifierGroupsEditor";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +34,20 @@ const DraftQuery = graphql(`
           priceMinor
           isAvailable
           badges
+          imageUrl
+          modifierGroups {
+            id
+            name
+            minSelect
+            maxSelect
+            required
+            options {
+              id
+              name
+              priceDeltaMinor
+              isAvailable
+            }
+          }
         }
       }
     }
@@ -79,6 +95,14 @@ const DeleteItemMutation = graphql(`
     deleteMenuItem(itemId: $itemId)
   }
 `);
+const SetItemPhotoMutation = graphql(`
+  mutation SetMenuItemPhoto($menuItemId: String!, $mediaId: String) {
+    setMenuItemPhoto(menuItemId: $menuItemId, mediaId: $mediaId) {
+      id
+      imageUrl
+    }
+  }
+`);
 const PublishMutation = graphql(`
   mutation Publish($branchId: String!) {
     publishMenu(branchId: $branchId) {
@@ -105,8 +129,18 @@ type ItemDraft = {
   priceRs: string;
 };
 
+type ModifierGroupShape = {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  required: boolean;
+  options: { id: string; name: string; priceDeltaMinor: number }[];
+};
+
 export default function MenuManagerPage() {
   const { branch, restaurant } = useConsole();
+  const client = useClient();
   const [{ data, fetching }, refetch] = useQuery({
     query: DraftQuery,
     variables: { branchId: branch?.id ?? "" },
@@ -117,11 +151,13 @@ export default function MenuManagerPage() {
   const [, upsertItem] = useMutation(UpsertItemMutation);
   const [, setAvailability] = useMutation(SetAvailabilityMutation);
   const [, deleteItem] = useMutation(DeleteItemMutation);
+  const [, setItemPhoto] = useMutation(SetItemPhotoMutation);
   const [publishState, publish] = useMutation(PublishMutation);
   const [, updateLayout] = useMutation(UpdateLayoutMutation);
 
   const [editing, setEditing] = useState<ItemDraft | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   if (!restaurant || !branch) {
     return fetching ? (
@@ -133,6 +169,28 @@ export default function MenuManagerPage() {
 
   const menu = data?.draftMenu;
   const refresh = () => refetch({ requestPolicy: "network-only" });
+
+  // The live draft row for the item currently open in the dialog. Modifier
+  // groups and the photo are keyed off the persisted id, so they only appear
+  // once the item has been saved to the draft.
+  const editingItem = editing?.id
+    ? menu?.categories.flatMap((c) => c.items).find((i) => i.id === editing.id)
+    : undefined;
+
+  async function handlePhotoUpload(menuItemId: string, file: File) {
+    setMessage(null);
+    setUploadingPhoto(true);
+    try {
+      const { assetId } = await uploadFile(client, file, "image");
+      const result = await setItemPhoto({ menuItemId, mediaId: assetId });
+      if (result.error) throw new Error(result.error.graphQLErrors[0]?.message ?? "Save failed");
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function saveItem() {
     if (!editing || !branch) return;
@@ -311,7 +369,7 @@ export default function MenuManagerPage() {
 
       {editing && (
         <Dialog open onOpenChange={(o) => !o && setEditing(null)}>
-          <DialogContent className="sm:max-w-sm">
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{editing.id ? "Edit item" : "New item"}</DialogTitle>
             </DialogHeader>
@@ -349,6 +407,77 @@ export default function MenuManagerPage() {
               >
                 Save to draft
               </Button>
+
+              {editingItem ? (
+                <>
+                  <div className="border-t border-kd-border pt-3">
+                    <Label>Photo</Label>
+                    <div className="mt-1 flex items-center gap-3">
+                      {editingItem.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={editingItem.imageUrl}
+                          alt={editingItem.name}
+                          className="h-16 w-16 shrink-0 rounded-lg border border-kd-border object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-kd-border text-xs text-kd-fg-subtle">
+                          None
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <input
+                          id="menu-item-photo"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && editing.id) handlePhotoUpload(editing.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={uploadingPhoto}
+                          onClick={() => document.getElementById("menu-item-photo")?.click()}
+                        >
+                          {uploadingPhoto ? "Uploading…" : editingItem.imageUrl ? "Replace" : "Upload"}
+                        </Button>
+                        {editingItem.imageUrl && (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            className="text-kd-danger"
+                            disabled={uploadingPhoto}
+                            onClick={async () => {
+                              if (!editing.id) return;
+                              await setItemPhoto({ menuItemId: editing.id, mediaId: null });
+                              refresh();
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-kd-border pt-3">
+                    <ModifierGroupsEditor
+                      branchId={branch.id}
+                      itemId={editingItem.id}
+                      groups={editingItem.modifierGroups as ModifierGroupShape[]}
+                      onChange={refresh}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="border-t border-kd-border pt-3 text-xs text-kd-fg-subtle">
+                  Save the item first to add a photo and modifier groups.
+                </p>
+              )}
             </div>
           </DialogContent>
         </Dialog>

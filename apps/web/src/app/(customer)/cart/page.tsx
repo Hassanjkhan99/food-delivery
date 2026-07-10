@@ -1,14 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Trash2, UtensilsCrossed } from "lucide-react";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { formatRs } from "@fd/shared";
 import { cartSubtotal, useCart } from "@/lib/cart";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+
+// Tip + cutlery preferences. Persisted separately from the item cart (`fd-cart`)
+// so they survive navigation to /checkout, where the checkout page reads this
+// store and threads tipAmount + cutleryRequested into quoteCart(QuoteCartInput)
+// and placeOrder(PlaceOrderInput). The API folds tip into grandTotalMinor
+// (untaxed/uncommissioned); cutleryRequested defaults true.
+type CartExtras = {
+  tipAmount: number; // minor units (paisa)
+  cutleryRequested: boolean;
+  setTip: (minor: number) => void;
+  setCutlery: (on: boolean) => void;
+  reset: () => void;
+};
+
+export const useCartExtras = create<CartExtras>()(
+  persist(
+    (set) => ({
+      tipAmount: 0,
+      cutleryRequested: true,
+      setTip: (minor) => set({ tipAmount: Math.max(0, Math.round(minor)) }),
+      setCutlery: (on) => set({ cutleryRequested: on }),
+      reset: () => set({ tipAmount: 0, cutleryRequested: true }),
+    }),
+    { name: "fd-cart-extras" },
+  ),
+);
+
+// Preset tip chips in minor units (Rs 0 / 50 / 100).
+const TIP_PRESETS = [0, 5000, 10000] as const;
 
 export default function CartPage() {
   const { branchId, branchName, branchSlug, lines, removeLine, setQty } = useCart();
+  const { tipAmount, cutleryRequested, setTip, setCutlery } = useCartExtras();
+
+  // Whether the current tip matches a preset (else it's a custom amount).
+  const isPreset = (TIP_PRESETS as readonly number[]).includes(tipAmount);
 
   if (lines.length === 0 || !branchId) {
     return (
@@ -65,12 +102,85 @@ export default function CartPage() {
         ))}
       </div>
 
+      {/* Tip the rider */}
+      <div className="mt-6 rounded-xl border border-kd-border bg-kd-surface p-4">
+        <p className="text-sm font-semibold text-kd-fg">Tip your rider</p>
+        <p className="mt-0.5 text-xs text-kd-fg-muted">
+          100% goes to the rider. Collected in cash for COD orders.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {TIP_PRESETS.map((preset) => (
+            <Button
+              key={preset}
+              type="button"
+              variant={isPreset && tipAmount === preset ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTip(preset)}
+            >
+              {preset === 0 ? "No tip" : formatRs(preset)}
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3">
+          <Label htmlFor="custom-tip" className="text-xs text-kd-fg-muted">
+            Custom amount (Rs)
+          </Label>
+          <Input
+            id="custom-tip"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            placeholder="e.g. 150"
+            // Show rupees; store minor units. Blank when a preset is active.
+            value={isPreset ? "" : String(Math.round(tipAmount / 100))}
+            onChange={(e) => {
+              const rupees = Number(e.target.value);
+              setTip(Number.isFinite(rupees) && rupees > 0 ? rupees * 100 : 0);
+            }}
+            className="mt-1"
+          />
+        </div>
+      </div>
+
+      {/* Cutlery toggle (default on) */}
+      <label
+        htmlFor="cutlery"
+        className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-kd-border bg-kd-surface p-4"
+      >
+        <span className="flex items-center gap-3">
+          <UtensilsCrossed className="h-5 w-5 shrink-0 text-kd-fg-muted" />
+          <span>
+            <span className="block text-sm font-semibold text-kd-fg">Send cutlery</span>
+            <span className="block text-xs text-kd-fg-muted">
+              Skip it to cut single-use plastic waste.
+            </span>
+          </span>
+        </span>
+        <input
+          id="cutlery"
+          type="checkbox"
+          checked={cutleryRequested}
+          onChange={(e) => setCutlery(e.target.checked)}
+          className="h-5 w-5 shrink-0 accent-kd-primary"
+        />
+      </label>
+
       <Separator className="my-6" />
 
       <div className="space-y-1 text-sm">
         <div className="flex justify-between">
           <span className="text-kd-fg-muted">Subtotal (estimate)</span>
           <span>{formatRs(subtotal)}</span>
+        </div>
+        {tipAmount > 0 && (
+          <div className="flex justify-between">
+            <span className="text-kd-fg-muted">Rider tip</span>
+            <span>{formatRs(tipAmount)}</span>
+          </div>
+        )}
+        <div className="flex justify-between pt-1 font-semibold text-kd-fg">
+          <span>Estimated total</span>
+          <span>{formatRs(subtotal + tipAmount)}</span>
         </div>
         <p className="text-xs text-kd-fg-subtle">
           Tax, delivery and platform fee are computed at checkout.

@@ -23,6 +23,7 @@ const QuoteCartInput = builder.inputType("QuoteCartInput", {
     lines: t.field({ type: [CartLineInput], required: true }),
     deliveryLat: t.float({ required: true }),
     deliveryLng: t.float({ required: true }),
+    tipAmount: t.int({ required: false }),
   }),
 });
 
@@ -38,6 +39,33 @@ const PlaceOrderInputType = builder.inputType("PlaceOrderInput", {
     customerNote: t.string({ required: false }),
     paymentMode: t.string({ required: true }),
     paymentMethodId: t.string({ required: false }),
+    tipAmount: t.int({ required: false }),
+    cutleryRequested: t.boolean({ required: false }),
+  }),
+});
+
+const SaveAddressInput = builder.inputType("SaveAddressInput", {
+  fields: (t) => ({
+    label: t.string({ required: true }),
+    text: t.string({ required: true }),
+    lat: t.float({ required: true }),
+    lng: t.float({ required: true }),
+    phone: t.string({ required: false }),
+    notes: t.string({ required: false }),
+    isDefault: t.boolean({ required: false }),
+  }),
+});
+
+// All fields optional: only the provided ones are patched onto the address.
+const UpdateAddressInput = builder.inputType("UpdateAddressInput", {
+  fields: (t) => ({
+    label: t.string({ required: false }),
+    text: t.string({ required: false }),
+    lat: t.float({ required: false }),
+    lng: t.float({ required: false }),
+    phone: t.string({ required: false }),
+    notes: t.string({ required: false }),
+    isDefault: t.boolean({ required: false }),
   }),
 });
 
@@ -76,6 +104,7 @@ QuoteType.implement({
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
+    tipAmount: t.exposeInt("tipAmount"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     minOrderMinor: t.exposeInt("minOrderMinor"),
     meetsMinimum: t.exposeBoolean("meetsMinimum"),
@@ -95,6 +124,8 @@ export const OrderType = builder.prismaObject("Order", {
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
+    tipAmount: t.exposeInt("tipAmount"),
+    cutleryRequested: t.exposeBoolean("cutleryRequested"),
     grandTotalMinor: t.exposeInt("grandTotalMinor"),
     contactPhone: t.exposeString("contactPhone"),
     customerNote: t.exposeString("customerNote", { nullable: true }),
@@ -131,6 +162,21 @@ builder.prismaObject("OrderEvent", {
   }),
 });
 
+// Saved delivery address in the customer's address book.
+builder.prismaObject("Address", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    label: t.exposeString("label"),
+    text: t.exposeString("text"),
+    lat: t.float({ resolve: (a) => Number(a.lat) }),
+    lng: t.float({ resolve: (a) => Number(a.lng) }),
+    phone: t.exposeString("phone", { nullable: true }),
+    notes: t.exposeString("notes", { nullable: true }),
+    isDefault: t.exposeBoolean("isDefault"),
+    createdAt: t.field({ type: "DateTime", resolve: (a) => a.createdAt }),
+  }),
+});
+
 // ── queries ─────────────────────────────────────────────────────────────────
 
 builder.queryFields((t) => ({
@@ -143,6 +189,18 @@ builder.queryFields((t) => ({
         where: { customerId: ctx.userId! },
         orderBy: { placedAt: "desc" },
         take: 50,
+      }),
+  }),
+
+  // The signed-in customer's saved address book (default first, then newest).
+  myAddresses: t.prismaField({
+    type: ["Address"],
+    authScopes: { loggedIn: true },
+    resolve: (query, _root, _args, ctx) =>
+      prisma.address.findMany({
+        ...query,
+        where: { userId: ctx.userId! },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
       }),
   }),
 
@@ -170,7 +228,13 @@ builder.mutationFields((t) => ({
     type: QuoteType,
     args: { input: t.arg({ type: QuoteCartInput, required: true }) },
     resolve: (_root, args) =>
-      quoteCart(quoteInputSchema.parse({ ...args.input, lines: normalizeLines(args.input.lines) })),
+      quoteCart(
+        quoteInputSchema.parse({
+          ...args.input,
+          tipAmount: args.input.tipAmount ?? undefined,
+          lines: normalizeLines(args.input.lines),
+        }),
+      ),
   }),
 
   placeOrder: t.prismaField({
@@ -186,6 +250,8 @@ builder.mutationFields((t) => ({
         addressLabel: args.input.addressLabel ?? "Home",
         customerNote: args.input.customerNote ?? undefined,
         paymentMethodId: args.input.paymentMethodId ?? undefined,
+        tipAmount: args.input.tipAmount ?? undefined,
+        cutleryRequested: args.input.cutleryRequested ?? undefined,
         lines: normalizeLines(args.input.lines),
       });
       return placeOrder(ctx.userId!, input, args.idempotencyKey);
@@ -218,6 +284,87 @@ builder.mutationFields((t) => ({
         },
       });
       return updated;
+    },
+  }),
+
+  // Add a new address to the signed-in customer's book. Passing isDefault:true (or
+  // saving the very first address) makes it the default and clears the flag on the rest.
+  saveAddress: t.prismaField({
+    type: "Address",
+    authScopes: { loggedIn: true },
+    args: { input: t.arg({ type: SaveAddressInput, required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const userId = ctx.userId!;
+      const isFirst = (await prisma.address.count({ where: { userId } })) === 0;
+      const makeDefault = args.input.isDefault ?? isFirst;
+      return prisma.$transaction(async (tx) => {
+        if (makeDefault) {
+          await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
+        }
+        return tx.address.create({
+          ...query,
+          data: {
+            userId,
+            label: args.input.label,
+            text: args.input.text,
+            lat: args.input.lat,
+            lng: args.input.lng,
+            phone: args.input.phone ?? null,
+            notes: args.input.notes ?? null,
+            isDefault: makeDefault,
+          },
+        });
+      });
+    },
+  }),
+
+  // Patch a saved address the customer owns. Only provided fields change; setting
+  // isDefault:true clears the flag on the customer's other addresses in the same tx.
+  updateAddress: t.prismaField({
+    type: "Address",
+    authScopes: { loggedIn: true },
+    args: {
+      id: t.arg.string({ required: true }),
+      input: t.arg({ type: UpdateAddressInput, required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const userId = ctx.userId!;
+      const existing = await prisma.address.findFirst({ where: { id: args.id, userId } });
+      if (!existing) throw new GraphQLError("Address not found");
+      const { input } = args;
+      return prisma.$transaction(async (tx) => {
+        if (input.isDefault === true) {
+          await tx.address.updateMany({ where: { userId }, data: { isDefault: false } });
+        }
+        return tx.address.update({
+          ...query,
+          where: { id: args.id },
+          data: {
+            ...(input.label != null ? { label: input.label } : {}),
+            ...(input.text != null ? { text: input.text } : {}),
+            ...(input.lat != null ? { lat: input.lat } : {}),
+            ...(input.lng != null ? { lng: input.lng } : {}),
+            ...(input.phone !== undefined ? { phone: input.phone } : {}),
+            ...(input.notes !== undefined ? { notes: input.notes } : {}),
+            ...(input.isDefault != null ? { isDefault: input.isDefault } : {}),
+          },
+        });
+      });
+    },
+  }),
+
+  // Delete a saved address the customer owns. Returns true on success.
+  deleteAddress: t.field({
+    type: "Boolean",
+    authScopes: { loggedIn: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const existing = await prisma.address.findFirst({
+        where: { id: args.id, userId: ctx.userId! },
+      });
+      if (!existing) throw new GraphQLError("Address not found");
+      await prisma.address.delete({ where: { id: args.id } });
+      return true;
     },
   }),
 }));

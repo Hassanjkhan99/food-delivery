@@ -13,6 +13,7 @@ import {
 import { GraphQLError } from "graphql";
 import { publishOrderChanged } from "../pubsub.js";
 import { logger } from "../logger.js";
+import { branchOpenNow } from "./branchHours.js";
 import { quoteCart } from "./quoteService.js";
 import { onCardCharged, onOrderDelivered, onOrderMoneyReversal } from "./ledgerService.js";
 import { mockProvider } from "./payments/mockProvider.js";
@@ -43,6 +44,20 @@ export async function placeOrder(
   const quote = await quoteCart(input);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
+
+  // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
+  // rejects when isAcceptingOrders is false; here we also honour the opening hours so an
+  // order can't be placed after close. branchOpenNow reads the structured BranchHours
+  // model (#19) and falls back to the legacy hoursJson. Uses a stable error code the
+  // client maps to a friendly "closed" message.
+  const branch = await prisma.branch.findUnique({ where: { id: quote.branchId } });
+  if (!branch) throw new GraphQLError("Restaurant not available");
+  const openNow = (await branchOpenNow(branch)).isOpen;
+  if (!branch.isAcceptingOrders || !openNow) {
+    throw new GraphQLError("This restaurant is currently closed", {
+      extensions: { code: "branch_closed" },
+    });
+  }
 
   // Card orders charge at placement (Foodpanda-style): validate the saved method first.
   let cardToken: string | null = null;
@@ -82,6 +97,8 @@ export async function placeOrder(
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,
           commissionBpsSnapshot: quote.commissionBps,
+          tipAmount: quote.tipAmount,
+          cutleryRequested: input.cutleryRequested,
           grandTotalMinor: quote.grandTotalMinor,
           paymentMode: input.paymentMode,
           acceptDeadlineAt: new Date(Date.now() + ACCEPTANCE_SLA_SECONDS * 1_000),

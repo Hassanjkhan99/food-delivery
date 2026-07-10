@@ -14,6 +14,9 @@ export const quoteInputSchema = z.object({
   lines: z.array(cartLineSchema).min(1).max(50),
   deliveryLat: z.number().gte(-90).lte(90),
   deliveryLng: z.number().gte(-180).lte(180),
+  // Optional rider tip in minor units; folded into the grand total. Capped to a sane
+  // ceiling so a fat-fingered client can't book an absurd total.
+  tipAmount: z.number().int().min(0).max(1_000_000).default(0),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({
@@ -23,6 +26,8 @@ export const placeOrderInputSchema = quoteInputSchema.extend({
   customerNote: z.string().max(500).optional(),
   paymentMode: z.enum(["cod", "card"]),
   paymentMethodId: z.string().optional(),
+  // Include cutlery/napkins with the order; defaults to true (opt-out).
+  cutleryRequested: z.boolean().default(true),
 });
 
 export type CartLineInput = z.infer<typeof cartLineSchema>;

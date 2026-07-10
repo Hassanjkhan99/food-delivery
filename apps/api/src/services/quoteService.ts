@@ -27,6 +27,7 @@ export type QuoteResult = {
   platformFeeMinor: number;
   commissionMinor: number;
   commissionBps: number;
+  tipAmount: number;
   grandTotalMinor: number;
   minOrderMinor: number;
   meetsMinimum: boolean;
@@ -124,6 +125,8 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   const commissionBps = isChain ? fee.chainCommissionBps : fee.smallBusinessCommissionBps;
   const platformFee = isChain ? fee.chainPlatformFeeMinor : fee.smallBusinessPlatformFeeMinor;
   const commission = applyBps(subtotal, commissionBps);
+  // Rider tip is added on top of the bill; it isn't taxed or commissioned.
+  const tipAmount = input.tipAmount ?? 0;
 
   return {
     branchId: branch.id,
@@ -133,7 +136,8 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
     platformFeeMinor: platformFee,
     commissionMinor: commission,
     commissionBps,
-    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee,
+    tipAmount,
+    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,

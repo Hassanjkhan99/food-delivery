@@ -99,6 +99,10 @@ enum OrderStatus {
 
 enum DeliveryTaskStatus {
   unassigned
+  // Offer→accept flow (swipe-to-accept): a task dispatched to a rider awaiting their
+  // acceptance. Additive — the legacy path still assigns directly to `assigned`, so
+  // `offered` only appears for tasks created via the new offer flow.
+  offered
   assigned
   arrived_pickup
   picked_up
@@ -107,6 +111,10 @@ enum DeliveryTaskStatus {
 }
 
 enum DeliveryEventType {
+  // Additive offer-flow events (see DeliveryTaskStatus.offered).
+  offered
+  accepted
+  declined
   assigned
   arrived_pickup
   picked_up
@@ -257,6 +265,9 @@ model Address {
   lng       Decimal  @db.Decimal(9, 6)
   phone     String?
   notes     String?
+  // Customer's preferred address, pre-selected at checkout. At most one per user is
+  // true — enforced in app code (setAddress/saveAddress clear the others in a tx).
+  isDefault Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id])
@@ -332,9 +343,30 @@ model Branch {
   menus      Menu[]
   orders     Order[]
   sourceDocs MenuSourceDoc[]
+  hours      BranchHours[]
 
   @@index([restaurantId])
   @@map("branches")
+}
+
+// Structured per-day opening hours (#19). Supersedes the ad-hoc Branch.hoursJson blob:
+// one row per open window per day (a day may have several, e.g. a lunch + dinner split).
+// dayOfWeek is a JS weekday (0 = Sunday … 6 = Saturday); minutes are since-midnight in
+// PKT (UTC+5, no DST) to match branchHoursOpenState. A window with closeMinute <= openMinute
+// spans midnight and spills into the next calendar day. A branch with NO rows is treated
+// as always open (isOpenNow falls back to hoursJson, then to "open"). setBranchHours
+// replaces the whole set transactionally, so there is no update/delete path for a single row.
+model BranchHours {
+  id          String @id @default(cuid())
+  branchId    String
+  dayOfWeek   Int
+  openMinute  Int
+  closeMinute Int
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@map("branch_hours")
 }
 
 model RestaurantTheme {
@@ -537,6 +569,12 @@ model Order {
   taxTotalMinor         Int
   platformFeeMinor      Int
   commissionMinor       Int
+  // Optional rider tip (minor units), included in grandTotalMinor and — for COD — in
+  // the cash the rider collects. There is no rider ledger split yet, so it is not
+  // posted as a separate rider credit; see orderService TODO.
+  tipAmount             Int         @default(0)
+  // Whether to include cutlery/napkins with the order (sustainability opt-out).
+  cutleryRequested      Boolean     @default(true)
   grandTotalMinor       Int
   commissionBpsSnapshot Int
   paymentMode           PaymentMode
@@ -605,12 +643,22 @@ model DeliveryTask {
   riderId        String?
   status         DeliveryTaskStatus @default(unassigned)
   codAmountMinor Int                @default(0)
+  // Offer→accept flow (swipe-to-accept). offeredAt is set when a task is dispatched
+  // to a rider for acceptance; acceptedAt when they accept; declineReason captures the
+  // last decline. All null on the legacy auto-assign path. Additive.
+  offeredAt      DateTime?          @db.Timestamptz()
+  acceptedAt     DateTime?          @db.Timestamptz()
+  declineReason  String?
+  // Optional proof-of-delivery photo captured at drop-off, uploaded via the shared
+  // media flow and linked on riderDelivered. Additive.
+  podMediaId     String?
   assignedAt     DateTime?          @db.Timestamptz()
   createdAt      DateTime           @default(now()) @db.Timestamptz()
 
-  order  Order           @relation(fields: [orderId], references: [id])
-  rider  Rider?          @relation(fields: [riderId], references: [id])
-  events DeliveryEvent[]
+  order    Order           @relation(fields: [orderId], references: [id])
+  rider    Rider?          @relation(fields: [riderId], references: [id])
+  podMedia MediaAsset?     @relation("PodMedia", fields: [podMediaId], references: [id])
+  events   DeliveryEvent[]
 
   @@index([riderId, status])
   @@map("delivery_tasks")
@@ -786,6 +834,7 @@ model MediaAsset {
   categoryHeaders MenuCategory[]    @relation("CategoryHeader")
   itemImages      MenuItem[]        @relation("ItemImage")
   sourceDocs      MenuSourceDoc[]
+  podTasks        DeliveryTask[]    @relation("PodMedia")
 
   @@map("media_assets")
 }
@@ -875,4 +924,17 @@ model Campaign {
 
   @@index([restaurantId])
   @@map("campaigns")
+}
+
+// Delivery-area waitlist (#64): captures "notify me" sign-ups from areas we don't
+// serve yet. Upserted by email so re-submitting just refreshes the pin/area.
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  areaLabel String?
+  lat       Decimal? @db.Decimal(9, 6)
+  lng       Decimal? @db.Decimal(9, 6)
+  createdAt DateTime @default(now()) @db.Timestamptz()
+
+  @@map("waitlist")
 }

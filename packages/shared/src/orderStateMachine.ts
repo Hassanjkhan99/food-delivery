@@ -41,7 +41,8 @@ export const TRANSITIONS: Record<OrderStatus, Transition[]> = {
     { to: "cancelled", allowedRoles: RESTAURANT },
   ],
   ready_for_pickup: [
-    { to: "rider_assigned", allowedRoles: RESTAURANT },
+    // Restaurant assigns a rider, or a rider self-accepts an offered job (swipe-to-accept).
+    { to: "rider_assigned", allowedRoles: [...RESTAURANT, ...RIDER] },
     { to: "picked_up", allowedRoles: [...RESTAURANT, ...RIDER] },
   ],
   rider_assigned: [

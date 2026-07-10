@@ -79,3 +79,58 @@ export function branchOpenState(hours: BranchHours, nowMs: number): OpenState {
   // Shouldn't happen (days is non-empty), but fall back to the bare time.
   return { isOpen, opensAtLabel: hours.open };
 }
+
+/**
+ * Structured opening-hours evaluation over the BranchHours model rows (#19). One row is
+ * one open window: `{ dayOfWeek, openMinute, closeMinute }` where dayOfWeek is a JS weekday
+ * (0 = Sunday … 6 = Saturday) and the minutes are since-midnight in PKT. A window with
+ * closeMinute <= openMinute spans midnight (the tail spills into the next calendar day).
+ *
+ * Semantics match branchOpenState: PKT wall-clock, overnight spill-over from the previous
+ * day, and no rows → always open. This is what Branch.isOpenNow / the placeOrder guard use
+ * once a branch has structured hours; hoursJson remains the fallback for un-migrated branches.
+ */
+export type BranchHoursRow = { dayOfWeek: number; openMinute: number; closeMinute: number };
+
+function minutesToLabel(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function branchHoursOpenState(rows: BranchHoursRow[], nowMs: number): OpenState {
+  // No structured hours recorded → caller falls back (hoursJson, then always-open).
+  if (!rows || rows.length === 0) return { isOpen: true, opensAtLabel: null };
+
+  const pkt = new Date(nowMs + PKT_OFFSET_MINUTES * 60_000);
+  const day = pkt.getUTCDay();
+  const mins = pkt.getUTCHours() * 60 + pkt.getUTCMinutes();
+
+  for (const r of rows) {
+    const spansMidnight = r.closeMinute <= r.openMinute;
+    // Today's segment: full window when same-day, else just the evening (>= open) part.
+    if (r.dayOfWeek === day) {
+      if (spansMidnight ? mins >= r.openMinute : mins >= r.openMinute && mins < r.closeMinute) {
+        return { isOpen: true, opensAtLabel: null };
+      }
+    }
+    // Early-morning spill-over from the previous day's overnight window.
+    if (spansMidnight && r.dayOfWeek === (day + 6) % 7 && mins < r.closeMinute) {
+      return { isOpen: true, opensAtLabel: null };
+    }
+  }
+
+  // Closed now → label the next opening time. Pick the window with the smallest
+  // forward weekday distance from today, breaking ties by earliest openMinute. A
+  // window later TODAY has distance 0; any window whose day is today but already
+  // passed rolls a full week forward (distance 7), so a Saturday-night opening is
+  // chosen over a Monday-morning one on Friday instead of sorting on openMinute alone.
+  const forwardDistance = (r: BranchHoursRow): number => {
+    if (r.dayOfWeek === day) return r.openMinute > mins ? 0 : 7;
+    return (r.dayOfWeek - day + 7) % 7;
+  };
+  const next = [...rows].sort(
+    (a, b) => forwardDistance(a) - forwardDistance(b) || a.openMinute - b.openMinute,
+  )[0];
+  return { isOpen: false, opensAtLabel: next ? minutesToLabel(next.openMinute) : null };
+}

@@ -8,7 +8,11 @@ import type { LedgerOwnerType, Order, Payment, PrismaClient } from "@fd/db";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
-type OrderWithMoney = Order & { payment: Payment | null; branch: { restaurantId: string } };
+type OrderWithMoney = Order & {
+  payment: Payment | null;
+  branch: { restaurantId: string };
+  deliveryTask?: { riderId: string | null } | null;
+};
 
 export type Leg = {
   code: string;
@@ -69,26 +73,40 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
 
   if (order.paymentMode === "card") {
     // Platform holds the customer's money; release restaurant share, keep fees.
-    await postLedgerTx(
-      tx,
-      `Settlement ${order.code} (card)`,
-      [
-        {
-          code: `customer:${order.customerId}:prepaid`,
-          ownerType: "customer",
-          ownerId: order.customerId,
-          debit: order.grandTotalMinor,
-        },
-        {
-          code: `restaurant:${restaurantId}:payable`,
-          ownerType: "restaurant",
-          ownerId: restaurantId,
-          credit: restaurantShare,
-        },
-        { code: "platform:revenue", ownerType: "platform", credit: fees },
-      ],
-      { orderId: order.id },
-    );
+    // The rider tip is part of grandTotalMinor and must also be released so the
+    // legs balance — credit it to the assigned rider's payable (platform pays it
+    // out with the delivery earnings). Falls back to platform:payable if somehow
+    // no rider is attached, keeping the tip owed rather than dropping it.
+    const tip = order.tipAmount;
+    const riderId = order.deliveryTask?.riderId ?? null;
+    const legs: Leg[] = [
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        debit: order.grandTotalMinor,
+      },
+      {
+        code: `restaurant:${restaurantId}:payable`,
+        ownerType: "restaurant",
+        ownerId: restaurantId,
+        credit: restaurantShare,
+      },
+      { code: "platform:revenue", ownerType: "platform", credit: fees },
+    ];
+    if (tip > 0) {
+      legs.push(
+        riderId
+          ? {
+              code: `rider:${riderId}:payable`,
+              ownerType: "rider",
+              ownerId: riderId,
+              credit: tip,
+            }
+          : { code: "platform:payable", ownerType: "platform", credit: tip },
+      );
+    }
+    await postLedgerTx(tx, `Settlement ${order.code} (card)`, legs, { orderId: order.id });
   } else {
     // COD: cash went to the restaurant; platform books its cut as a receivable.
     await postLedgerTx(

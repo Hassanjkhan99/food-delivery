@@ -6,6 +6,7 @@ import { formatRs } from "@fd/shared";
 import { useConsole } from "../useConsole";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HoursEditor } from "../HoursEditor";
 
 const SetAcceptingMutation = graphql(`
   mutation SetAccepting($branchId: String!, $accepting: Boolean!) {
@@ -43,6 +44,8 @@ export default function SettingsPage() {
             {branch.isAcceptingOrders ? "Pause" : "Resume"}
           </Button>
         </div>
+
+        <HoursEditor branchId={branch.id} />
 
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
           <p className="mb-2 font-medium">Commercial profile</p>

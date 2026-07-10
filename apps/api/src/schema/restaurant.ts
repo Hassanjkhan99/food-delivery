@@ -36,6 +36,16 @@ function restaurantActor(ctx: AppContext): Actor {
   };
 }
 
+// One open window for setBranchHours: minutes are since-midnight (PKT), 0..1439.
+// closeMinute <= openMinute means the window spans midnight (see branchHoursOpenState).
+const BranchHoursInput = builder.inputType("BranchHoursInput", {
+  fields: (t) => ({
+    dayOfWeek: t.int({ required: true }),
+    openMinute: t.int({ required: true }),
+    closeMinute: t.int({ required: true }),
+  }),
+});
+
 builder.prismaObject("Rider", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -73,6 +83,46 @@ builder.prismaObject("Payout", {
     paidAt: t.field({ type: "DateTime", nullable: true, resolve: (p) => p.paidAt }),
   }),
 });
+
+// Owner analytics (#21): a top-selling item, tallied by snapshot name (see popularItems
+// for why name, not id) with its units sold and gross revenue over the window.
+const AnalyticsTopItem = builder.objectRef<{
+  name: string;
+  qty: number;
+  revenueMinor: number;
+}>("AnalyticsTopItem");
+AnalyticsTopItem.implement({
+  fields: (t) => ({
+    name: t.exposeString("name"),
+    qty: t.exposeInt("qty"),
+    revenueMinor: t.exposeInt("revenueMinor"),
+  }),
+});
+
+// Read-only sales summary over a trailing window, computed from delivered orders.
+// ordersByDayOfWeek is indexed 0=Sunday…6=Saturday; ordersByHour is 0…23. Both are
+// bucketed in PKT so they line up with the branch's opening hours.
+type AnalyticsResult = {
+  totalOrders: number;
+  totalRevenueMinor: number;
+  avgOrderValueMinor: number;
+  ordersByDayOfWeek: number[];
+  ordersByHour: number[];
+  topItems: Array<{ name: string; qty: number; revenueMinor: number }>;
+};
+const RestaurantAnalytics = builder.objectRef<AnalyticsResult>("RestaurantAnalytics");
+RestaurantAnalytics.implement({
+  fields: (t) => ({
+    totalOrders: t.exposeInt("totalOrders"),
+    totalRevenueMinor: t.exposeInt("totalRevenueMinor"),
+    avgOrderValueMinor: t.exposeInt("avgOrderValueMinor"),
+    ordersByDayOfWeek: t.field({ type: ["Int"], resolve: (a) => a.ordersByDayOfWeek }),
+    ordersByHour: t.field({ type: ["Int"], resolve: (a) => a.ordersByHour }),
+    topItems: t.field({ type: [AnalyticsTopItem], resolve: (a) => a.topItems }),
+  }),
+});
+
+const PKT_OFFSET_MS = 5 * 60 * 60_000;
 
 // ── queries ─────────────────────────────────────────────────────────────────
 
@@ -174,6 +224,69 @@ builder.queryFields((t) => ({
         where: { restaurantId: args.restaurantId },
         orderBy: { createdAt: "desc" },
       });
+    },
+  }),
+
+  // Owner sales analytics for a branch over a trailing window (#21). Read-only, computed
+  // live from delivered Order/OrderItem rows — no schema change, no stored aggregates.
+  restaurantAnalytics: t.field({
+    type: RestaurantAnalytics,
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      days: t.arg.int({ required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const days = Math.min(Math.max(args.days ?? 30, 1), 365);
+      const since = new Date(Date.now() - days * 24 * 60 * 60_000);
+      const orders = await prisma.order.findMany({
+        where: { branchId: args.branchId, status: "delivered", placedAt: { gte: since } },
+        select: {
+          grandTotalMinor: true,
+          placedAt: true,
+          items: { select: { qty: true, lineTotalMinor: true, menuSnapshotJson: true } },
+        },
+      });
+
+      const ordersByDayOfWeek = Array<number>(7).fill(0);
+      const ordersByHour = Array<number>(24).fill(0);
+      const tally = new Map<string, { qty: number; revenueMinor: number }>();
+      let totalRevenueMinor = 0;
+
+      for (const o of orders) {
+        totalRevenueMinor += o.grandTotalMinor;
+        // Bucket in PKT wall-clock (read UTC getters on the shifted instant).
+        const pkt = new Date(o.placedAt.getTime() + PKT_OFFSET_MS);
+        const dow = pkt.getUTCDay();
+        const hour = pkt.getUTCHours();
+        ordersByDayOfWeek[dow] = (ordersByDayOfWeek[dow] ?? 0) + 1;
+        ordersByHour[hour] = (ordersByHour[hour] ?? 0) + 1;
+        for (const it of o.items) {
+          const snap = it.menuSnapshotJson as { name?: string } | null;
+          const name = snap?.name;
+          if (!name) continue;
+          const agg = tally.get(name) ?? { qty: 0, revenueMinor: 0 };
+          agg.qty += it.qty;
+          agg.revenueMinor += it.lineTotalMinor;
+          tally.set(name, agg);
+        }
+      }
+
+      const topItems = [...tally.entries()]
+        .map(([name, v]) => ({ name, qty: v.qty, revenueMinor: v.revenueMinor }))
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 10);
+
+      const totalOrders = orders.length;
+      return {
+        totalOrders,
+        totalRevenueMinor,
+        avgOrderValueMinor: totalOrders ? Math.round(totalRevenueMinor / totalOrders) : 0,
+        ordersByDayOfWeek,
+        ordersByHour,
+        topItems,
+      };
     },
   }),
 }));
@@ -289,6 +402,62 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Offer a job to a rider for swipe-to-accept (additive alternative to assignRider,
+  // which hard-assigns). Creates/updates the DeliveryTask in `offered` state with the
+  // rider attached so it surfaces in that rider's myJobs; the order itself stays
+  // ready_for_pickup until the rider accepts (acceptTask promotes it to rider_assigned).
+  offerTask: t.prismaField({
+    type: "DeliveryTask",
+    authScopes: { restaurantMember: true },
+    args: {
+      orderId: t.arg.string({ required: true }),
+      riderId: t.arg.string({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Only orders still awaiting a rider can be offered. Guards against offering a
+      // pending/cancelled/delivered order and surfacing a bogus job to the rider.
+      if (order.status !== "ready_for_pickup") {
+        throw new GraphQLError("Order is not ready for pickup");
+      }
+      const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
+      if (!rider || rider.restaurantId !== order.branch.restaurantId) {
+        throw new GraphQLError("Rider is not on this restaurant's roster");
+      }
+      // Don't clobber a task that has already progressed (assigned/picked up/etc.);
+      // only a fresh (unassigned) or re-offerable (offered) task may be (re)offered.
+      const existing = await prisma.deliveryTask.findUnique({
+        where: { orderId: args.orderId },
+        select: { status: true },
+      });
+      if (existing && existing.status !== "unassigned" && existing.status !== "offered") {
+        throw new GraphQLError("This delivery is already in progress");
+      }
+      const task = await prisma.deliveryTask.upsert({
+        where: { orderId: args.orderId },
+        update: {
+          riderId: args.riderId,
+          status: "offered",
+          offeredAt: new Date(),
+          acceptedAt: null,
+          assignedAt: null,
+          declineReason: null,
+        },
+        create: {
+          orderId: args.orderId,
+          riderId: args.riderId,
+          status: "offered",
+          offeredAt: new Date(),
+          codAmountMinor: order.paymentMode === "cod" ? order.grandTotalMinor : 0,
+        },
+      });
+      await prisma.deliveryEvent.create({
+        data: { taskId: task.id, type: "offered", actorUserId: ctx.userId },
+      });
+      return prisma.deliveryTask.findUniqueOrThrow({ ...query, where: { id: task.id } });
+    },
+  }),
+
   setAcceptingOrders: t.prismaField({
     type: "Branch",
     authScopes: { restaurantMember: true },
@@ -302,6 +471,41 @@ builder.mutationFields((t) => ({
         where: { id: args.branchId },
         data: { isAcceptingOrders: args.accepting },
       });
+    },
+  }),
+
+  // Replace a branch's structured opening hours (#19) with the provided set (a full
+  // overwrite — pass [] to clear, which reverts isOpenNow to the always-open fallback).
+  // Once any rows exist they take precedence over the legacy hoursJson everywhere.
+  setBranchHours: t.prismaField({
+    type: "Branch",
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      hours: t.arg({ type: [BranchHoursInput], required: true }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      for (const h of args.hours) {
+        if (h.dayOfWeek < 0 || h.dayOfWeek > 6) throw new GraphQLError("dayOfWeek must be 0-6");
+        if (h.openMinute < 0 || h.openMinute > 1439 || h.closeMinute < 0 || h.closeMinute > 1439) {
+          throw new GraphQLError("Minutes must be within a day (0-1439)");
+        }
+      }
+      await prisma.$transaction(async (tx) => {
+        await tx.branchHours.deleteMany({ where: { branchId: args.branchId } });
+        if (args.hours.length > 0) {
+          await tx.branchHours.createMany({
+            data: args.hours.map((h) => ({
+              branchId: args.branchId,
+              dayOfWeek: h.dayOfWeek,
+              openMinute: h.openMinute,
+              closeMinute: h.closeMinute,
+            })),
+          });
+        }
+      });
+      return prisma.branch.findUniqueOrThrow({ where: { id: args.branchId } });
     },
   }),
 
@@ -456,6 +660,193 @@ builder.mutationFields((t) => ({
       await prisma.menuItemModifierGroup.deleteMany({ where: { itemId: args.itemId } });
       await prisma.menuItem.delete({ where: { id: args.itemId } });
       return true;
+    },
+  }),
+
+  // ── modifier group / option CRUD (#20, operates on the draft) ─────────────
+  // Modifier groups are menu-scoped (ModifierGroup.menuId) and attached to items via
+  // the MenuItemModifierGroup join. All mutations below only touch the branch draft —
+  // published menus are immutable and orders freeze a menuSnapshotJson, so live orders
+  // are never affected. `required` is derived as minSelect >= 1 (no separate column).
+
+  upsertModifierGroup: t.prismaField({
+    type: "ModifierGroup",
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      id: t.arg.string({ required: false }),
+      name: t.arg.string({ required: true }),
+      minSelect: t.arg.int({ required: true }),
+      maxSelect: t.arg.int({ required: true }),
+      // When provided, ensures this draft item is linked to the group (idempotent).
+      itemId: t.arg.string({ required: false }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const draft = await ensureDraft(args.branchId);
+      if (!args.name.trim()) throw new GraphQLError("Group name is required");
+      if (args.minSelect < 0 || args.maxSelect < 1 || args.minSelect > args.maxSelect) {
+        throw new GraphQLError("Invalid min/max selection");
+      }
+      if (args.itemId) {
+        const item = await prisma.menuItem.findUnique({
+          where: { id: args.itemId },
+          include: { category: true },
+        });
+        if (!item || item.category.menuId !== draft.id)
+          throw new GraphQLError("Item not in draft");
+      }
+      let group;
+      if (args.id) {
+        const existing = await prisma.modifierGroup.findUnique({ where: { id: args.id } });
+        if (!existing || existing.menuId !== draft.id)
+          throw new GraphQLError("Group not in draft");
+        group = await prisma.modifierGroup.update({
+          where: { id: args.id },
+          data: { name: args.name, minSelect: args.minSelect, maxSelect: args.maxSelect },
+        });
+      } else {
+        group = await prisma.modifierGroup.create({
+          data: {
+            menuId: draft.id,
+            name: args.name,
+            minSelect: args.minSelect,
+            maxSelect: args.maxSelect,
+          },
+        });
+      }
+      if (args.itemId) {
+        const sortOrder = await prisma.menuItemModifierGroup.count({
+          where: { itemId: args.itemId },
+        });
+        await prisma.menuItemModifierGroup.upsert({
+          where: { itemId_groupId: { itemId: args.itemId, groupId: group.id } },
+          update: {},
+          create: { itemId: args.itemId, groupId: group.id, sortOrder },
+        });
+      }
+      return group;
+    },
+  }),
+
+  deleteModifierGroup: t.field({
+    type: "Boolean",
+    authScopes: { restaurantMember: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const group = await prisma.modifierGroup.findUnique({
+        where: { id: args.id },
+        include: { menu: true },
+      });
+      if (!group) throw new GraphQLError("Group not found");
+      if (group.menu.status !== "draft")
+        throw new GraphQLError("Only draft modifier groups can be deleted");
+      await assertBranchMember(ctx, group.menu.branchId);
+      await prisma.$transaction(async (tx) => {
+        await tx.menuItemModifierGroup.deleteMany({ where: { groupId: args.id } });
+        await tx.modifierOption.deleteMany({ where: { groupId: args.id } });
+        await tx.modifierGroup.delete({ where: { id: args.id } });
+      });
+      return true;
+    },
+  }),
+
+  upsertModifierOption: t.prismaField({
+    type: "ModifierOption",
+    authScopes: { restaurantMember: true },
+    args: {
+      groupId: t.arg.string({ required: true }),
+      id: t.arg.string({ required: false }),
+      name: t.arg.string({ required: true }),
+      priceDeltaMinor: t.arg.int({ required: true }),
+      isAvailable: t.arg.boolean({ required: false }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      const group = await prisma.modifierGroup.findUnique({
+        where: { id: args.groupId },
+        include: { menu: true },
+      });
+      if (!group) throw new GraphQLError("Group not found");
+      if (group.menu.status !== "draft")
+        throw new GraphQLError("Only draft modifier options can be edited");
+      await assertBranchMember(ctx, group.menu.branchId);
+      if (!args.name.trim()) throw new GraphQLError("Option name is required");
+      if (args.priceDeltaMinor < 0) throw new GraphQLError("Price delta cannot be negative");
+      if (args.id) {
+        const existing = await prisma.modifierOption.findUnique({ where: { id: args.id } });
+        if (!existing || existing.groupId !== args.groupId)
+          throw new GraphQLError("Option not in group");
+        // On edit, only touch isAvailable when the caller explicitly sends it — omitting
+        // it must NOT silently restock an option the restaurant had disabled.
+        return prisma.modifierOption.update({
+          where: { id: args.id },
+          data: {
+            name: args.name,
+            priceDeltaMinor: args.priceDeltaMinor,
+            ...(args.isAvailable != null ? { isAvailable: args.isAvailable } : {}),
+          },
+        });
+      }
+      const sortOrder = await prisma.modifierOption.count({ where: { groupId: args.groupId } });
+      return prisma.modifierOption.create({
+        data: {
+          groupId: args.groupId,
+          name: args.name,
+          priceDeltaMinor: args.priceDeltaMinor,
+          isAvailable: args.isAvailable ?? true,
+          sortOrder,
+        },
+      });
+    },
+  }),
+
+  deleteModifierOption: t.field({
+    type: "Boolean",
+    authScopes: { restaurantMember: true },
+    args: { id: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      const option = await prisma.modifierOption.findUnique({
+        where: { id: args.id },
+        include: { group: { include: { menu: true } } },
+      });
+      if (!option) throw new GraphQLError("Option not found");
+      if (option.group.menu.status !== "draft")
+        throw new GraphQLError("Only draft modifier options can be deleted");
+      await assertBranchMember(ctx, option.group.menu.branchId);
+      await prisma.modifierOption.delete({ where: { id: args.id } });
+      return true;
+    },
+  }),
+
+  // ── menu item photo (#50 image pipeline reuse) ────────────────────────────
+  // Set or clear a draft item's uploaded photo. Reuses the presign/finalize/MediaAsset
+  // flow (media.ts): the client uploads via presignUpload+finalizeUpload, then passes the
+  // finalized assetId here. Pass mediaId:null to clear. Item.imageUrl reads it back.
+  setMenuItemPhoto: t.prismaField({
+    type: "MenuItem",
+    authScopes: { restaurantMember: true },
+    args: {
+      menuItemId: t.arg.string({ required: true }),
+      mediaId: t.arg.string({ required: false }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      const item = await prisma.menuItem.findUnique({
+        where: { id: args.menuItemId },
+        include: { category: { include: { menu: true } } },
+      });
+      if (!item) throw new GraphQLError("Item not found");
+      if (item.category.menu.status !== "draft")
+        throw new GraphQLError("Only draft items can be edited");
+      await assertBranchMember(ctx, item.category.menu.branchId);
+      if (args.mediaId) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: args.mediaId } });
+        if (!asset || asset.status !== "finalized")
+          throw new GraphQLError("Asset not finalized");
+      }
+      return prisma.menuItem.update({
+        where: { id: args.menuItemId },
+        data: { imageAssetId: args.mediaId ?? null },
+      });
     },
   }),
 
