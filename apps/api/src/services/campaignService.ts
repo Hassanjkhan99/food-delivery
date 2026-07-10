@@ -12,7 +12,7 @@
 // exactly like runPayoutBatch.
 import { prisma } from "@fd/db";
 import type { CampaignType, PrismaClient, RestaurantTier } from "@fd/db";
-import { postLedgerTx } from "./ledgerService.js";
+import { accountBalance, postLedgerTx } from "./ledgerService.js";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -53,8 +53,11 @@ export async function accrueCampaigns(now = new Date()): Promise<
   Array<{ campaignId: string; restaurantId: string; amountMinor: number; ended: boolean }>
 > {
   const today = utcDayStart(now);
+  // Only bill campaigns whose restaurant can still be shown to customers. A suspended /
+  // non-approved restaurant is hidden from the promoted rail (featuredBranches), so
+  // continuing to debit it charges for placement that never renders.
   const active = await prisma.campaign.findMany({
-    where: { status: "active" },
+    where: { status: "active", restaurant: { status: "approved" } },
     include: { restaurant: true },
   });
 
@@ -77,8 +80,34 @@ export async function accrueCampaigns(now = new Date()): Promise<
     if (c.lastAccruedAt && utcDayStart(c.lastAccruedAt).getTime() >= today.getTime()) continue;
 
     const amount = c.dailyRateMinor;
-    await prisma.$transaction(async (tx: Tx) => {
+    const posted = await prisma.$transaction(async (tx: Tx) => {
+      // Idempotency guard: claim today inside the transaction with a conditional write so
+      // two concurrent accrual runs can't both post a ledger leg for the same UTC day.
+      // updateMany returns the number of rows matched; if another run already stamped a
+      // lastAccruedAt in today's bucket, we match nothing and skip posting.
+      const claim = await tx.campaign.updateMany({
+        where: {
+          id: c.id,
+          OR: [{ lastAccruedAt: null }, { lastAccruedAt: { lt: today } }],
+        },
+        data: { lastAccruedAt: now },
+      });
+      if (claim.count === 0) return false;
+
       if (amount > 0) {
+        // Re-check the wallet each day: the submit-time check only proved one day of
+        // balance at approval, so a multi-day campaign could otherwise run negative. If
+        // the restaurant can't cover today's fee, end the campaign instead of debiting
+        // into unbacked debt (it can be recreated + resubmitted after a top-up). There is
+        // no `paused` status in the MVP enum, so `ended` is the stop state.
+        const balance = await accountBalance(tx, `restaurant:${c.restaurantId}:payable`);
+        if (balance < amount) {
+          await tx.campaign.update({
+            where: { id: c.id },
+            data: { status: "ended", lastAccruedAt: c.lastAccruedAt },
+          });
+          return "stopped";
+        }
         await postLedgerTx(tx, `Campaign ${c.id} daily fee`, [
           {
             code: `restaurant:${c.restaurantId}:payable`,
@@ -89,8 +118,14 @@ export async function accrueCampaigns(now = new Date()): Promise<
           { code: "platform:revenue", ownerType: "platform", credit: amount },
         ]);
       }
-      await tx.campaign.update({ where: { id: c.id }, data: { lastAccruedAt: now } });
+      return true;
     });
+    if (posted === false) continue; // lost the idempotency race — already accrued today.
+    if (posted === "stopped") {
+      // Ended for insufficient balance: report as ended, no charge posted.
+      out.push({ campaignId: c.id, restaurantId: c.restaurantId, amountMinor: 0, ended: true });
+      continue;
+    }
     out.push({ campaignId: c.id, restaurantId: c.restaurantId, amountMinor: amount, ended: false });
   }
 

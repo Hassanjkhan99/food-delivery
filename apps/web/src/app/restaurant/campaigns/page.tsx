@@ -109,8 +109,13 @@ export default function CampaignsPage() {
       restaurantId,
       type,
       label: label.trim() || undefined,
-      startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
-      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
+      // The <input type="date"> gives a bare YYYY-MM-DD, which `new Date()` reads as UTC
+      // midnight. The API treats endsAt as an exclusive cutoff (rejects endsAt <= startsAt
+      // and stops accrual once endsAt < now), so send end-of-day for the end date. This
+      // lets the campaign run through the whole selected day and makes a same-day campaign
+      // (start today, end today) valid.
+      startsAt: startsAt ? new Date(`${startsAt}T00:00:00.000Z`).toISOString() : undefined,
+      endsAt: endsAt ? new Date(`${endsAt}T23:59:59.999Z`).toISOString() : undefined,
     });
     if (r.error) {
       setMessage(r.error.graphQLErrors[0]?.message ?? "Couldn't create campaign.");
