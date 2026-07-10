@@ -25,6 +25,7 @@ const AccountViewerQuery = graphql(`
         name
         email
         phone
+        marketingOptOut
       }
     }
     mySessions {
@@ -48,6 +49,15 @@ const UpdateProfileMutation = graphql(`
       id
       name
       email
+    }
+  }
+`);
+
+const SetMarketingOptOutMutation = graphql(`
+  mutation SetMarketingOptOut($optOut: Boolean!) {
+    setMarketingOptOut(optOut: $optOut) {
+      id
+      marketingOptOut
     }
   }
 `);
@@ -79,6 +89,7 @@ export default function AccountPage() {
   const [, logout] = useMutation(LogoutMutation);
   const [updateState, updateProfile] = useMutation(UpdateProfileMutation);
   const [, revokeSession] = useMutation(RevokeSessionMutation);
+  const [{ fetching: optOutPending }, setMarketingOptOut] = useMutation(SetMarketingOptOutMutation);
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -86,6 +97,7 @@ export default function AccountPage() {
 
   const viewer = data?.viewer;
   const sessions = data?.mySessions ?? [];
+  const optedOut = viewer?.user?.marketingOptOut ?? false;
 
   if (!viewer) {
     return (
@@ -234,6 +246,30 @@ export default function AccountPage() {
           Payment methods
         </Link>
       </nav>
+
+      {/* Marketing notification preference (#56) */}
+      <div className="flex items-start justify-between gap-4 rounded-xl border border-kd-border bg-kd-surface p-4">
+        <div className="text-sm">
+          <p className="font-medium text-kd-fg">Marketing notifications</p>
+          <p className="mt-0.5 text-xs text-kd-fg-muted">
+            Promotional offers in your inbox. Order updates are always sent.
+          </p>
+        </div>
+        <Button
+          variant={optedOut ? "outline" : "default"}
+          size="sm"
+          className="shrink-0"
+          disabled={optOutPending}
+          onClick={async () => {
+            const res = await setMarketingOptOut({ optOut: !optedOut });
+            // Refetch unless the normalized cache already reflected the new value, so
+            // the label and the next toggle payload never derive from stale state.
+            if (!res.data?.setMarketingOptOut) refetch({ requestPolicy: "network-only" });
+          }}
+        >
+          {optedOut ? "Opted out" : "On"}
+        </Button>
+      </div>
 
       <Button
         variant="outline"

@@ -56,6 +56,7 @@ async function wipe() {
     "branch_cancellation_stats",
     "branches",
     "user_roles",
+    "notifications",
     "restaurants",
     "tax_profiles",
     "users",

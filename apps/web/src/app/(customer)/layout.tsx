@@ -7,6 +7,7 @@ import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/i18n/provider";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -69,14 +70,17 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               )}
             </Link>
             {viewer ? (
-              <Link
-                href="/account"
-                aria-label={t("a11y.account")}
-                className="flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
-              >
-                <User className="h-5 w-5" aria-hidden />
-                <span className="hidden sm:inline">{viewer.user?.name ?? t("nav.account")}</span>
-              </Link>
+              <>
+                <NotificationBell />
+                <Link
+                  href="/account"
+                  aria-label={t("a11y.account")}
+                  className="flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+                >
+                  <User className="h-5 w-5" aria-hidden />
+                  <span className="hidden sm:inline">{viewer.user?.name ?? t("nav.account")}</span>
+                </Link>
+              </>
             ) : (
               <Link
                 href="/login"

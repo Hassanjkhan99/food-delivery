@@ -13,6 +13,8 @@ export const UserType = builder.prismaObject("User", {
     phone: t.exposeString("phone"),
     name: t.exposeString("name", { nullable: true }),
     email: t.exposeString("email", { nullable: true }),
+    // Marketing opt-out state (#56), surfaced so the account screen can toggle it.
+    marketingOptOut: t.exposeBoolean("marketingOptOut"),
   }),
 });
 

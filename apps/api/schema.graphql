@@ -81,27 +81,9 @@ input CardInput {
 }
 
 input CartLineInput {
-  comboId: String
-  menuItemId: String
+  menuItemId: String!
   modifierOptionIds: [String!]
   notes: String
-  qty: Int!
-}
-
-type Combo {
-  description: String
-  id: ID!
-  imageUrl: String
-  isAvailable: Boolean!
-  items: [ComboItem!]!
-  name: String!
-  originalPriceMinor: Int!
-  priceMinor: Int!
-}
-
-type ComboItem {
-  id: ID!
-  menuItem: MenuItem!
   qty: Int!
 }
 
@@ -180,7 +162,6 @@ type MediaAsset {
 
 type Menu {
   categories: [MenuCategory!]!
-  combos: [Combo!]!
   id: ID!
   layoutJson: JSON
   status: String!
@@ -197,7 +178,6 @@ type MenuCategory {
 
 type MenuItem {
   badges: [String!]!
-  compareAtPriceMinor: Int
   description: String
   id: ID!
   imageUrl: String
@@ -234,7 +214,6 @@ type ModifierOption {
 type Mutation {
   acceptOrder(id: String!, prepEtaMinutes: Int!): Order!
   acceptTask(taskId: String!): DeliveryTask!
-  addComboItem(comboId: String!, menuItemId: String!, qty: Int): Combo!
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
@@ -242,17 +221,16 @@ type Mutation {
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
   deleteAddress(id: String!): Boolean!
-  deleteCombo(comboId: String!): Boolean!
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
   deleteModifierOption(id: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
-  issueGoodwillCredit(amountMinor: Int!, customerId: String!, reason: String!): Int!
   joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
   logout: Boolean!
-  markCollected(id: String!): Order!
+  markAllNotificationsRead: Int!
+  markNotificationRead(id: String!): Boolean!
   markReady(id: String!): Order!
   offerTask(orderId: String!, riderId: String!): DeliveryTask!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
@@ -264,7 +242,6 @@ type Mutation {
   rateOrder(comment: String, orderId: String!, stars: Int!, tags: [String!]): Rating!
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
-  removeComboItem(comboItemId: String!): Combo!
   removePaymentMethod(id: String!): Boolean!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
@@ -273,28 +250,45 @@ type Mutation {
   riderPickedUp(taskId: String!): DeliveryTask!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
+  sendPromoBlast(body: String!, linkHref: String, restaurantId: String, segment: String!, title: String!): Int!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
-  setComboAvailability(available: Boolean!, comboId: String!): Combo!
   setItemAvailability(available: Boolean!, itemId: String!): MenuItem!
+  setMarketingOptOut(optOut: Boolean!): User!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
-  topUpWallet(amountMinor: Int!, paymentMethodId: String!): Wallet!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
   upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
-  upsertCombo(branchId: String!, description: String, id: String, name: String!, priceMinor: Int!): Combo!
-  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, compareAtPriceMinor: Int, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
+  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
   upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
   upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
+}
+
+type Notification {
+  body: String!
+  createdAt: DateTime!
+  id: ID!
+  kind: String!
+  linkHref: String
+  orderId: String
+  read: Boolean!
+  readAt: DateTime
+  restaurantId: String
+  title: String!
+}
+
+type NotificationEvent {
+  unreadCount: Int!
+  userId: String!
 }
 
 type Order {
@@ -308,16 +302,13 @@ type Order {
   deliveredAt: DateTime
   deliveryFeeMinor: Int!
   events: [OrderEvent!]!
-  fulfillmentMode: String!
   grandTotalMinor: Int!
   id: ID!
   items: [OrderItem!]!
   paymentMode: String!
-  pickupCode: String
   placedAt: DateTime!
   platformFeeMinor: Int!
   prepEtaMinutes: Int
-  scheduledFor: DateTime
   status: String!
   subtotalMinor: Int!
   taxTotalMinor: Int!
@@ -386,11 +377,9 @@ input PlaceOrderInput {
   cutleryRequested: Boolean
   deliveryLat: Float!
   deliveryLng: Float!
-  fulfillmentMode: String
   lines: [CartLineInput!]!
   paymentMethodId: String
   paymentMode: String!
-  scheduledFor: String
   tipAmount: Int
 }
 
@@ -415,18 +404,19 @@ type Query {
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
+  myNotifications: [Notification!]!
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
-  myWallet: Wallet!
   order(id: String!): Order
   payoutCandidates: [PayoutCandidate!]!
   payoutHistory(restaurantId: String!): [Payout!]!
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  unreadNotificationCount: Int!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -451,15 +441,13 @@ input QuoteCartInput {
   branchId: String!
   deliveryLat: Float!
   deliveryLng: Float!
-  fulfillmentMode: String
   lines: [CartLineInput!]!
   tipAmount: Int
 }
 
 type QuoteLine {
-  comboId: String
   lineTotalMinor: Int!
-  menuItemId: String
+  menuItemId: String!
   name: String!
   qty: Int!
   unitPriceMinor: Int!
@@ -585,6 +573,7 @@ input SaveAddressInput {
 
 type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
+  notificationFeed: NotificationEvent!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
 }
@@ -602,6 +591,7 @@ input UpdateAddressInput {
 type User {
   email: String
   id: ID!
+  marketingOptOut: Boolean!
   name: String
   phone: String!
 }
@@ -617,16 +607,4 @@ type Waitlist {
   createdAt: DateTime!
   email: String!
   id: ID!
-}
-
-type Wallet {
-  balanceMinor: Int!
-  transactions: [WalletTxn!]!
-}
-
-type WalletTxn {
-  amountMinor: Int!
-  createdAt: DateTime!
-  id: ID!
-  memo: String!
 }

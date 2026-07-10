@@ -30,6 +30,7 @@ import {
 } from "./voucherService.js";
 import { mockProvider } from "./payments/mockProvider.js";
 import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
+import { notifyOrderStatus } from "./notificationService.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
 export const SYSTEM_ACTOR: Actor = { userId: null, role: "system" };
@@ -303,10 +304,13 @@ export async function placeOrder(
         branchId: chargedOrder.branchId,
         status: chargedOrder.status,
       });
+      // In-app inbox entry (#56). Non-fatal — never rolls back a placed order.
+      void notifyOrderStatus(chargedOrder, chargedOrder.status as OrderStatus);
       return chargedOrder;
     }
 
     publishOrderChanged({ orderId: order.id, branchId: order.branchId, status: order.status });
+    void notifyOrderStatus(order, order.status as OrderStatus);
     return order;
   } catch (e) {
     // Unique violation on idempotencyKey: a concurrent duplicate won the race.
@@ -407,6 +411,8 @@ export async function transition(
     { orderId, branchId: order.branchId, status: to },
     order.deliveryTask?.riderId,
   );
+  // In-app inbox entry (#56) for the customer. Non-fatal.
+  void notifyOrderStatus({ id: order.id, customerId: order.customerId, code: order.code }, to);
   return updated;
 }
 
