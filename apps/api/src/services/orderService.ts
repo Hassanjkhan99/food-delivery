@@ -183,6 +183,11 @@ export async function placeOrder(
               reason: `Payment failed: ${result.declineReason}`,
             },
           });
+          // Points were spent inside the placement tx (before the charge attempt). This
+          // decline path cancels the order directly instead of via transition(), so it
+          // must return the redeemed points itself — otherwise the customer loses points
+          // on an order that never succeeded. No-op when nothing was redeemed.
+          await onOrderReversalLoyalty(tx, order, "cancelled");
         });
         throw new GraphQLError(result.declineReason);
       }

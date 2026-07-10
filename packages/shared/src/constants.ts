@@ -41,6 +41,13 @@ export const LOYALTY_POINT_VALUE_MINOR = 10;
 export const LOYALTY_MIN_REDEEM_POINTS = 100;
 /** Points must be redeemed in whole multiples of this step. */
 export const LOYALTY_REDEEM_STEP = 100;
+/**
+ * Upper bound on a single redeem request. The client sends this as a "redeem all I'm
+ * allowed" sentinel and the server clamps it down to the live balance + subtotal ceiling
+ * (see resolveLoyaltyRedemption). Both the checkout client and the quote/place-order zod
+ * schema use this value so a redeem-all request can never fail input validation.
+ */
+export const LOYALTY_MAX_REDEEM_POINTS = 10_000_000;
 
 /** Points earned for a delivered order, from its subtotal (minor units). */
 export function loyaltyPointsEarned(subtotalMinor: number): number {

@@ -5,14 +5,16 @@
 // reduction (booked against the platform via the smaller order total).
 import type { PrismaClient } from "@fd/db";
 import { loyaltyPointsEarned } from "@fd/shared";
+import { GraphQLError } from "graphql";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 /**
  * Append a signed points movement for `userId` inside an existing transaction,
  * creating the account on first touch and keeping the cached balance in lock-step.
- * Returns the new balance. Callers guarantee balance never goes negative (redeem is
- * clamped to balance upstream) but we floor at 0 defensively.
+ * Returns the new balance. A spend (negative delta) that would overdraw the balance is
+ * rejected — two checkouts quoted against the same balance can both reach this path, and
+ * silently flooring at 0 would grant a second discount with no points behind it.
  */
 export async function postLoyaltyTx(
   tx: Tx,
@@ -28,7 +30,11 @@ export async function postLoyaltyTx(
     update: {},
     create: { userId, pointsBalance: 0 },
   });
-  const balanceAfter = Math.max(0, account.pointsBalance + delta);
+  const balanceAfter = account.pointsBalance + delta;
+  if (balanceAfter < 0) {
+    // Insufficient balance — a concurrent spend already drained the points.
+    throw new GraphQLError("Not enough loyalty points to redeem");
+  }
 
   await tx.loyaltyAccount.update({
     where: { userId },

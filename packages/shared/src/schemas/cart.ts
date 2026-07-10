@@ -1,5 +1,6 @@
 // Cart/checkout validation shared by the web forms and API resolvers.
 import { z } from "zod";
+import { LOYALTY_MAX_REDEEM_POINTS } from "../constants";
 
 export const cartLineSchema = z.object({
   menuItemId: z.string().min(1),
@@ -20,7 +21,7 @@ export const quoteInputSchema = z.object({
   // Loyalty points the customer wants to redeem (FP-07). Server clamps this to the
   // balance + redemption rules and recomputes the discount; the client value is only a
   // request. 0 = redeem nothing.
-  redeemPoints: z.number().int().min(0).max(10_000_000).default(0),
+  redeemPoints: z.number().int().min(0).max(LOYALTY_MAX_REDEEM_POINTS).default(0),
 });
 
 export const placeOrderInputSchema = quoteInputSchema.extend({

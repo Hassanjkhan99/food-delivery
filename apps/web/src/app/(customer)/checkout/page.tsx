@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
-import { formatRs } from "@fd/shared";
+import { formatRs, LOYALTY_MAX_REDEEM_POINTS } from "@fd/shared";
 import { useCart } from "@/lib/cart";
 import { useCartExtras } from "../cart/page";
 import { useDeliveryLocation } from "@/lib/location";
@@ -119,9 +119,10 @@ export default function CheckoutPage() {
   const [quoteState, runQuote] = useMutation(QuoteMutation);
   const [placeState, runPlace] = useMutation(PlaceOrderMutation);
 
-  // Requesting a huge number tells the server "redeem as much as I'm allowed"; it
-  // clamps to the live balance + subtotal ceiling. 0 disables redemption.
-  const redeemPoints = useLoyalty ? 100_000_000 : 0;
+  // Requesting the max-allowed value tells the server "redeem as much as I'm allowed"; it
+  // clamps to the live balance + subtotal ceiling. 0 disables redemption. The sentinel
+  // must stay within the shared schema cap or the quote/place-order input fails validation.
+  const redeemPoints = useLoyalty ? LOYALTY_MAX_REDEEM_POINTS : 0;
 
   useEffect(() => {
     if (!branchId || lines.length === 0) return;

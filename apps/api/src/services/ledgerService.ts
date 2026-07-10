@@ -69,26 +69,32 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
 
   if (order.paymentMode === "card") {
     // Platform holds the customer's money; release restaurant share, keep fees.
-    await postLedgerTx(
-      tx,
-      `Settlement ${order.code} (card)`,
-      [
-        {
-          code: `customer:${order.customerId}:prepaid`,
-          ownerType: "customer",
-          ownerId: order.customerId,
-          debit: order.grandTotalMinor,
-        },
-        {
-          code: `restaurant:${restaurantId}:payable`,
-          ownerType: "restaurant",
-          ownerId: restaurantId,
-          credit: restaurantShare,
-        },
-        { code: "platform:revenue", ownerType: "platform", credit: fees },
-      ],
-      { orderId: order.id },
-    );
+    // Loyalty is platform-funded (FP-07): the customer only prepaid the discounted
+    // grandTotal, but the restaurant is owed the full (undiscounted) share. The platform
+    // absorbs the gap so the legs balance and the restaurant is never shortchanged.
+    const legs: Leg[] = [
+      {
+        code: `customer:${order.customerId}:prepaid`,
+        ownerType: "customer",
+        ownerId: order.customerId,
+        debit: order.grandTotalMinor,
+      },
+      {
+        code: `restaurant:${restaurantId}:payable`,
+        ownerType: "restaurant",
+        ownerId: restaurantId,
+        credit: restaurantShare,
+      },
+      { code: "platform:revenue", ownerType: "platform", credit: fees },
+    ];
+    if (order.loyaltyDiscountMinor > 0) {
+      legs.push({
+        code: "platform:revenue",
+        ownerType: "platform",
+        debit: order.loyaltyDiscountMinor,
+      });
+    }
+    await postLedgerTx(tx, `Settlement ${order.code} (card)`, legs, { orderId: order.id });
   } else {
     // COD: cash went to the restaurant; platform books its cut as a receivable.
     await postLedgerTx(
