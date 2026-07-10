@@ -128,8 +128,10 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   const commissionBps = isChain ? fee.chainCommissionBps : fee.smallBusinessCommissionBps;
   const platformFee = isChain ? fee.chainPlatformFeeMinor : fee.smallBusinessPlatformFeeMinor;
   const commission = applyBps(subtotal, commissionBps);
-  // Rider tip is added on top of the bill; it isn't taxed or commissioned.
-  const tipAmount = input.tipAmount ?? 0;
+  // Rider tip is added on top of the bill; it isn't taxed or commissioned. Pickup has
+  // no rider leg, so a rider tip can't be routed to anyone — force it to zero (#54) so
+  // a tip chosen on the cart page before switching to Pickup is never charged.
+  const tipAmount = isPickup ? 0 : input.tipAmount ?? 0;
   // Pickup has no rider leg, so there's no delivery fee to charge (#54). Founder call:
   // no separate pickup discount in v1 — the waived delivery fee is the customer win.
   const deliveryFeeMinor = isPickup ? 0 : branch.deliveryFeeMinor;

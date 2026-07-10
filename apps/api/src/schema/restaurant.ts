@@ -391,6 +391,11 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Pickup orders have no rider leg (#54): the customer collects at the counter, so
+      // never let one enter the delivery workflow via a stale UI or restaurant client.
+      if (order.fulfillmentMode === "pickup") {
+        throw new GraphQLError("Pickup orders can't be assigned to a rider");
+      }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");
@@ -434,6 +439,10 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.orderId);
+      // Pickup orders have no rider leg (#54): never offer one to a rider.
+      if (order.fulfillmentMode === "pickup") {
+        throw new GraphQLError("Pickup orders can't be offered to a rider");
+      }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
         throw new GraphQLError("Rider is not on this restaurant's roster");

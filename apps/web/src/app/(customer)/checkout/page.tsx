@@ -118,6 +118,11 @@ export default function CheckoutPage() {
   const [quoteState, runQuote] = useMutation(QuoteMutation);
   const [placeState, runPlace] = useMutation(PlaceOrderMutation);
 
+  // The fulfillment mode the last quote was requested for. Until a fresh quote for the
+  // current mode returns, the displayed quote is stale (a Delivery-after-Pickup switch
+  // would otherwise show a pickup total + no delivery fee while submit sends delivery).
+  const [quotedMode, setQuotedMode] = useState<"delivery" | "pickup">(fulfillmentMode);
+
   useEffect(() => {
     if (!branchId || lines.length === 0) return;
     void runQuote({
@@ -129,6 +134,9 @@ export default function CheckoutPage() {
         tipAmount,
         fulfillmentMode,
       },
+    }).then((res) => {
+      // Only mark the mode as quoted once this request's result lands.
+      if (res.data?.quoteCart) setQuotedMode(fulfillmentMode);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId, cartLines, loc.lat, loc.lng, tipAmount, fulfillmentMode]);
@@ -148,10 +156,14 @@ export default function CheckoutPage() {
   const quoteError = quoteState.error?.graphQLErrors[0]?.message;
 
   const isPickup = fulfillmentMode === "pickup";
+  // The visible quote is stale while a mode switch is still being re-priced.
+  const quoteStale = !quote || quotedMode !== fulfillmentMode || quoteState.fetching;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Guard against placing an order against a stale quote (e.g. a fast mode switch).
+    if (quoteStale) return;
 
     // Pickup has no delivery address; the API still requires addressText (min 5), so we
     // send a clear pickup marker naming the branch instead of a customer address.
@@ -431,7 +443,9 @@ export default function CheckoutPage() {
           type="submit"
           size="lg"
           className="w-full"
-          disabled={placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius}
+          disabled={
+            placeState.fetching || quoteStale || !quote || !quote.meetsMinimum || !quote.inRadius
+          }
         >
           {placeState.fetching
             ? "Placing order…"
