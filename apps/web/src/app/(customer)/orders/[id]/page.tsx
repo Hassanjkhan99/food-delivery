@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { ReorderButton } from "@/components/ReorderButton";
+import { REORDERABLE_STATUSES, type OrderItemSnapshot } from "@/lib/cart";
 
 const OrderQuery = graphql(`
   query OrderDetail($id: String!) {
@@ -28,8 +30,10 @@ const OrderQuery = graphql(`
       pickupPin
       addressSnapshotJson
       branch {
+        id
         restaurant {
           name
+          slug
         }
       }
       items {
@@ -408,6 +412,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>{formatRs(order.grandTotalMinor)}</span>
         </div>
       </div>
+
+      {/* Reorder — rebuild the cart from this order's items. Only offered once
+          the order reaches a terminal state (matching the orders list) so an
+          in-flight order can't be duplicated before it's fulfilled. Availability
+          and pricing are re-validated at checkout via quoteCart. */}
+      {REORDERABLE_STATUSES.has(order.status) && order.items.length > 0 && (
+        <div className="mt-4">
+          <ReorderButton
+            size="default"
+            variant="outline"
+            className="w-full"
+            source={{
+              branch: {
+                id: order.branch.id,
+                slug: order.branch.restaurant.slug,
+                name: order.branch.restaurant.name,
+              },
+              items: order.items.map((i) => ({
+                qty: i.qty,
+                notes: i.notes,
+                menuSnapshotJson: i.menuSnapshotJson as OrderItemSnapshot["menuSnapshotJson"],
+              })),
+            }}
+          >
+            Reorder these items
+          </ReorderButton>
+        </div>
+      )}
 
       {address?.text && (
         <p className="mt-4 text-sm text-kd-fg-muted">Delivering to: {address.text}</p>

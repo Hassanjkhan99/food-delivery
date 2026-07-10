@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
-import { useCart } from "@/lib/cart";
-import { useCartExtras } from "../cart/page";
+import { useCart, useCartExtras } from "@/lib/cart";
 import { useDeliveryLocation } from "@/lib/location";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +49,35 @@ const CheckoutMethodsQuery = graphql(`
       brand
       last4
       isDefault
+    }
+  }
+`);
+
+const CheckoutViewerQuery = graphql(`
+  query CheckoutViewer {
+    viewer {
+      user {
+        id
+        phone
+      }
+    }
+  }
+`);
+
+const GuestRequestOtpMutation = graphql(`
+  mutation GuestRequestOtp($phone: String!) {
+    requestOtp(phone: $phone) {
+      devCode
+    }
+  }
+`);
+
+const GuestVerifyOtpMutation = graphql(`
+  mutation GuestVerifyOtp($phone: String!, $code: String!) {
+    verifyOtp(phone: $phone, code: $code) {
+      user {
+        id
+      }
     }
   }
 `);
@@ -99,7 +127,56 @@ export default function CheckoutPage() {
     setSavedCoords(null);
   }
 
-  const [{ data: methodsData }] = useQuery({ query: CheckoutMethodsQuery });
+  // Guest checkout: a signed-out shopper verifies their phone inline (OTP) rather
+  // than being bounced to /login and losing their place. verifyOtp find-or-creates
+  // the customer account + sets the session cookie, after which placeOrder works.
+  const [{ data: viewerData }, refetchViewer] = useQuery({
+    query: CheckoutViewerQuery,
+    requestPolicy: "cache-and-network",
+  });
+  const loggedIn = Boolean(viewerData?.viewer?.user?.id);
+  const [guestPhone, setGuestPhone] = useState("+92");
+  const [guestCode, setGuestCode] = useState("");
+  const [guestStep, setGuestStep] = useState<"phone" | "code">("phone");
+  const [guestDevCode, setGuestDevCode] = useState<string | null>(null);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [, requestGuestOtp] = useMutation(GuestRequestOtpMutation);
+  const guestRequesting = useRef(false);
+  const [verifyState, verifyGuestOtp] = useMutation(GuestVerifyOtpMutation);
+
+  async function onGuestRequestOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (guestRequesting.current) return;
+    setGuestError(null);
+    guestRequesting.current = true;
+    const result = await requestGuestOtp({ phone: guestPhone.trim() });
+    guestRequesting.current = false;
+    if (result.error) {
+      setGuestError(result.error.graphQLErrors[0]?.message ?? "Couldn't send the code.");
+      return;
+    }
+    setGuestDevCode(result.data?.requestOtp?.devCode ?? null);
+    setGuestStep("code");
+    // Pre-fill the delivery contact phone with the verified number.
+    setContactPhone(guestPhone.trim());
+  }
+
+  async function onGuestVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setGuestError(null);
+    const result = await verifyGuestOtp({ phone: guestPhone.trim(), code: guestCode });
+    if (result.error || !result.data?.verifyOtp?.user?.id) {
+      setGuestError(result.error?.graphQLErrors[0]?.message ?? "Verification failed.");
+      return;
+    }
+    // Session cookie is now set server-side; re-read the viewer so the order form unlocks.
+    refetchViewer({ requestPolicy: "network-only" });
+  }
+
+  const [{ data: methodsData }] = useQuery({
+    query: CheckoutMethodsQuery,
+    pause: !loggedIn,
+  });
   const methods = useMemo(() => methodsData?.myPaymentMethods ?? [], [methodsData]);
   // Derived default (no effect needed): explicit selection wins, else default card.
   const paymentMethodId =
@@ -198,6 +275,66 @@ export default function CheckoutPage() {
     <main className="mx-auto max-w-lg">
       <h1 className="mb-1 text-2xl font-bold">Checkout</h1>
       <p className="mb-6 text-sm text-kd-fg-muted">Ordering from {branchName}</p>
+
+      {/* Guest checkout — verify phone inline instead of bouncing to /login. */}
+      {!loggedIn && (
+        <div className="mb-4 rounded-xl border border-kd-border bg-kd-surface p-4">
+          <p className="text-sm font-semibold text-kd-fg">Verify your phone to order</p>
+          <p className="mt-0.5 text-xs text-kd-fg-muted">
+            No account needed — we&apos;ll text you a one-time code and keep your cart.
+          </p>
+          {guestStep === "phone" ? (
+            <form onSubmit={onGuestRequestOtp} className="mt-3 flex gap-2">
+              <Input
+                type="tel"
+                required
+                placeholder="+923001234567"
+                value={guestPhone}
+                onChange={(e) => setGuestPhone(e.target.value)}
+                aria-label="Phone number"
+              />
+              <Button type="submit">Send code</Button>
+            </form>
+          ) : (
+            <form onSubmit={onGuestVerifyOtp} className="mt-3 space-y-2">
+              {guestDevCode && (
+                <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-xs text-kd-warning">
+                  Dev mode — your code is{" "}
+                  <span className="font-mono font-bold">{guestDevCode}</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  placeholder="6-digit code"
+                  value={guestCode}
+                  onChange={(e) => setGuestCode(e.target.value.replace(/\D/g, ""))}
+                  aria-label="Verification code"
+                  className="font-mono tracking-widest"
+                />
+                <Button type="submit" disabled={verifyState.fetching || guestCode.length !== 6}>
+                  {verifyState.fetching ? "Verifying…" : "Verify"}
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setGuestStep("phone");
+                  setGuestCode("");
+                  setGuestDevCode(null);
+                }}
+                className="text-xs text-kd-fg-muted hover:text-kd-fg"
+              >
+                Use a different number
+              </button>
+            </form>
+          )}
+          {guestError && <p className="mt-2 text-sm text-kd-danger">{guestError}</p>}
+        </div>
+      )}
 
       <form onSubmit={submit} className="space-y-4">
         <AddressSelector
@@ -371,11 +508,15 @@ export default function CheckoutPage() {
           type="submit"
           size="lg"
           className="w-full"
-          disabled={placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius}
+          disabled={
+            placeState.fetching || !quote || !quote.meetsMinimum || !quote.inRadius || !loggedIn
+          }
         >
           {placeState.fetching
             ? "Placing order…"
-            : `Place order${quote ? ` · ${formatRs(quote.grandTotalMinor)}` : ""}`}
+            : !loggedIn
+              ? "Verify your phone to continue"
+              : `Place order${quote ? ` · ${formatRs(quote.grandTotalMinor)}` : ""}`}
         </Button>
       </form>
     </main>
