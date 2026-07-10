@@ -41,7 +41,7 @@ export async function placeOrder(
     return existing;
   }
 
-  const quote = await quoteCart(input);
+  const quote = await quoteCart(input, customerId);
   if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
   if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
 

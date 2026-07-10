@@ -192,6 +192,16 @@ enum CampaignStatus {
   rejected
 }
 
+// Pandapro-style membership (#59). A subscription that grants free/discounted
+// delivery above a threshold. Recurring billing is a real PSP concern (#17) — this
+// phase mock-charges the sign-up via the same mock provider as orders and renews on
+// demand; no cron dunning yet.
+enum SubscriptionStatus {
+  active
+  cancelled
+  expired
+}
+
 // ───────────────────────────── identity & auth ─────────────────────────────
 
 model User {
@@ -211,6 +221,7 @@ model User {
   ownedRestaurants Restaurant[]        @relation("RestaurantOwner")
   tickets          SupportTicket[]
   pushSubs         PushSubscription[]
+  subscriptions    Subscription[]
 
   @@map("users")
 }
@@ -924,6 +935,58 @@ model Campaign {
 
   @@index([restaurantId])
   @@map("campaigns")
+}
+
+// ───────────────────────────── membership (#59) ─────────────────────────────
+
+// A purchasable membership tier (pandapro-style). Benefit model: when an active
+// member's order subtotal is >= freeDeliveryThresholdMinor the delivery fee is fully
+// waived; below that it is reduced by deliveryDiscountBps. Admin-configured, but a
+// default plan is seeded so the flow works out of the box.
+model MembershipPlan {
+  id                          String   @id @default(cuid())
+  name                        String
+  // Recurring price charged each billing period (minor units / paisa).
+  priceMinor                  Int
+  // Order subtotal (minor units) at/above which delivery is fully free.
+  freeDeliveryThresholdMinor  Int      @default(0)
+  // Delivery-fee discount (basis points) applied when below the free threshold.
+  // 10000 bps = 100% off. Default 0 = no discount below threshold.
+  deliveryDiscountBps         Int      @default(0)
+  // Billing cadence in days (30 = monthly).
+  billingPeriodDays           Int      @default(30)
+  isActive                    Boolean  @default(true)
+  createdAt                   DateTime @default(now()) @db.Timestamptz()
+  updatedAt                   DateTime @updatedAt @db.Timestamptz()
+
+  subscriptions Subscription[]
+
+  @@map("membership_plans")
+}
+
+// A user's membership. At most one active row per user is enforced in app code
+// (subscribe reuses/renews an existing active row). Billing is mock-charged at
+// sign-up/renewal via the mock payment provider; providerRef records the mock charge.
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String
+  planId             String
+  status             SubscriptionStatus @default(active)
+  currentPeriodStart DateTime           @default(now()) @db.Timestamptz()
+  currentPeriodEnd   DateTime           @db.Timestamptz()
+  autoRenew          Boolean            @default(true)
+  // Mock recurring-billing bookkeeping (real PSP recurring is #17).
+  paymentMethodId    String?
+  lastChargeRef      String?
+  cancelledAt        DateTime?          @db.Timestamptz()
+  createdAt          DateTime           @default(now()) @db.Timestamptz()
+  updatedAt          DateTime           @updatedAt @db.Timestamptz()
+
+  user User           @relation(fields: [userId], references: [id])
+  plan MembershipPlan @relation(fields: [planId], references: [id])
+
+  @@index([userId, status])
+  @@map("subscriptions")
 }
 
 // Delivery-area waitlist (#64): captures "notify me" sign-ups from areas we don't

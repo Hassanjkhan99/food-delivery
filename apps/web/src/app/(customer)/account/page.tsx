@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 const AccountViewerQuery = graphql(`
   query AccountViewer {
@@ -55,6 +56,20 @@ export default function AccountPage() {
           Roles: {viewer.roles?.map((r) => r?.role).join(", ") || "customer"}
         </p>
       </div>
+      <nav className="mt-4 grid gap-2">
+        <Link href="/membership" className={buttonVariants({ variant: "outline" })}>
+          KhaanaDo Pro membership
+        </Link>
+        <Link href="/orders" className={buttonVariants({ variant: "outline" })}>
+          My orders
+        </Link>
+        <Link href="/payment-methods" className={buttonVariants({ variant: "outline" })}>
+          Payment methods
+        </Link>
+        <Link href="/addresses" className={buttonVariants({ variant: "outline" })}>
+          Saved addresses
+        </Link>
+      </nav>
       <Button
         variant="outline"
         className="mt-6 w-full"

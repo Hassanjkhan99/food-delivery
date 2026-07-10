@@ -23,6 +23,13 @@ export type QuoteResult = {
   branchId: string;
   subtotalMinor: number;
   deliveryFeeMinor: number;
+  // Full delivery fee before any membership benefit is applied. Equals deliveryFeeMinor
+  // when the customer is not a member (or the benefit didn't apply).
+  baseDeliveryFeeMinor: number;
+  // How much the delivery fee was reduced by an active membership (>= 0).
+  membershipDeliverySavingMinor: number;
+  // Whether an active membership benefit (free/discounted delivery) was applied.
+  membershipApplied: boolean;
   taxTotalMinor: number;
   platformFeeMinor: number;
   commissionMinor: number;
@@ -36,7 +43,37 @@ export type QuoteResult = {
   lines: ResolvedLine[];
 };
 
-export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
+// Compute the delivery fee after any active membership benefit. Free above the plan's
+// threshold; otherwise reduced by the plan's discount bps. customerId is optional — a
+// guest/unauthenticated quote simply pays the full fee.
+async function applyMembershipBenefit(
+  customerId: string | undefined,
+  subtotalMinor: number,
+  baseDeliveryFeeMinor: number,
+): Promise<{ deliveryFeeMinor: number; applied: boolean }> {
+  if (!customerId || baseDeliveryFeeMinor <= 0) {
+    return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
+  }
+  const sub = await prisma.subscription.findFirst({
+    where: { userId: customerId, status: "active", currentPeriodEnd: { gt: new Date() } },
+    include: { plan: true },
+  });
+  if (!sub) return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
+
+  if (subtotalMinor >= sub.plan.freeDeliveryThresholdMinor) {
+    return { deliveryFeeMinor: 0, applied: true };
+  }
+  if (sub.plan.deliveryDiscountBps > 0) {
+    const discounted = baseDeliveryFeeMinor - applyBps(baseDeliveryFeeMinor, sub.plan.deliveryDiscountBps);
+    return { deliveryFeeMinor: Math.max(0, discounted), applied: true };
+  }
+  return { deliveryFeeMinor: baseDeliveryFeeMinor, applied: false };
+}
+
+export async function quoteCart(
+  input: QuoteInput,
+  customerId?: string,
+): Promise<QuoteResult> {
   const branch = await prisma.branch.findUnique({
     where: { id: input.branchId },
     include: { restaurant: true, taxProfile: true },
@@ -128,16 +165,27 @@ export async function quoteCart(input: QuoteInput): Promise<QuoteResult> {
   // Rider tip is added on top of the bill; it isn't taxed or commissioned.
   const tipAmount = input.tipAmount ?? 0;
 
+  // Membership benefit (#59): waive/reduce the delivery fee for active members.
+  const baseDeliveryFeeMinor = branch.deliveryFeeMinor;
+  const { deliveryFeeMinor, applied } = await applyMembershipBenefit(
+    customerId,
+    subtotal,
+    baseDeliveryFeeMinor,
+  );
+
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
-    deliveryFeeMinor: branch.deliveryFeeMinor,
+    deliveryFeeMinor,
+    baseDeliveryFeeMinor,
+    membershipDeliverySavingMinor: baseDeliveryFeeMinor - deliveryFeeMinor,
+    membershipApplied: applied,
     taxTotalMinor: tax,
     platformFeeMinor: platformFee,
     commissionMinor: commission,
     commissionBps,
     tipAmount,
-    grandTotalMinor: subtotal + tax + branch.deliveryFeeMinor + platformFee + tipAmount,
+    grandTotalMinor: subtotal + tax + deliveryFeeMinor + platformFee + tipAmount,
     minOrderMinor: branch.minOrderMinor,
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,

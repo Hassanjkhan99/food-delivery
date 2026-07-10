@@ -102,6 +102,9 @@ QuoteType.implement({
     branchId: t.exposeString("branchId"),
     subtotalMinor: t.exposeInt("subtotalMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
+    baseDeliveryFeeMinor: t.exposeInt("baseDeliveryFeeMinor"),
+    membershipDeliverySavingMinor: t.exposeInt("membershipDeliverySavingMinor"),
+    membershipApplied: t.exposeBoolean("membershipApplied"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
@@ -227,13 +230,15 @@ builder.mutationFields((t) => ({
   quoteCart: t.field({
     type: QuoteType,
     args: { input: t.arg({ type: QuoteCartInput, required: true }) },
-    resolve: (_root, args) =>
+    resolve: (_root, args, ctx) =>
       quoteCart(
         quoteInputSchema.parse({
           ...args.input,
           tipAmount: args.input.tipAmount ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
+        // Apply the customer's membership benefit when signed in (guest quote pays full).
+        ctx.userId ?? undefined,
       ),
   }),
 

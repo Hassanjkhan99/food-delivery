@@ -160,6 +160,27 @@ type MediaAsset {
   url: String!
 }
 
+type Membership {
+  autoRenew: Boolean!
+  cancelledAt: DateTime
+  currentPeriodEnd: DateTime!
+  currentPeriodStart: DateTime!
+  id: ID!
+  isActive: Boolean!
+  plan: MembershipPlan!
+  status: String!
+}
+
+type MembershipPlan {
+  billingPeriodDays: Int!
+  deliveryDiscountBps: Int!
+  freeDeliveryThresholdMinor: Int!
+  id: ID!
+  isActive: Boolean!
+  name: String!
+  priceMinor: Int!
+}
+
 type Menu {
   categories: [MenuCategory!]!
   id: ID!
@@ -217,6 +238,7 @@ type Mutation {
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
+  cancelMembership: Membership!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
@@ -256,6 +278,7 @@ type Mutation {
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   startPreparing(id: String!): Order!
   submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  subscribeMembership(paymentMethodId: String!, planId: String!): Membership!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
@@ -377,11 +400,13 @@ type Query {
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
   homeBanners: [HomeBanner!]!
+  membershipPlans: [MembershipPlan!]!
   menuSourceDocs(branchId: String!): [MenuSourceDoc!]!
   myAddresses: [Address!]!
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
   myJobs: [DeliveryTask!]!
+  myMembership: Membership
   myOrders: [Order!]!
   myPaymentMethods: [PaymentMethod!]!
   myRestaurants: [Restaurant!]!
@@ -399,6 +424,7 @@ type Query {
 }
 
 type Quote {
+  baseDeliveryFeeMinor: Int!
   branchId: String!
   deliveryFeeMinor: Int!
   distanceM: Int!
@@ -406,6 +432,8 @@ type Quote {
   inRadius: Boolean!
   lines: [QuoteLine!]!
   meetsMinimum: Boolean!
+  membershipApplied: Boolean!
+  membershipDeliverySavingMinor: Int!
   minOrderMinor: Int!
   platformFeeMinor: Int!
   subtotalMinor: Int!

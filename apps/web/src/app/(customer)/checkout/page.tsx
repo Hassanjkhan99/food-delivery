@@ -23,6 +23,9 @@ const QuoteMutation = graphql(`
     quoteCart(input: $input) {
       subtotalMinor
       deliveryFeeMinor
+      baseDeliveryFeeMinor
+      membershipDeliverySavingMinor
+      membershipApplied
       taxTotalMinor
       platformFeeMinor
       grandTotalMinor
@@ -322,8 +325,24 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-kd-fg-muted">Delivery fee</span>
-                <span>{formatRs(quote.deliveryFeeMinor)}</span>
+                {quote.membershipApplied && quote.membershipDeliverySavingMinor > 0 ? (
+                  <span className="flex items-center gap-2">
+                    <span className="text-kd-fg-subtle line-through">
+                      {formatRs(quote.baseDeliveryFeeMinor)}
+                    </span>
+                    <span className="font-medium text-kd-success">
+                      {quote.deliveryFeeMinor === 0 ? "Free" : formatRs(quote.deliveryFeeMinor)}
+                    </span>
+                  </span>
+                ) : (
+                  <span>{formatRs(quote.deliveryFeeMinor)}</span>
+                )}
               </div>
+              {quote.membershipApplied && quote.membershipDeliverySavingMinor > 0 && (
+                <p className="text-xs font-medium text-kd-success">
+                  KhaanaDo Pro saved you {formatRs(quote.membershipDeliverySavingMinor)} on delivery
+                </p>
+              )}
               <div className="flex justify-between">
                 <span className="text-kd-fg-muted">Platform fee</span>
                 <span>{formatRs(quote.platformFeeMinor)}</span>
