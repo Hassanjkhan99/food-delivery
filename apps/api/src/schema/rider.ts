@@ -110,6 +110,24 @@ RiderPayoutRowType.implement({
   }),
 });
 
+// Pakistan Standard Time (UTC+5, no DST) — the whole app treats branch hours and
+// analytics as PKT wall-clock, so rider "today" windows must too, independent of the
+// API process timezone.
+const PKT_OFFSET_MINUTES = 5 * 60;
+
+// Start of the PKT calendar day for `when`, returned as a real UTC instant so it can be
+// compared directly against stored timestamps (which are UTC). Midnight PKT = 19:00 UTC
+// the previous day.
+function startOfPktDay(when: Date): Date {
+  const pkt = new Date(when.getTime() + PKT_OFFSET_MINUTES * 60_000);
+  const pktMidnight = Date.UTC(
+    pkt.getUTCFullYear(),
+    pkt.getUTCMonth(),
+    pkt.getUTCDate(),
+  );
+  return new Date(pktMidnight - PKT_OFFSET_MINUTES * 60_000);
+}
+
 // ISO-week bucket (Mon 00:00 → next Mon 00:00, UTC) for grouping computed payouts.
 function isoWeekWindow(when: Date): { key: string; start: Date; end: Date } {
   const d = new Date(Date.UTC(when.getUTCFullYear(), when.getUTCMonth(), when.getUTCDate()));
@@ -137,6 +155,7 @@ builder.queryFields((t) => ({
         agreementAccepted: boolean;
         rejectionReason: string | null;
         missingRequirements: string[];
+        cashLimitMinor: number;
       }>("RiderProfile")
       .implement({
         fields: (f) => ({
@@ -153,6 +172,10 @@ builder.queryFields((t) => ({
             type: ["String"],
             resolve: (p) => p.missingRequirements,
           }),
+          // Per-rider COD ceiling. The cash panel warns as today's collected COD
+          // approaches this; enforcement (blocking new assignments) is the fraud
+          // issue #25's job — this only surfaces the number.
+          cashLimitMinor: f.exposeInt("cashLimitMinor"),
         }),
       }),
     nullable: true,
@@ -175,6 +198,52 @@ builder.queryFields((t) => ({
         agreementAccepted: rider.agreementAccepted,
         rejectionReason: rider.rejectionReason,
         missingRequirements: missingRequirements(rider),
+        cashLimitMinor: rider.cashLimitMinor,
+      };
+    },
+  }),
+
+  // Cash-in-hand snapshot for the rider's COD panel (#47). Today's collected COD
+  // (from tasks delivered since local midnight) vs the rider's cashLimitMinor, so
+  // the UI can render a "used / limit" band and warn as it fills. `todayCod` sums
+  // the COD amounts on tasks whose order was delivered today; a task with no
+  // deliveredAt (edge case) falls back to its createdAt day.
+  myCashSummary: t.field({
+    type: builder
+      .objectRef<{
+        todayCodCollectedMinor: number;
+        cashLimitMinor: number;
+        deliveriesToday: number;
+      }>("RiderCashSummary")
+      .implement({
+        fields: (f) => ({
+          todayCodCollectedMinor: f.exposeInt("todayCodCollectedMinor"),
+          cashLimitMinor: f.exposeInt("cashLimitMinor"),
+          deliveriesToday: f.exposeInt("deliveriesToday"),
+        }),
+      }),
+    nullable: true,
+    authScopes: { rider: true },
+    resolve: async (_root, _args, ctx) => {
+      // A rider-role account with no Rider row (myRiderProfile renders the "no profile"
+      // fallback) has a null riderId; return null so the page can still render.
+      if (!ctx.riderId) return null;
+      const rider = await prisma.rider.findUnique({ where: { id: ctx.riderId } });
+      // PKT day window, not the API process day — riders near local midnight otherwise
+      // see the panel reset on the wrong boundary (midnight PKT = 19:00 UTC).
+      const startOfDay = startOfPktDay(new Date());
+      const tasks = await prisma.deliveryTask.findMany({
+        where: { riderId: ctx.riderId, status: "delivered" },
+        include: { order: true },
+      });
+      const todays = tasks.filter((task) => {
+        const when = task.order.deliveredAt ?? task.createdAt;
+        return when >= startOfDay;
+      });
+      return {
+        todayCodCollectedMinor: todays.reduce((s, t2) => s + t2.codAmountMinor, 0),
+        cashLimitMinor: rider?.cashLimitMinor ?? 0,
+        deliveriesToday: todays.length,
       };
     },
   }),
@@ -304,6 +373,34 @@ builder.mutationFields((t) => ({
         create: { riderId: ctx.riderId!, isOnline: args.online },
       });
       return args.online;
+    },
+  }),
+
+  // Location ping (#47): the rider app posts getCurrentPosition every ~20s while a
+  // job is active. We persist the last fix on RiderAvailability so the customer's
+  // live map (UX-07) can read it. Best-effort — upsert so a rider that never toggled
+  // availability still gets a row; no history is kept (only the latest point).
+  riderPing: t.field({
+    type: "Boolean",
+    authScopes: { rider: true },
+    args: {
+      lat: t.arg.float({ required: true }),
+      lng: t.arg.float({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      if (args.lat < -90 || args.lat > 90 || args.lng < -180 || args.lng > 180) {
+        throw new GraphQLError("Invalid coordinates");
+      }
+      // Only update the last GPS fix — never flip availability. Creating the row with
+      // isOnline: true here would silently bring an offline rider "online" (both
+      // myRiderProfile and the restaurant roster read this flag) just from a ping;
+      // going online must stay an explicit rider action (setAvailability).
+      await prisma.riderAvailability.upsert({
+        where: { riderId: ctx.riderId! },
+        update: { lat: args.lat, lng: args.lng },
+        create: { riderId: ctx.riderId!, isOnline: false, lat: args.lat, lng: args.lng },
+      });
+      return true;
     },
   }),
 

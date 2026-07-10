@@ -1,7 +1,8 @@
 "use client";
 
-// Rider home: availability toggle + job queue. Polls 5s (SSE in M10).
-import { useEffect, useState } from "react";
+// Rider home: availability toggle + cash panel + job queue, with a full-screen
+// assignment/offer alert (#47) when a new task lands. SSE riderJobFeed drives refetch.
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useSubscription } from "urql";
 import { graphql } from "@/graphql/generated";
@@ -9,6 +10,8 @@ import { formatRs } from "@fd/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CashPanel } from "@/components/rider/cash-panel";
+import { AssignmentAlert, type AlertJob } from "@/components/rider/assignment-alert";
 
 const RiderHomeQuery = graphql(`
   query RiderHome {
@@ -16,6 +19,12 @@ const RiderHomeQuery = graphql(`
       riderId
       isOnline
       riderType
+      cashLimitMinor
+    }
+    myCashSummary {
+      todayCodCollectedMinor
+      cashLimitMinor
+      deliveriesToday
     }
     myJobs {
       id
@@ -71,6 +80,11 @@ const RiderFeedSubscription = graphql(`
 
 const ACTIVE = ["assigned", "arrived_pickup", "picked_up"];
 
+// Assignments the rider has already acknowledged this session, so the full-screen
+// alert fires once per new assignment rather than on every refetch. Session-scoped
+// (not persisted) — a reload re-surfaces an unstarted job, which is the safe default.
+const ackedThisSession = new Set<string>();
+
 export default function RiderHomePage() {
   const [{ data, fetching }, refetch] = useQuery({
     query: RiderHomeQuery,
@@ -83,6 +97,7 @@ export default function RiderHomePage() {
   // controls and show a pending state (prevents double-submit on a swipe).
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [offerError, setOfferError] = useState<string | null>(null);
+  const [ackTick, setAckTick] = useState(0); // re-render when the ack set changes
 
   // Live job feed via SSE; slow poll as a reconnect safety net.
   useSubscription(
@@ -98,22 +113,35 @@ export default function RiderHomePage() {
   }, [refetch]);
 
   const profile = data?.myRiderProfile;
-  if (!profile) {
-    return fetching ? (
-      <Skeleton className="h-40 rounded-2xl" />
-    ) : (
-      <p className="text-kd-fg-muted">No rider profile for this account.</p>
-    );
-  }
+  const jobs = useMemo(() => data?.myJobs ?? [], [data?.myJobs]);
 
-  const jobs = data?.myJobs ?? [];
   // Offered jobs await the rider's accept/decline. Legacy auto-assign creates
   // "assigned" directly, so those stay in the active list untouched.
   const offered = jobs.filter((j) => j.status === "offered");
   const active = jobs.filter((j) => ACTIVE.includes(j.status));
-  const past = jobs.filter(
-    (j) => j.status !== "offered" && !ACTIVE.includes(j.status),
-  ).slice(0, 5);
+  const past = jobs
+    .filter((j) => j.status !== "offered" && !ACTIVE.includes(j.status))
+    .slice(0, 5);
+
+  // The alert surfaces the FIRST actionable job: an offer (accept/decline) if any,
+  // otherwise a freshly-assigned job the rider hasn't acknowledged yet.
+  const alertOffer = offered[0];
+  const freshAssigned = active.find(
+    (j) => j.status === "assigned" && !ackedThisSession.has(j.id),
+  );
+  const alertJobRaw = alertOffer ?? freshAssigned;
+  const alertMode: "offer" | "acknowledge" = alertOffer ? "offer" : "acknowledge";
+
+  const alertJob: AlertJob | null = alertJobRaw
+    ? {
+        id: alertJobRaw.id,
+        code: alertJobRaw.order.code,
+        pickupName: alertJobRaw.order.branch.restaurant.name,
+        dropText:
+          (alertJobRaw.order.addressSnapshotJson as { text?: string })?.text ?? "",
+        codAmountMinor: alertJobRaw.codAmountMinor,
+      }
+    : null;
 
   async function onAccept(taskId: string) {
     setPendingId(taskId);
@@ -123,6 +151,10 @@ export default function RiderHomePage() {
     if (res.error) {
       // e.g. "Offer is no longer available" when re-offered/taken concurrently.
       setOfferError(res.error.graphQLErrors[0]?.message ?? "Could not accept this job.");
+    } else {
+      // The accept promoted this task offered→assigned. Mark it acknowledged so the
+      // refetch doesn't immediately re-surface it as a "fresh assignment" alert.
+      acknowledge(taskId);
     }
     refetch({ requestPolicy: "network-only" });
   }
@@ -138,8 +170,36 @@ export default function RiderHomePage() {
     refetch({ requestPolicy: "network-only" });
   }
 
+  function acknowledge(taskId: string) {
+    ackedThisSession.add(taskId);
+    setAckTick((n) => n + 1);
+  }
+  // ackTick keeps the linter honest that the ack set drives rendering.
+  void ackTick;
+
+  if (!profile) {
+    return fetching ? (
+      <Skeleton className="h-40 rounded-2xl" />
+    ) : (
+      <p className="text-kd-fg-muted">No rider profile for this account.</p>
+    );
+  }
+
+  const cash = data?.myCashSummary;
+
   return (
     <main className="space-y-4">
+      {alertJob && (
+        <AssignmentAlert
+          job={alertJob}
+          mode={alertMode}
+          busy={pendingId === alertJob.id}
+          onAccept={() => onAccept(alertJob.id)}
+          onDecline={() => onDecline(alertJob.id)}
+          onAcknowledge={() => acknowledge(alertJob.id)}
+        />
+      )}
+
       <div className="flex items-center justify-between rounded-2xl border border-kd-border bg-kd-surface p-4">
         <div>
           <p className="font-semibold">{profile.isOnline ? "You're online" : "You're offline"}</p>
@@ -155,6 +215,12 @@ export default function RiderHomePage() {
           {profile.isOnline ? "Go offline" : "Go online"}
         </Button>
       </div>
+
+      <CashPanel
+        collectedMinor={cash?.todayCodCollectedMinor ?? 0}
+        limitMinor={cash?.cashLimitMinor ?? profile.cashLimitMinor}
+        deliveriesToday={cash?.deliveriesToday ?? 0}
+      />
 
       {offered.length > 0 && (
         <section>
