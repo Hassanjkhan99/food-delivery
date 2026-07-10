@@ -217,6 +217,7 @@ type Mutation {
   addPaymentMethod(card: CardInput!): PaymentMethod!
   approveRestaurant(id: String!): Restaurant!
   assignRider(orderId: String!, riderId: String!): Order!
+  assignTicket(id: String!): SupportTicket!
   cancelOrder(id: String!, reason: String): Order!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineTask(reason: String, taskId: String!): Boolean!
@@ -241,8 +242,10 @@ type Mutation {
   registerMenuSourceDoc(assetId: String!, branchId: String!, kind: String!): MenuSourceDoc!
   rejectOrder(id: String!, reason: String!): Order!
   removePaymentMethod(id: String!): Boolean!
+  reopenTicket(id: String!): SupportTicket!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  resolveTicket(id: String!, note: String, resolutionCode: String!): SupportTicket!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
   riderPickedUp(taskId: String!): DeliveryTask!
@@ -393,6 +396,8 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  ticket(id: String!): SupportTicket
+  ticketQueue(category: String, status: String, take: Int): [SupportTicket!]!
   viewer: Viewer
   walletBalance(restaurantId: String!): Int!
   walletStatement(restaurantId: String!): [LedgerEntry!]!
@@ -551,6 +556,34 @@ type Subscription {
   branchOrderFeed(branchId: String!): OrderChanged!
   orderStatus(orderId: String!): OrderChanged!
   riderJobFeed: OrderChanged!
+}
+
+type SupportTicket {
+  assignedToName: String
+  assignedToUserId: String
+  body: String!
+  category: String!
+  createdAt: DateTime!
+  customer: User!
+  evidence: [TicketEvidenceRow!]!
+  firstRespondedAt: DateTime
+  id: ID!
+  order: Order
+  resolutionCode: String
+  resolutionNote: String
+  resolvedAt: DateTime
+  status: String!
+  subject: String!
+  updatedAt: DateTime!
+}
+
+type TicketEvidenceRow {
+  amountMinor: Int
+  createdAt: DateTime!
+  detail: String
+  id: String!
+  label: String!
+  source: String!
 }
 
 input UpdateAddressInput {
