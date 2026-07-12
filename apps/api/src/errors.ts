@@ -164,9 +164,11 @@ export const maskError = (error: unknown, message: string): Error => {
   // GraphQLErrors pass through untouched (their message !== the mask message).
   const masked = defaultMaskError(error, message) as GraphQLError;
   if (masked.message === message) {
-    return new GraphQLError("Something went wrong on our end. Please try again in a moment.", {
-      extensions: { code: "INTERNAL_SERVER_ERROR" },
-    });
+    // Override ONLY the message — keep Yoga's masked-error metadata intact. In particular
+    // extensions.unexpected is what makes Yoga serve internal failures as HTTP 500;
+    // returning a fresh GraphQLError would drop it (and the `path`), so the failure would
+    // look client-safe and return HTTP 200, breaking status-based monitoring/retries.
+    masked.message = "Something went wrong on our end. Please try again in a moment.";
   }
   return masked;
 };
