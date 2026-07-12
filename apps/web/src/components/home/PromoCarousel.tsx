@@ -44,23 +44,44 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
         style={{ transform: `translateX(-${safeIndex * 100}%)` }}
       >
         {banners.map((b) => {
-          const inner = (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={b.imageUrl}
-              alt={b.title}
-              className="aspect-[10/3] w-full shrink-0 object-cover"
-            />
-          );
+          // Use a real photo as the banner backdrop (with an orange scrim for legible
+          // text). Placeholder SVGs are ignored so they never clash — those banners fall
+          // back to the clean orange gradient.
+          const isPhoto = !!b.imageUrl && /\.(jpe?g|png|webp|avif)$/i.test(b.imageUrl);
           return (
             <div key={b.id} className="w-full shrink-0">
-              {b.linkHref ? (
-                <Link href={b.linkHref} aria-label={b.title}>
-                  {inner}
-                </Link>
-              ) : (
-                inner
-              )}
+              <div className="relative flex min-h-[160px] items-center overflow-hidden rounded-[24px] bg-gradient-to-br from-kd-primary-hover to-kd-primary sm:min-h-[180px]">
+                {isPhoto && (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={b.imageUrl}
+                      alt=""
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                    />
+                    {/* Orange brand scrim: opaque on the left for text, clearing to reveal
+                        the dish on the right. */}
+                    <div
+                      aria-hidden
+                      className="absolute inset-0 bg-gradient-to-r from-[#c2410c]/95 via-[#ea580c]/75 to-[#f97316]/10"
+                    />
+                  </>
+                )}
+                <div className="relative z-10 max-w-[62%] p-6 sm:p-10">
+                  <h3 className="text-2xl font-bold leading-tight text-white drop-shadow-sm sm:text-3xl lg:text-[40px] lg:leading-[46px]">
+                    {b.title}
+                  </h3>
+                  {b.linkHref && (
+                    <Link
+                      href={b.linkHref}
+                      className="mt-4 inline-flex h-12 items-center gap-1.5 rounded-full bg-white px-6 text-base font-semibold text-kd-primary shadow-sm transition hover:bg-kd-primary-soft active:scale-[0.98] sm:h-14 sm:text-lg"
+                    >
+                      Explore menu <span aria-hidden>→</span>
+                    </Link>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })}

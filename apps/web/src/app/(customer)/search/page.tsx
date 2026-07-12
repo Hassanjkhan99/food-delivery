@@ -5,7 +5,7 @@
 // Idle state shows deletable recents + popular chips; dish rows deep-link into
 // /r/[slug]?item=<id> (the restaurant page auto-opens that item's sheet). Zero-result
 // state suggests broadening and links back to the full nearby feed — never a dead end.
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "urql";
@@ -17,6 +17,7 @@ import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRecentSearches } from "./use-recent-searches";
+import { didYouMean, suggestTerms } from "./suggestions";
 
 // Editorial defaults — no analytics backing yet, so a curated list of common cravings.
 // Terms must match real data: cuisine tags are matched exactly (e.g. the seed uses the
@@ -78,6 +79,13 @@ const SearchQuery = graphql(`
 `);
 
 type Tab = "restaurants" | "dishes";
+type SortKey = "relevance" | "rating" | "eta" | "price";
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "relevance", label: "Relevance" },
+  { key: "rating", label: "Top rated" },
+  { key: "eta", label: "Fastest" },
+  { key: "price", label: "Price" },
+];
 
 export default function SearchPage() {
   return (
@@ -98,6 +106,7 @@ function SearchScreen() {
   const [debounced, setDebounced] = useState(initial);
   // null = follow the auto-pick (whichever tab has hits); a value = user's explicit choice.
   const [tabChoice, setTabChoice] = useState<Tab | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("relevance");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Autofocus so the keyboard is ready the moment the screen opens.
@@ -111,6 +120,7 @@ function SearchScreen() {
     const id = setTimeout(() => {
       setDebounced(input);
       setTabChoice(null);
+      setSortKey("relevance");
     }, 250);
     return () => clearTimeout(id);
   }, [input]);
@@ -139,6 +149,27 @@ function SearchScreen() {
   const restaurants = data?.searchMarketplace.restaurants ?? [];
   const dishes = data?.searchMarketplace.items ?? [];
   const hasResults = restaurants.length > 0 || dishes.length > 0;
+
+  // Sort the returned set client-side (the server orders by relevance). Restaurants
+  // can sort by rating / ETA / delivery fee; dishes by price.
+  const sortedRestaurants = useMemo(() => {
+    if (sortKey === "relevance") return restaurants;
+    const arr = [...restaurants];
+    if (sortKey === "rating")
+      arr.sort((a, b) => (b.branch.restaurant.avgRating ?? 0) - (a.branch.restaurant.avgRating ?? 0));
+    else if (sortKey === "eta") arr.sort((a, b) => a.etaMinutes - b.etaMinutes);
+    else if (sortKey === "price")
+      arr.sort((a, b) => a.branch.deliveryFeeMinor - b.branch.deliveryFeeMinor);
+    return arr;
+  }, [restaurants, sortKey]);
+  const sortedDishes = useMemo(() => {
+    if (sortKey === "price") return [...dishes].sort((a, b) => a.item.priceMinor - b.item.priceMinor);
+    return dishes;
+  }, [dishes, sortKey]);
+
+  // Typeahead predictions for the live input (before debounce) so a partial term
+  // is guided immediately. Excludes exact matches (nothing left to predict).
+  const predictions = suggestTerms(input);
 
   // Auto-pick the tab with hits (prefer restaurants) unless the user chose one.
   const autoTab: Tab = restaurants.length === 0 && dishes.length > 0 ? "dishes" : "restaurants";
@@ -194,6 +225,27 @@ function SearchScreen() {
         </form>
       </div>
 
+      {/* Typeahead predictions — tap to complete a partial/mistyped term. */}
+      {predictions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {predictions.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setInput(t);
+                commit(t);
+                inputRef.current?.focus();
+              }}
+              className="flex items-center gap-1.5 rounded-full border border-kd-border bg-kd-surface px-3 py-1.5 text-sm text-kd-fg-muted transition-colors hover:border-kd-primary hover:text-kd-primary"
+            >
+              <Search className="h-3.5 w-3.5" />
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+
       {showIdle && (
         <IdleState
           recents={recents}
@@ -212,19 +264,36 @@ function SearchScreen() {
 
       {active && data && hasResults && (
         <>
-          <div className="flex gap-1 border-b border-kd-border">
-            <TabButton active={tab === "restaurants"} onClick={() => setTabChoice("restaurants")}>
-              Restaurants ({restaurants.length})
-            </TabButton>
-            <TabButton active={tab === "dishes"} onClick={() => setTabChoice("dishes")}>
-              Dishes ({dishes.length})
-            </TabButton>
+          <div className="flex items-center justify-between gap-2 border-b border-kd-border">
+            <div className="flex gap-1">
+              <TabButton active={tab === "restaurants"} onClick={() => setTabChoice("restaurants")}>
+                Restaurants ({restaurants.length})
+              </TabButton>
+              <TabButton active={tab === "dishes"} onClick={() => setTabChoice("dishes")}>
+                Dishes ({dishes.length})
+              </TabButton>
+            </div>
+            <label className="flex shrink-0 items-center gap-1.5 pb-1 text-xs text-kd-fg-muted">
+              <span className="hidden sm:inline">Sort</span>
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                aria-label="Sort results"
+                className="rounded-lg border border-kd-border bg-kd-surface px-2 py-1 text-xs font-medium text-kd-fg outline-none focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           {tab === "restaurants" &&
             (restaurants.length > 0 ? (
               <ul className="space-y-2">
-                {restaurants.map((hit) => (
+                {sortedRestaurants.map((hit) => (
                   <RestaurantRow key={hit.branch.id} hit={hit} />
                 ))}
               </ul>
@@ -237,7 +306,7 @@ function SearchScreen() {
           {tab === "dishes" &&
             (dishes.length > 0 ? (
               <ul className="space-y-2">
-                {dishes.map((hit) => (
+                {sortedDishes.map((hit) => (
                   <DishRow key={`${hit.branch.id}-${hit.item.id}`} hit={hit} />
                 ))}
               </ul>
@@ -249,7 +318,17 @@ function SearchScreen() {
         </>
       )}
 
-      {showZero && <ZeroState term={term} onClear={() => setInput("")} />}
+      {showZero && (
+        <ZeroState
+          term={term}
+          onClear={() => setInput("")}
+          onPick={(t) => {
+            setInput(t);
+            commit(t);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -422,7 +501,16 @@ function IdleState({
   );
 }
 
-function ZeroState({ term, onClear }: { term: string; onClear: () => void }) {
+function ZeroState({
+  term,
+  onClear,
+  onPick,
+}: {
+  term: string;
+  onClear: () => void;
+  onPick: (term: string) => void;
+}) {
+  const corrections = didYouMean(term);
   return (
     <div className="rounded-2xl border border-kd-border bg-kd-surface p-8 text-center">
       <div className="text-4xl">🔍</div>
@@ -430,6 +518,23 @@ function ZeroState({ term, onClear }: { term: string; onClear: () => void }) {
       <p className="mt-1 text-sm text-kd-fg-muted">
         Try a shorter or different term — or browse everything that delivers to you.
       </p>
+      {corrections.length > 0 && (
+        <div className="mt-4">
+          <p className="text-sm font-medium text-kd-fg">Did you mean</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            {corrections.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onPick(c)}
+                className="rounded-full bg-kd-primary-soft px-3 py-1.5 text-sm font-semibold text-kd-primary hover:bg-kd-primary hover:text-white"
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex justify-center gap-2">
         <Button variant="outline" onClick={onClear}>
           Clear search
