@@ -7,9 +7,12 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Wire the Geist font loaded in layout.tsx into Tailwind's font-sans/heading.
+     (Was self-referential `var(--font-sans)`, so the app fell back to the browser
+     default.) The final display font is a one-line swap here + in layout.tsx. */
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-geist-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,6 +57,8 @@
   --color-kd-primary-hover: var(--kd-primary-hover);
   --color-kd-primary-soft: var(--kd-primary-soft);
   --color-kd-accent: var(--kd-accent);
+  --color-kd-accent-soft: var(--kd-accent-soft);
+  --color-kd-overlay: var(--kd-overlay);
   --color-kd-success: var(--kd-success);
   --color-kd-success-soft: var(--kd-success-soft);
   --color-kd-bg: var(--kd-bg);
@@ -88,24 +93,27 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* shadcn tokens bridged to the --kd-* brand system (single source of truth) so
+     every UI primitive (Button, Card, Input, Badge…) inherits the McDonald's palette
+     instead of shadcn's neutral gray. Raw brand values live in the --kd-* block below. */
+  --background: var(--kd-bg);
+  --foreground: var(--kd-fg);
+  --card: var(--kd-surface);
+  --card-foreground: var(--kd-fg);
+  --popover: var(--kd-surface);
+  --popover-foreground: var(--kd-fg);
+  --primary: var(--kd-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--kd-surface-muted);
+  --secondary-foreground: var(--kd-fg);
+  --muted: var(--kd-surface-muted);
+  --muted-foreground: var(--kd-fg-muted);
+  --accent: var(--kd-accent-soft);
+  --accent-foreground: var(--kd-fg);
+  --destructive: var(--kd-danger);
+  --border: var(--kd-border);
+  --input: var(--kd-border);
+  --ring: var(--kd-primary);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -121,48 +129,53 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* KhaanaDo brand — light (primary). Rose brand, amber accent, emerald success,
-     warm Stone neutrals. See the KhaanaDo Design System project. */
-  --kd-primary: #e11d48;
-  --kd-primary-hover: #be123c;
-  --kd-primary-soft: #ffe4e6;
-  --kd-accent: #f59e0b;
+  /* Brand — light. McDonald's-style fast-food identity (issue #48 UX-13): red CTAs,
+     golden-yellow accent, cream-dominant surfaces, warm charcoal text. Usage ratio ~
+     cream/white 55–65%, charcoal 15–20%, red 10–15%, yellow 5–10%. Style/energy only —
+     no literal McDonald's assets. */
+  --kd-primary: #da291c; /* red — primary CTAs (Add to cart, Checkout) */
+  --kd-primary-hover: #b91c1c;
+  --kd-primary-soft: #fee2e2;
+  --kd-accent: #ffc72c; /* golden yellow — brand accent, highlights, rating star */
+  --kd-accent-soft: #fff4d1;
   --kd-success: #059669;
   --kd-success-soft: #d1fae5;
-  --kd-bg: #fafaf9;
+  --kd-bg: #fff8e7; /* cream — dominant app background */
   --kd-surface: #ffffff;
-  --kd-surface-muted: #f5f5f4;
-  --kd-fg: #1c1917;
-  --kd-fg-muted: #78716c;
-  --kd-fg-subtle: #a8a29e;
-  --kd-border: #e7e5e4;
+  --kd-surface-muted: #fdf3dd; /* soft warm cream for recessed surfaces */
+  --kd-fg: #1f1b16; /* warm charcoal */
+  --kd-fg-muted: #6b5f52;
+  --kd-fg-subtle: #a89a88;
+  --kd-border: #eaded0; /* warm cream border */
   --kd-warning: #d97706;
   --kd-warning-soft: #fef3c7;
   --kd-danger: #dc2626;
   --kd-danger-soft: #fee2e2;
   --kd-info: #0284c7;
   --kd-info-soft: #e0f2fe;
+  --kd-overlay: rgb(0 0 0 / 0.5); /* scrim for modals / image overlays */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* shadcn tokens bridged to the --kd-* brand system (dark). */
+  --background: var(--kd-bg);
+  --foreground: var(--kd-fg);
+  --card: var(--kd-surface);
+  --card-foreground: var(--kd-fg);
+  --popover: var(--kd-surface);
+  --popover-foreground: var(--kd-fg);
+  --primary: var(--kd-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--kd-surface-muted);
+  --secondary-foreground: var(--kd-fg);
+  --muted: var(--kd-surface-muted);
+  --muted-foreground: var(--kd-fg-muted);
+  --accent: var(--kd-accent-soft);
+  --accent-foreground: var(--kd-fg);
+  --destructive: var(--kd-danger);
+  --border: var(--kd-border);
+  --input: var(--kd-border);
+  --ring: var(--kd-primary);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -177,26 +190,29 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* KhaanaDo brand — dark. */
-  --kd-primary: #fb7185;
-  --kd-primary-hover: #f43f5e;
-  --kd-primary-soft: #4c0519;
+  /* Brand — dark. Dark charcoal surfaces, brighter red CTA, golden-yellow accent.
+     (Dark mode is out of v1 per #48, but kept consistent so the token system is complete.) */
+  --kd-primary: #ef4444;
+  --kd-primary-hover: #f87171;
+  --kd-primary-soft: #450a0a;
   --kd-accent: #fbbf24;
+  --kd-accent-soft: #3d2f05;
   --kd-success: #34d399;
   --kd-success-soft: #052e2b;
-  --kd-bg: #1c1917;
-  --kd-surface: #292524;
-  --kd-surface-muted: #292524;
-  --kd-fg: #fafaf9;
-  --kd-fg-muted: #a8a29e;
-  --kd-fg-subtle: #78716c;
-  --kd-border: #44403c;
+  --kd-bg: #1a1613; /* dark warm charcoal */
+  --kd-surface: #262019;
+  --kd-surface-muted: #2f2820;
+  --kd-fg: #faf6ee;
+  --kd-fg-muted: #b8ab99;
+  --kd-fg-subtle: #7c7264;
+  --kd-border: #443c30;
   --kd-warning: #fbbf24;
   --kd-warning-soft: #451a03;
   --kd-danger: #f87171;
   --kd-danger-soft: #450a0a;
   --kd-info: #38bdf8;
   --kd-info-soft: #082f49;
+  --kd-overlay: rgb(0 0 0 / 0.6);
 }
 
 @layer base {
