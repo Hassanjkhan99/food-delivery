@@ -74,7 +74,7 @@ markup instead of ad-hoc `text-2xl`/`leading-*` pairs.
 
 ## Color -> token mapping
 
-> KhaanaDo token mapping (existing tokens in `apps/web/src/app/globals.css` — DO NOT add new ones unless foundation added them):
+> Herald token mapping (existing tokens in `apps/web/src/app/globals.css` — DO NOT add new ones unless foundation added them):
 >
 > STRUCTURAL NEUTRALS (warm Stone):
 > ```

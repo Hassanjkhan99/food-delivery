@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Inter, Poppins } from "next/font/google";
+import { Cinzel, Geist_Mono, Inter, Poppins } from "next/font/google";
 import { GraphQLProvider } from "@/lib/urql";
 import { I18nProvider } from "@/i18n/provider";
 import { PwaSetup } from "@/components/PwaSetup";
@@ -24,8 +24,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Herald brand serif (inscriptional Roman) — used only by the Wordmark component.
+const cinzel = Cinzel({
+  variable: "--font-herald",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "KhaanaDo — Food Delivery",
+  title: "Herald — Food Delivery",
   description: "Restaurant-first delivery marketplace",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
@@ -46,7 +53,7 @@ export default function RootLayout({
     <html
       lang="en"
       dir="ltr"
-      className={`${poppins.variable} ${inter.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${poppins.variable} ${inter.variable} ${geistMono.variable} ${cinzel.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <I18nProvider>

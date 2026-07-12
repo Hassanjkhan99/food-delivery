@@ -17,55 +17,15 @@ const FEES = {
 const bps = (amount: number, b: number) => Math.round((amount * b) / 10_000);
 
 async function wipe() {
-  // Dependency order matters; everything goes.
-  const tables = [
-    "ratings",
-    "support_tickets",
-    "home_banners",
-    "subscriptions",
-    "membership_plans",
-    "refunds",
-    "cancellations",
-    "payments",
-    "delivery_events",
-    "delivery_tasks",
-    "order_events",
-    "order_items",
-    "orders",
-    "ledger_entries",
-    "ledger_accounts",
-    "payouts",
-    "campaigns",
-    "menu_source_docs",
-    "menu_item_modifier_groups",
-    "modifier_options",
-    "modifier_groups",
-    "menu_items",
-    "menu_categories",
-    "menus",
-    "restaurant_themes",
-    "media_assets",
-    "rider_availability",
-    "riders",
-    "payment_methods",
-    "push_subscriptions",
-    "addresses",
-    "sessions",
-    "otp_codes",
-    "audit_logs",
-    "fee_configs",
-    // #30: RESTRICT FK to branches — must be wiped before branches or re-seed fails.
-    "branch_cancellation_stats",
-    "branches",
-    "user_roles",
-    "notifications",
-    "restaurants",
-    "tax_profiles",
-    "users",
-  ];
-  for (const t of tables) {
-    await prisma.$executeRawUnsafe(`DELETE FROM "${t}"`);
-  }
+  // TRUNCATE every app table in one statement; CASCADE resolves FK order for us, so this
+  // can't drift as the schema grows (the old hand-ordered DELETE list silently omitted
+  // branch_hours and broke re-seeds against a populated DB). Keep _prisma_migrations.
+  const rows = await prisma.$queryRawUnsafe<Array<{ tablename: string }>>(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`,
+  );
+  if (rows.length === 0) return;
+  const list = rows.map((r) => `"${r.tablename}"`).join(", ");
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
 }
 
 // ── ledger helpers ──────────────────────────────────────────────────────────
@@ -149,7 +109,7 @@ async function main() {
   // otherwise 50% off delivery. Mock-billed at sign-up.
   await prisma.membershipPlan.create({
     data: {
-      name: "KhaanaDo Pro",
+      name: "Herald Pro",
       priceMinor: 19_900,
       freeDeliveryThresholdMinor: 50_000,
       deliveryDiscountBps: 5_000,

@@ -4,11 +4,15 @@ import { Client, Provider, cacheExchange, fetchExchange, subscriptionExchange } 
 import { createClient as createSSEClient } from "graphql-sse";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/graphql";
+// Same-origin by default now that the GraphQL server is mounted inside this app at
+// /api/graphql. A relative URL keeps the session cookie first-party in every environment
+// (local, preview, prod) with no CORS. Override with NEXT_PUBLIC_API_URL only to point at a
+// standalone API (e.g. http://localhost:4000/graphql).
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/graphql";
 
 export function makeClient() {
-  // Subscriptions ride the graphql-sse protocol on the SAME endpoint; the session
-  // cookie flows because localhost:3000 -> :4000 is same-site.
+  // Subscriptions ride the graphql-sse protocol on the SAME endpoint; the session cookie
+  // flows because it's first-party same-origin.
   const sse = createSSEClient({
     url: API_URL,
     credentials: "include",

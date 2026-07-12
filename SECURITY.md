@@ -1,6 +1,6 @@
 # Security Policy
 
-KhaanaDo sits in the money flow (double-entry ledger, card tokenization, payouts,
+Herald sits in the money flow (double-entry ledger, card tokenization, payouts,
 refunds). We take vulnerabilities seriously and ask you to report them privately.
 
 ## Reporting a vulnerability
@@ -12,7 +12,7 @@ Instead, use one of these private channels:
 
 1. **Preferred:** GitHub → repository **Security** tab → **Report a vulnerability**
    (Private Vulnerability Reporting / GitHub Security Advisories).
-2. **Email:** security@khaanado.example (replace with a monitored inbox before public
+2. **Email:** security@herald.example (replace with a monitored inbox before public
    launch). Encrypt sensitive details if possible.
 
 Please include:

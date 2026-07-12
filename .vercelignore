@@ -1,0 +1,26 @@
+# Vercel installs deps and builds fresh, so none of the local artifacts belong in the
+# upload. Keeping them out avoids the 100 MB per-file limit (turbo cache / next cache).
+node_modules
+**/node_modules
+.turbo
+**/.turbo
+.next
+.next-*
+**/.next
+**/.next-*
+.storage
+**/.storage
+.vercel
+# Test + tooling output
+e2e/test-results
+e2e/playwright-report
+playwright-report
+blob-report
+test-results
+**/*.tsbuildinfo
+*.log
+# VCS + local env
+.git
+.env
+.env.*
+!.env.example

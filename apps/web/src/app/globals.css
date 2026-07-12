@@ -52,9 +52,9 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  /* KhaanaDo Design System brand tokens (--kd-*). Mirrored here so Tailwind emits
+  /* Herald Design System brand tokens (--kd-*). Mirrored here so Tailwind emits
      kd-* color utilities (bg-kd-primary, text-kd-fg-muted, …). Raw values live in
-     :root/.dark below. Source: claude.ai/design "KhaanaDo Design System". */
+     :root/.dark below. Source: claude.ai/design "Herald Design System". */
   --color-kd-primary: var(--kd-primary);
   --color-kd-primary-hover: var(--kd-primary-hover);
   --color-kd-primary-active: var(--kd-primary-active);
@@ -78,7 +78,7 @@
   --color-kd-info: var(--kd-info);
   --color-kd-info-soft: var(--kd-info-soft);
 
-  /* KhaanaDo semantic type scale (--text-kd-*). Additive/opt-in Tailwind v4
+  /* Herald semantic type scale (--text-kd-*). Additive/opt-in Tailwind v4
      font-size tokens (emit text-kd-display … text-kd-caption). Names are
      namespaced to avoid colliding with Tailwind's default text-* sizes. */
   --text-kd-display: 2.25rem;
@@ -193,8 +193,7 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Brand — dark. Dark charcoal surfaces, brighter red CTA, golden-yellow accent.
-     (Dark mode is out of v1 per #48, but kept consistent so the token system is complete.) */
+  /* Brand — dark. Warm-orange (dark mode is out of v1, kept consistent). */
   --kd-primary: #fb923c;
   --kd-primary-hover: #fdba74;
   --kd-primary-active: #ea580c;

@@ -1,10 +1,10 @@
-KhaanaDo — restaurant-first delivery marketplace
-Copyright (c) 2026 KhaanaDo contributors
+Herald — restaurant-first delivery marketplace
+Copyright (c) 2026 Herald contributors
 
-The KhaanaDo CORE (apps/api, apps/web, packages/db, packages/config) is licensed
+The Herald CORE (apps/api, apps/web, packages/db, packages/config) is licensed
 under the GNU Affero General Public License v3.0 or later, reproduced in full
 below. The network-copyleft clause (section 13) is deliberate: anyone who runs a
-modified KhaanaDo server for others over a network must offer those users the
+modified Herald server for others over a network must offer those users the
 corresponding source.
 
 SDK / shareable libraries (packages/shared) are licensed separately under the

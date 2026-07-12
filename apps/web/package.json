@@ -4,8 +4,8 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,11 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@fd/api": "workspace:*",
+    "@fd/db": "workspace:*",
     "@fd/shared": "workspace:*",
+    "@whatwg-node/server-plugin-cookies": "^1.0.7",
+    "graphql-yoga": "^5.16.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@hookform/resolvers": "^5.2.0",
     "class-variance-authority": "^0.7.1",

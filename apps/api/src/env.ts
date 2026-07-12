@@ -20,6 +20,13 @@ export const env = {
   get storageDir(): string {
     return process.env.STORAGE_DIR ?? "./.storage";
   },
+  // Origin the object-store PUT/GET URLs are built against. Empty string = same-origin
+  // relative URLs, which is what the collapsed web deploy wants (uploads are served by
+  // the web app's own /api/uploads + /files routes). The standalone API sets this to its
+  // own absolute origin (e.g. http://localhost:4000) so cross-origin dev keeps working.
+  get objectStoreBaseUrl(): string {
+    return process.env.OBJECT_STORE_BASE_URL ?? "";
+  },
   // Optional. When absent, the Google Places photo tier is skipped and the image
   // pipeline degrades to the typography fallback (dev/CI stay green without a key).
   get googlePlacesApiKey(): string | null {

@@ -8,6 +8,7 @@ import { OTP_RATE_LIMIT_PER_HOUR } from "@fd/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Wordmark } from "@/components/brand/Wordmark";
 
 const RequestOtpMutation = graphql(`
   mutation RequestOtp($phone: String!) {
@@ -211,8 +212,8 @@ function LoginForm() {
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`}</style>
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="text-2xl font-bold tracking-tight text-kd-fg">
-            🍜 Khaana<span className="text-kd-primary">Do</span>
+          <div className="flex justify-center text-2xl text-kd-fg">
+            <Wordmark />
           </div>
           <p className="mt-1 text-sm text-kd-fg-muted">Food you love, delivered.</p>
         </div>

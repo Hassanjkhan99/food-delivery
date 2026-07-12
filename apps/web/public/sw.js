@@ -54,9 +54,9 @@ self.addEventListener("fetch", (event) => {
 
 // Web push stub — payloads render as a basic notification once VAPID is configured.
 self.addEventListener("push", (event) => {
-  const data = event.data?.json?.() ?? { title: "KhaanaDo", body: "Order update" };
+  const data = event.data?.json?.() ?? { title: "Herald", body: "Order update" };
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "KhaanaDo", {
+    self.registration.showNotification(data.title ?? "Herald", {
       body: data.body ?? "",
       icon: "/icons/icon-192.png",
     }),

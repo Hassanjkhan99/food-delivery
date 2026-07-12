@@ -1,4 +1,4 @@
-# Handoff — KhaanaDo (restaurant-first delivery marketplace)
+# Handoff — Herald (restaurant-first delivery marketplace)
 
 Read this first in any new session. Repo: https://github.com/Hassanjkhan99/food-delivery (private).
 
@@ -15,7 +15,7 @@ green; all four role UIs verified rendering with live seeded data.
 - **All 32 stale draft PRs closed** with audit notes — they were 0 commits ahead of master
   (content shipped via integration commit `9714461`, already Codex-reviewed → follow-ups filed
   as backlog issues #107–#130). Do not reopen; the work is in master.
-- **Project board created:** "KhaanaDo Delivery" — https://github.com/users/Hassanjkhan99/projects/5 (115 items).
+- **Project board created:** "Herald Delivery" — https://github.com/users/Hassanjkhan99/projects/5 (115 items).
 - **Codex follow-ups triaged (23 issues).** Fixed in #131: #121 (COD loyalty leg), #123 (membership
   double-charge — now has a unique index + atomic claim), #115 (pickup-code collisions), plus the
   `RsRsRs`→`₨₨₨` price-band glyph. **Still open / deferred with a plan** (see the issues, all on the board):
@@ -91,7 +91,7 @@ doesn't appear. This gate is essential; do not merge ahead of it.
 
 **Status of the gates (already cleared — don't re-ask):**
 
-- #35 decisions ANSWERED (see `ux-parity-decisions` memory): keep "KhaanaDo" placeholder, Tailwind-
+- #35 decisions ANSWERED (see `ux-parity-decisions` memory): keep "Herald" placeholder, Tailwind-
   only (no Figma), photo strategy = uploaded → Google Places → typography fallback.
 - Photo pipeline #50 is BUILT + merged (commit 87ff80f): `<RestaurantImage>`/`<ItemImage>` resolve
   the chain; home feed + restaurant page already consume them. This UNBLOCKS #36 and #38.

@@ -18,3 +18,5 @@ playwright-report/
 test-results/
 .playwright/
 blob-report/
+
+.vercel
