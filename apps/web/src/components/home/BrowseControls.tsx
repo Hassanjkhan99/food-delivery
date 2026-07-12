@@ -68,7 +68,7 @@ export function BrowseControls({
   const count = activeFilterCount(filter);
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex items-center gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <FilterSheet count={count} filter={filter} onApply={onFilterChange} />
 
       <label className="relative shrink-0">
@@ -76,7 +76,7 @@ export function BrowseControls({
         <select
           value={sort}
           onChange={(e) => onSortChange(e.target.value as BrowseSort)}
-          className="cursor-pointer rounded-full border border-kd-border bg-kd-surface py-1.5 pl-3 pr-8 text-sm font-medium text-kd-fg outline-none focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+          className="h-12 cursor-pointer rounded-full border border-kd-border bg-kd-surface pl-5 pr-9 text-base font-medium text-kd-fg outline-none hover:border-kd-primary focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
         >
           {BROWSE_SORTS.map((s) => (
             <option key={s} value={s}>
@@ -123,10 +123,10 @@ function QuickChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
+        "flex h-12 shrink-0 items-center rounded-full border px-5 text-base font-medium transition-colors",
         active
-          ? "border-kd-primary bg-kd-primary-soft text-kd-primary"
-          : "border-kd-border bg-kd-surface text-kd-fg-muted hover:bg-kd-surface-muted",
+          ? "border-kd-primary bg-kd-primary text-white"
+          : "border-kd-border bg-kd-surface text-kd-fg hover:border-kd-primary hover:bg-kd-surface-muted",
       )}
     >
       {label}
@@ -177,9 +177,9 @@ function FilterSheet({
         render={
           <button
             type="button"
-            className="relative flex shrink-0 items-center gap-1.5 rounded-full border border-kd-border bg-kd-surface px-3 py-1.5 text-sm font-medium text-kd-fg hover:bg-kd-surface-muted"
+            className="relative flex h-12 shrink-0 items-center gap-2 rounded-full border border-kd-border bg-kd-surface px-5 text-base font-medium text-kd-fg transition-colors hover:border-kd-primary hover:bg-kd-surface-muted"
           >
-            <SlidersHorizontal className="h-4 w-4" />
+            <SlidersHorizontal className="h-[18px] w-[18px]" />
             Filters
             {count > 0 && (
               <span className="grid h-5 min-w-5 place-items-center rounded-full bg-kd-primary px-1 text-xs font-bold text-white">

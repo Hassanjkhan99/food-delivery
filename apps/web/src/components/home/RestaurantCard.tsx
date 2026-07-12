@@ -33,9 +33,9 @@ function FavoriteButton() {
         e.preventDefault();
         setSaved((v) => !v);
       }}
-      className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-kd-fg-muted shadow-sm backdrop-blur transition-colors hover:bg-white"
+      className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-kd-border bg-white/95 text-kd-fg-muted shadow-sm backdrop-blur transition-colors hover:bg-white hover:text-kd-primary"
     >
-      <Heart className={cn("h-4 w-4", saved && "fill-kd-primary text-kd-primary")} />
+      <Heart className={cn("h-[22px] w-[22px]", saved && "fill-kd-primary text-kd-primary")} />
     </button>
   );
 }
@@ -153,30 +153,33 @@ export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
   return (
     <Link
       href={`/r/${r.slug}`}
-      className="group relative flex gap-3 overflow-hidden rounded-2xl border border-kd-border bg-kd-surface p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative flex items-center gap-5 rounded-[22px] border border-kd-border bg-kd-surface p-3 shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_18px_36px_rgba(0,0,0,0.12)]"
     >
       <RestaurantImage
         photo={hit.photo}
         name={r.name}
         tint={r.primaryColor}
-        className={cn("h-24 w-24 shrink-0 rounded-xl", avail.closed && "grayscale-[0.6]")}
-        sizes="96px"
+        className={cn(
+          "h-32 w-32 shrink-0 rounded-[18px] sm:h-40 sm:w-40",
+          avail.closed && "grayscale-[0.6]",
+        )}
+        sizes="160px"
       />
-      <div className="min-w-0 flex-1 py-0.5 pr-6">
+      <div className="min-w-0 flex-1 py-0.5 pr-8">
         {hit.deliveryFeeMinor === 0 && !avail.closed && (
-          <span className="inline-flex items-center rounded-full bg-kd-success-soft px-2 py-0.5 text-xs font-semibold text-kd-success">
+          <span className="inline-flex h-7 items-center rounded-full bg-kd-success-soft px-2.5 text-sm font-semibold text-kd-success">
             Free delivery
           </span>
         )}
-        <p className="mt-1 truncate font-bold text-kd-fg">{r.name}</p>
+        <p className="mt-1.5 truncate text-xl font-semibold text-kd-fg sm:text-2xl">{r.name}</p>
         {r.avgRating != null && (
-          <div className="mt-0.5 flex items-center gap-1 text-sm tabular-nums">
-            <Star className="h-3.5 w-3.5 fill-kd-accent text-kd-accent" />
-            <span className="font-semibold text-kd-fg">{r.avgRating.toFixed(1)}</span>
+          <div className="mt-1 flex items-center gap-1 text-base tabular-nums">
+            <Star className="h-[18px] w-[18px] fill-kd-accent text-kd-accent" />
+            <span className="font-semibold text-kd-accent">{r.avgRating.toFixed(1)}</span>
             <span className="text-kd-fg-muted">({r.ratingCount})</span>
           </div>
         )}
-        <p className="mt-0.5 truncate text-sm text-kd-fg-muted tabular-nums">
+        <p className="mt-1 truncate text-base text-kd-fg-muted tabular-nums">
           {avail.closed ? (
             <span className="font-semibold text-kd-danger">{avail.label}</span>
           ) : (

@@ -48,22 +48,22 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
             {/* Structured brand banner: orange gradient, headline + CTA on the left, a
                 decorative dish bleeding in on the right. Per-banner art (b.imageUrl) can
                 be wired to a real photo later; the seeded illustration is a placeholder. */}
-            <div className="relative flex min-h-[9rem] items-center overflow-hidden rounded-2xl bg-gradient-to-r from-kd-primary to-kd-primary-hover sm:min-h-[11rem]">
+            <div className="relative flex min-h-[160px] items-center overflow-hidden rounded-[24px] bg-gradient-to-br from-kd-primary-hover to-kd-primary sm:min-h-[180px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={b.imageUrl || "/banners/biryani.svg"}
                 alt=""
                 aria-hidden
-                className="pointer-events-none absolute inset-y-0 right-0 h-full w-1/2 object-cover object-center opacity-95 [mask-image:linear-gradient(to_right,transparent,#000_45%)]"
+                className="pointer-events-none absolute inset-y-0 right-0 h-full w-[45%] object-cover object-center opacity-95 [mask-image:linear-gradient(to_right,transparent,#000_45%)]"
               />
-              <div className="relative z-10 max-w-[62%] p-5 sm:p-7">
-                <h3 className="text-lg font-extrabold leading-tight text-white sm:text-2xl">
+              <div className="relative z-10 max-w-[55%] p-6 sm:p-10">
+                <h3 className="text-2xl font-bold leading-tight text-white sm:text-3xl lg:text-[40px] lg:leading-[46px]">
                   {b.title}
                 </h3>
                 {b.linkHref && (
                   <Link
                     href={b.linkHref}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-kd-primary shadow-sm transition hover:bg-white/90"
+                    className="mt-4 inline-flex h-12 items-center gap-1.5 rounded-full bg-white px-6 text-base font-semibold text-kd-primary shadow-sm transition hover:bg-kd-primary-soft active:scale-[0.98] sm:h-14 sm:text-lg"
                   >
                     Explore menu <span aria-hidden>→</span>
                   </Link>

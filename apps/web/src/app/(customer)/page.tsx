@@ -318,28 +318,25 @@ export default function HomePage() {
           and the filter row (spaced below search). A decorative food image bleeds in on the
           right (md+) — swap /banners/hero-dish.* for a real photo. Full-bleed on mobile,
           a rounded inset card on sm+. */}
-      <section className="relative -mx-4 -mt-6 overflow-hidden px-4 pb-5 pt-6 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:px-8 sm:pt-7">
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 bg-gradient-to-br from-kd-primary-soft via-kd-primary-soft/50 to-kd-surface"
-        />
+      <section className="relative -mx-4 -mt-6 overflow-hidden bg-[#FFF9F2] px-4 pb-6 pt-6 sm:mx-0 sm:mt-0 sm:rounded-[28px] sm:px-8 lg:min-h-[370px] lg:px-12 lg:py-12">
+        {/* Decorative dish, right ~40% (md+). Swap /banners/biryani.svg for a real photo. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/banners/biryani.svg"
           alt=""
           aria-hidden
-          className="pointer-events-none absolute -right-8 top-0 hidden h-full w-[45%] object-cover object-left opacity-95 md:block [mask-image:linear-gradient(to_right,transparent,#000_40%)]"
+          className="pointer-events-none absolute -right-6 top-0 hidden h-full w-[42%] object-cover object-left opacity-95 md:block [mask-image:linear-gradient(to_right,transparent,#000_38%)]"
         />
-        <div className="relative max-w-xl">
+        <div className="relative flex h-full flex-col justify-center lg:w-[60%]">
           <AddressChip />
-          <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-kd-fg sm:text-3xl">
+          <h1 className="mt-4 text-3xl font-bold tracking-tight text-kd-fg sm:text-5xl lg:text-[56px] lg:leading-[64px]">
             What are you craving?
           </h1>
           {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
               the dedicated /search screen, which also matches dishes (#37). */}
           <form
             role="search"
-            className="relative mt-4"
+            className="relative mt-6 max-w-[760px]"
             onSubmit={(e) => {
               e.preventDefault();
               const q = search.trim();
@@ -349,31 +346,31 @@ export default function HomePage() {
             <button
               type="submit"
               aria-label="Search restaurants and dishes"
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
+              className="absolute left-5 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
             >
-              <Search className="h-5 w-5" />
+              <Search className="h-7 w-7" strokeWidth={1.75} />
             </button>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search restaurants, cuisines or dishes…"
-              className="w-full rounded-2xl border border-kd-border bg-kd-surface py-3.5 pl-12 pr-10 text-sm text-kd-fg shadow-sm outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+              className="h-[64px] w-full rounded-full border border-kd-border bg-kd-surface pl-14 pr-12 text-lg text-kd-fg shadow-[0_8px_20px_rgba(0,0,0,0.05)] outline-none transition-colors placeholder:text-kd-fg-subtle hover:border-kd-primary focus:border-2 focus:border-kd-primary lg:h-[72px]"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
                 aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-kd-fg-subtle hover:bg-kd-surface-muted"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             )}
           </form>
 
           {/* Filter row lives in the hero, spaced below the search (was cramped against it). */}
           {data && (hits.length > 0 || serverFiltering) && (
-            <div className="mt-4">
+            <div className="mt-5">
               <BrowseControls
                 sort={sort}
                 onSortChange={setSort}

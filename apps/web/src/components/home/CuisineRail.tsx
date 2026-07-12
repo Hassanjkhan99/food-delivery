@@ -19,10 +19,10 @@ export function CuisineRail({
 }) {
   if (cuisines.length === 0) return null;
 
-  // py-2 gives the selected chip's ring-offset room so it isn't clipped by the
-  // horizontal scroll track (was pb-1, which cut off the ring around "All").
+  // Vertical padding gives the cards' hover-lift + shadow room so they aren't clipped
+  // by the horizontal scroll track.
   return (
-    <div className="-mx-4 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="-mx-4 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex gap-4">
         <CuisineButton
           label="All"
@@ -59,23 +59,19 @@ function CuisineButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 text-center"
       aria-pressed={selected}
+      className={cn(
+        "flex h-[100px] w-28 shrink-0 flex-col items-center justify-center gap-1.5 rounded-[20px] border p-4 text-center shadow-[0_6px_18px_rgba(0,0,0,0.05)] transition-all",
+        selected
+          ? "border-2 border-kd-primary bg-kd-primary-soft"
+          : "border-kd-border bg-kd-surface hover:-translate-y-1 hover:shadow-[0_18px_30px_rgba(0,0,0,0.08)]",
+      )}
     >
+      <span className="text-[40px] leading-none">{emoji}</span>
       <span
         className={cn(
-          "grid h-[68px] w-[68px] place-items-center rounded-2xl border text-3xl transition-all",
-          selected
-            ? "border-kd-primary bg-kd-primary-soft shadow-sm"
-            : "border-kd-border bg-kd-surface hover:border-kd-primary/50 hover:shadow-sm",
-        )}
-      >
-        {emoji}
-      </span>
-      <span
-        className={cn(
-          "line-clamp-1 text-xs leading-tight",
-          selected ? "font-semibold text-kd-primary" : "text-kd-fg-muted",
+          "line-clamp-1 text-sm font-medium leading-tight",
+          selected ? "text-kd-primary" : "text-kd-fg-muted",
         )}
       >
         {label}
