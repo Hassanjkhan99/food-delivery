@@ -8,6 +8,8 @@ import { useCart } from "@/lib/cart";
 import { useI18n } from "@/i18n/provider";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const ViewerQuery = graphql(`
   query CustomerViewer {
@@ -31,6 +33,8 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   return (
     <div className="flex min-h-screen flex-col bg-kd-bg">
       <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
+        {/* McDonald's-style golden ribbon: a thin brand accent across the top of the shell. */}
+        <div aria-hidden className="h-1 w-full bg-gradient-to-r from-kd-accent via-kd-accent to-kd-primary" />
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
           <Link href="/" className="text-lg font-bold tracking-tight text-kd-fg">
             🍜 Khaana<span className="text-kd-primary">Do</span>
@@ -84,7 +88,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
             ) : (
               <Link
                 href="/login"
-                className="rounded-lg bg-kd-primary px-3 py-1.5 font-medium text-white hover:bg-kd-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+                className={cn(buttonVariants({ variant: "brand", size: "sm" }), "font-semibold")}
               >
                 {t("nav.signIn")}
               </Link>
