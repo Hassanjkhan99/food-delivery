@@ -7,9 +7,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  /* Wire the Geist font loaded in layout.tsx into Tailwind's font-sans/heading.
+     (Was self-referential `var(--font-sans)`, so the app fell back to the browser
+     default.) The final display font is a one-line swap here + in layout.tsx. */
+  /* Body/UI = Inter, headings = Poppins (founder design-system spec). Robust generic
+     fallbacks so type never drops to a serif if a webfont fails to load. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-poppins), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,8 +57,11 @@
      :root/.dark below. Source: claude.ai/design "Herald Design System". */
   --color-kd-primary: var(--kd-primary);
   --color-kd-primary-hover: var(--kd-primary-hover);
+  --color-kd-primary-active: var(--kd-primary-active);
   --color-kd-primary-soft: var(--kd-primary-soft);
   --color-kd-accent: var(--kd-accent);
+  --color-kd-accent-soft: var(--kd-accent-soft);
+  --color-kd-overlay: var(--kd-overlay);
   --color-kd-success: var(--kd-success);
   --color-kd-success-soft: var(--kd-success-soft);
   --color-kd-bg: var(--kd-bg);
@@ -88,24 +96,27 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* shadcn tokens bridged to the --kd-* brand system (single source of truth) so
+     every UI primitive (Button, Card, Input, Badge…) inherits the McDonald's palette
+     instead of shadcn's neutral gray. Raw brand values live in the --kd-* block below. */
+  --background: var(--kd-bg);
+  --foreground: var(--kd-fg);
+  --card: var(--kd-surface);
+  --card-foreground: var(--kd-fg);
+  --popover: var(--kd-surface);
+  --popover-foreground: var(--kd-fg);
+  --primary: var(--kd-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--kd-surface-muted);
+  --secondary-foreground: var(--kd-fg);
+  --muted: var(--kd-surface-muted);
+  --muted-foreground: var(--kd-fg-muted);
+  --accent: var(--kd-accent-soft);
+  --accent-foreground: var(--kd-fg);
+  --destructive: var(--kd-danger);
+  --border: var(--kd-border);
+  --input: var(--kd-border);
+  --ring: var(--kd-primary);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -121,48 +132,53 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* Herald brand — light (primary). Rose brand, amber accent, emerald success,
-     warm Stone neutrals. See the Herald Design System project. */
-  --kd-primary: #e11d48;
-  --kd-primary-hover: #be123c;
-  --kd-primary-soft: #ffe4e6;
-  --kd-accent: #f59e0b;
-  --kd-success: #059669;
-  --kd-success-soft: #d1fae5;
-  --kd-bg: #fafaf9;
+  /* Brand — light. Warm-orange design-system spec (founder). Orange everyday brand,
+     amber rating, warm off-white background, cool slate text, neutral borders. Red is
+     reserved for urgent/destructive only. */
+  --kd-primary: #f97316; /* orange 500 — CTAs, links, active states */
+  --kd-primary-hover: #ea580c; /* orange 600 */
+  --kd-primary-active: #c2410c; /* orange 700 */
+  --kd-primary-soft: #fff7ed; /* orange 50 — hover/soft surfaces */
+  --kd-accent: #f59e0b; /* amber — rating stars */
+  --kd-accent-soft: #fef3c7;
+  --kd-success: #16a34a;
+  --kd-success-soft: #dcfce7;
+  --kd-bg: #fffdf8; /* warm off-white — app background */
   --kd-surface: #ffffff;
-  --kd-surface-muted: #f5f5f4;
-  --kd-fg: #1c1917;
-  --kd-fg-muted: #78716c;
-  --kd-fg-subtle: #a8a29e;
-  --kd-border: #e7e5e4;
+  --kd-surface-muted: #fff7ed; /* soft peach for recessed / hover surfaces */
+  --kd-fg: #1f2937; /* slate 800 — primary text */
+  --kd-fg-muted: #6b7280; /* slate 500 — secondary text */
+  --kd-fg-subtle: #9ca3af; /* slate 400 — placeholder / tertiary */
+  --kd-border: #ececec;
   --kd-warning: #d97706;
   --kd-warning-soft: #fef3c7;
   --kd-danger: #dc2626;
   --kd-danger-soft: #fee2e2;
   --kd-info: #0284c7;
   --kd-info-soft: #e0f2fe;
+  --kd-overlay: rgb(0 0 0 / 0.5); /* scrim for modals / image overlays */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* shadcn tokens bridged to the --kd-* brand system (dark). */
+  --background: var(--kd-bg);
+  --foreground: var(--kd-fg);
+  --card: var(--kd-surface);
+  --card-foreground: var(--kd-fg);
+  --popover: var(--kd-surface);
+  --popover-foreground: var(--kd-fg);
+  --primary: var(--kd-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--kd-surface-muted);
+  --secondary-foreground: var(--kd-fg);
+  --muted: var(--kd-surface-muted);
+  --muted-foreground: var(--kd-fg-muted);
+  --accent: var(--kd-accent-soft);
+  --accent-foreground: var(--kd-fg);
+  --destructive: var(--kd-danger);
+  --border: var(--kd-border);
+  --input: var(--kd-border);
+  --ring: var(--kd-primary);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -177,26 +193,29 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* Herald brand — dark. */
-  --kd-primary: #fb7185;
-  --kd-primary-hover: #f43f5e;
-  --kd-primary-soft: #4c0519;
+  /* Brand — dark. Warm-orange (dark mode is out of v1, kept consistent). */
+  --kd-primary: #fb923c;
+  --kd-primary-hover: #fdba74;
+  --kd-primary-active: #ea580c;
+  --kd-primary-soft: #431407;
   --kd-accent: #fbbf24;
+  --kd-accent-soft: #3d2f05;
   --kd-success: #34d399;
   --kd-success-soft: #052e2b;
-  --kd-bg: #1c1917;
-  --kd-surface: #292524;
-  --kd-surface-muted: #292524;
-  --kd-fg: #fafaf9;
-  --kd-fg-muted: #a8a29e;
-  --kd-fg-subtle: #78716c;
-  --kd-border: #44403c;
+  --kd-bg: #1a1613; /* dark warm charcoal */
+  --kd-surface: #262019;
+  --kd-surface-muted: #2f2820;
+  --kd-fg: #faf6ee;
+  --kd-fg-muted: #b8ab99;
+  --kd-fg-subtle: #7c7264;
+  --kd-border: #443c30;
   --kd-warning: #fbbf24;
   --kd-warning-soft: #451a03;
   --kd-danger: #f87171;
   --kd-danger-soft: #450a0a;
   --kd-info: #38bdf8;
   --kd-info-soft: #082f49;
+  --kd-overlay: rgb(0 0 0 / 0.6);
 }
 
 @layer base {
@@ -208,5 +227,12 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Headings use Poppins per the design-system spec (body stays Inter). */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
   }
 }

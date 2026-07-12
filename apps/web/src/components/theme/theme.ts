@@ -47,10 +47,13 @@ export function themeVars(theme: ThemeShape): React.CSSProperties {
 export function cardClasses(cardStyle: string): string {
   switch (cardStyle) {
     case "glass":
+      // Glass is an intentional decorative treatment — keep the translucent white.
       return "border border-white/30 bg-white/40 backdrop-blur-md shadow-sm";
     case "tilt3d":
-      return "border border-black/5 bg-white shadow-md";
+      return "border border-kd-border bg-kd-surface shadow-md";
     default:
-      return "border bg-white/80";
+      // Solid surface + subtle shadow reads far more premium than the old flat
+      // translucent card (was `border bg-white/80`).
+      return "border border-kd-border bg-kd-surface shadow-sm";
   }
 }

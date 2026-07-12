@@ -34,11 +34,13 @@ export function ComboCard({
   cardStyle,
   accepting,
   onAdd,
+  imageFallback,
 }: {
   combo: ComboForCard;
   cardStyle: string;
   accepting: boolean;
   onAdd: (combo: ComboForCard) => void;
+  imageFallback?: string | null;
 }) {
   const reduced = useReducedMotion();
   const disabled = !combo.isAvailable || !accepting;
@@ -51,7 +53,12 @@ export function ComboCard({
   return (
     <div className="relative">
       <div className={`flex w-full items-start justify-between gap-3 rounded-2xl p-4 text-sm ${cardClasses(cardStyle)} ${disabled ? "opacity-50" : ""}`}>
-        <ItemImage url={combo.imageUrl} name={combo.name} className="h-20 w-20 rounded-xl" />
+        <ItemImage
+          url={combo.imageUrl}
+          name={combo.name}
+          fallbackSrc={imageFallback}
+          className="h-20 w-20 rounded-xl"
+        />
         <div className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{combo.name}</span>
@@ -62,16 +69,16 @@ export function ComboCard({
             )}
           </div>
           {combo.description && (
-            <p className="mt-1 line-clamp-2 text-sm opacity-60">{combo.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{combo.description}</p>
           )}
-          {contents && <p className="mt-1 line-clamp-2 text-xs opacity-50">{contents}</p>}
+          {contents && <p className="mt-1 line-clamp-2 text-xs text-kd-fg-subtle">{contents}</p>}
           {!combo.isAvailable && (
             <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>
           )}
         </div>
         <span className="flex shrink-0 flex-col items-end">
           {off != null && (
-            <span className="text-xs line-through opacity-50">
+            <span className="text-xs text-kd-fg-subtle line-through">
               {formatRs(combo.originalPriceMinor)}
             </span>
           )}
@@ -86,10 +93,10 @@ export function ComboCard({
           aria-label={`Add ${combo.name}`}
           onClick={() => onAdd(combo)}
           whileTap={reduced ? undefined : { scale: 0.95 }}
-          className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white shadow-md transition hover:brightness-110"
+          className="absolute bottom-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-md ring-2 ring-kd-surface transition hover:brightness-110"
           style={{ backgroundColor: "var(--brand-primary)" }}
         >
-          <Plus className="h-4 w-4" strokeWidth={3} />
+          <Plus className="h-5 w-5" strokeWidth={3} />
         </motion.button>
       )}
     </div>

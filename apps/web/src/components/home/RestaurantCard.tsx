@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Clock, Heart, Star, Tag } from "lucide-react";
-import { formatRs, priceBandLabel } from "@fd/shared";
+import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
+import { restaurantCoverPlaceholder } from "@/components/media/placeholders";
 import { cn } from "@/lib/utils";
 import type { FeedHit } from "./types";
 
@@ -33,9 +34,9 @@ function FavoriteButton() {
         e.preventDefault();
         setSaved((v) => !v);
       }}
-      className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-kd-fg-muted shadow-sm backdrop-blur transition-colors hover:bg-white"
+      className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-kd-border bg-white/95 text-kd-fg-muted shadow-sm backdrop-blur transition-colors hover:bg-white hover:text-kd-primary"
     >
-      <Heart className={cn("h-4 w-4", saved && "fill-kd-primary text-kd-primary")} />
+      <Heart className={cn("h-[22px] w-[22px]", saved && "fill-kd-primary text-kd-primary")} />
     </button>
   );
 }
@@ -58,6 +59,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             photo={hit.photo}
             name={r.name}
             tint={r.primaryColor}
+            fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
             className={cn(
               "aspect-[16/10] w-full transition-transform duration-300 group-hover:scale-[1.03]",
               avail.closed && "grayscale-[0.6]",
@@ -66,7 +68,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             // on top of it (ToS-required credit must not be hidden) — #36 review.
             overlay={
               avail.closed && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/45 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-kd-overlay text-center">
                   <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-kd-fg">
                     {avail.label}
                   </span>
@@ -106,7 +108,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
           <h3 className="font-semibold leading-tight tracking-tight text-kd-fg">{r.name}</h3>
 
           {r.dealBadge && (
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-kd-primary-soft px-2 py-0.5 text-xs font-semibold text-kd-primary">
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-kd-accent-soft px-2 py-0.5 text-xs font-semibold text-kd-warning">
               <Tag className="h-3 w-3" />
               {r.dealBadge}
             </span>
@@ -129,17 +131,68 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             {hit.priceBand > 0 && (
               <>
                 <span className="text-kd-fg-subtle">·</span>
-                <span aria-label={`Price band ${hit.priceBand} of 3`}>
-                  <span className="font-semibold text-kd-fg">{priceBandLabel(hit.priceBand)}</span>
-                  <span className="text-kd-fg-subtle">
-                    {priceBandLabel(3).slice(hit.priceBand)}
+                <span aria-label={`Price band ${hit.priceBand} of 3`} className="tracking-tight">
+                  <span className="text-kd-fg-subtle">Rs </span>
+                  <span className="font-semibold text-kd-fg">
+                    {priceBandDots(hit.priceBand).filled}
                   </span>
+                  <span className="text-kd-fg-subtle">{priceBandDots(hit.priceBand).empty}</span>
                 </span>
               </>
             )}
           </div>
         </div>
       </article>
+    </Link>
+  );
+}
+
+/** Horizontal card (photo left, details right) — used for the "Top rated" rail so it
+ *  matches the polished list layout. Shows a free-delivery pill, gold rating, ETA + min. */
+export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
+  const r = hit.restaurant;
+  const avail = availability(hit);
+  return (
+    <Link
+      href={`/r/${r.slug}`}
+      className="group relative flex items-center gap-5 rounded-[22px] border border-kd-border bg-kd-surface p-3 shadow-[0_8px_20px_rgba(0,0,0,0.05)] transition-all hover:-translate-y-1.5 hover:shadow-[0_18px_36px_rgba(0,0,0,0.12)]"
+    >
+      <RestaurantImage
+        photo={hit.photo}
+        name={r.name}
+        tint={r.primaryColor}
+        fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
+        className={cn(
+          "h-32 w-32 shrink-0 rounded-[18px] sm:h-40 sm:w-40",
+          avail.closed && "grayscale-[0.6]",
+        )}
+        sizes="160px"
+      />
+      <div className="min-w-0 flex-1 py-0.5 pr-8">
+        {hit.deliveryFeeMinor === 0 && !avail.closed && (
+          <span className="inline-flex h-7 items-center rounded-full bg-kd-success-soft px-2.5 text-sm font-semibold text-kd-success">
+            Free delivery
+          </span>
+        )}
+        <p className="mt-1.5 truncate text-xl font-semibold text-kd-fg sm:text-2xl">{r.name}</p>
+        {r.avgRating != null && (
+          <div className="mt-1 flex items-center gap-1 text-base tabular-nums">
+            <Star className="h-[18px] w-[18px] fill-kd-accent text-kd-accent" />
+            <span className="font-semibold text-kd-accent">{r.avgRating.toFixed(1)}</span>
+            <span className="text-kd-fg-muted">({r.ratingCount})</span>
+          </div>
+        )}
+        <p className="mt-1 truncate text-base text-kd-fg-muted tabular-nums">
+          {avail.closed ? (
+            <span className="font-semibold text-kd-danger">{avail.label}</span>
+          ) : (
+            <>
+              {hit.etaMinutes}–{hit.etaMinutes + 10} min · Min {formatRs(hit.minOrderMinor)}
+            </>
+          )}
+        </p>
+      </div>
+      <FavoriteButton />
     </Link>
   );
 }
@@ -155,6 +208,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           photo={hit.photo}
           name={r.name}
           tint={r.primaryColor}
+          fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
           className={cn("aspect-[16/10] w-44 rounded-xl", avail.closed && "grayscale-[0.6]")}
           sizes="176px"
           // Scrim inside the image so the Google attribution stays visible — #36 review.
@@ -163,7 +217,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           // review round 2.
           overlay={
             avail.closed && (
-              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 px-2 text-center text-xs font-bold text-white">
+              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-kd-overlay px-2 text-center text-xs font-bold text-white">
                 {avail.label ?? "Closed"}
               </span>
             )

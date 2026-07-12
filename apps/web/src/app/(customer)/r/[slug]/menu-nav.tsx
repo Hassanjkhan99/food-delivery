@@ -49,7 +49,7 @@ export function MenuNav({
 
   return (
     <div
-      className="sticky top-14 z-30 -mx-4 mb-6 border-b border-black/5 backdrop-blur"
+      className="sticky top-14 z-30 -mx-4 mb-6 border-b border-kd-border backdrop-blur"
       style={{ backgroundColor: "color-mix(in srgb, var(--brand-bg) 88%, transparent)" }}
     >
       <AnimatePresence initial={false}>
@@ -85,21 +85,21 @@ export function MenuNav({
 
       <div className="px-4 pt-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-50" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kd-fg-subtle" />
           <input
             type="search"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search the menu"
             aria-label="Search the menu"
-            className="w-full rounded-full border border-black/10 bg-white/70 py-2 pl-9 pr-9 text-sm outline-none focus:border-black/20"
+            className="w-full rounded-full border border-kd-border bg-kd-surface py-2.5 pl-9 pr-9 text-sm text-kd-fg shadow-sm outline-none placeholder:text-kd-fg-subtle focus:border-kd-fg-muted"
           />
           {search && (
             <button
               type="button"
               aria-label="Clear search"
               onClick={() => onSearch("")}
-              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kd-fg-muted hover:bg-black/5"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-kd-fg-muted hover:bg-kd-surface-muted"
             >
               <X className="h-4 w-4" />
             </button>

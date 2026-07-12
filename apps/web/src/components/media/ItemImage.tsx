@@ -14,20 +14,25 @@ export function ItemImage({
   name,
   className,
   sizes = "96px",
+  fallbackSrc,
 }: {
   url?: string | null;
   name: string;
   className?: string;
   sizes?: string;
+  /** On-cuisine placeholder photo shown when there's no real photo (else gradient tile). */
+  fallbackSrc?: string | null;
 }) {
   const [errored, setErrored] = useState(false);
+  const [fallbackErrored, setFallbackErrored] = useState(false);
   const show = url && !errored;
+  const useFallback = !show && !!fallbackSrc && !fallbackErrored;
 
   return (
     <div
       aria-hidden
       className={cn("relative shrink-0 overflow-hidden bg-kd-surface-muted", className)}
-      style={show ? undefined : { background: fallbackGradient(name) }}
+      style={show || useFallback ? undefined : { background: fallbackGradient(name) }}
     >
       {show ? (
         <Image
@@ -37,6 +42,14 @@ export function ItemImage({
           sizes={sizes}
           className="object-cover"
           onError={() => setErrored(true)}
+        />
+      ) : useFallback ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={fallbackSrc}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setFallbackErrored(true)}
         />
       ) : (
         <span className="absolute inset-0 flex select-none items-center justify-center text-sm font-semibold text-white/90">

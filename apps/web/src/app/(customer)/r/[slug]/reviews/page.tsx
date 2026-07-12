@@ -141,13 +141,13 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
       </h1>
 
       {/* Summary + distribution */}
-      <section className="mt-4 flex flex-col gap-5 rounded-2xl border border-black/5 bg-white/60 p-5 sm:flex-row sm:items-center">
+      <section className="mt-4 flex flex-col gap-5 rounded-2xl border border-kd-border bg-kd-surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div className="flex flex-col items-center justify-center sm:w-40">
           <div className="text-5xl font-bold" style={{ color: "var(--brand-primary)" }}>
             {r.avgRating != null ? r.avgRating.toFixed(1) : "—"}
           </div>
           <Stars n={Math.round(r.avgRating ?? 0)} className="mt-1" />
-          <div className="mt-1 text-xs opacity-60">
+          <div className="mt-1 text-xs text-kd-fg-muted">
             {r.ratingCount} {r.ratingCount === 1 ? "review" : "reviews"}
           </div>
         </div>
@@ -156,9 +156,9 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
             const count = dist[star - 1] ?? 0;
             return (
               <div key={star} className="flex items-center gap-2 text-xs">
-                <span className="w-3 tabular-nums opacity-70">{star}</span>
-                <Star className="h-3 w-3 fill-kd-warning text-kd-warning" />
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/5">
+                <span className="w-3 tabular-nums text-kd-fg-muted">{star}</span>
+                <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-kd-surface-muted">
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -167,7 +167,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
                     }}
                   />
                 </div>
-                <span className="w-6 text-right tabular-nums opacity-60">{count}</span>
+                <span className="w-6 text-right tabular-nums text-kd-fg-muted">{count}</span>
               </div>
             );
           })}
@@ -176,14 +176,17 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
 
       {/* List */}
       {reviews.length === 0 ? (
-        <p className="py-12 text-center text-sm opacity-60">No reviews yet.</p>
+        <p className="py-12 text-center text-sm text-kd-fg-muted">No reviews yet.</p>
       ) : (
         <ul className="mt-5 space-y-3">
           {reviews.map((rev) => (
-            <li key={rev.id} className="rounded-2xl border border-black/5 bg-white/60 p-4">
+            <li
+              key={rev.id}
+              className="rounded-2xl border border-kd-border bg-kd-surface p-4 shadow-sm"
+            >
               <div className="flex items-center justify-between gap-2">
                 <Stars n={rev.stars} />
-                <span className="text-xs opacity-50">{relativeDate(rev.createdAt)}</span>
+                <span className="text-xs text-kd-fg-subtle">{relativeDate(rev.createdAt)}</span>
               </div>
               {rev.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -200,7 +203,7 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
                   ))}
                 </div>
               )}
-              {rev.comment && <p className="mt-2 text-sm opacity-80">{rev.comment}</p>}
+              {rev.comment && <p className="mt-2 text-sm text-kd-fg">{rev.comment}</p>}
               {rev.response && (
                 <div
                   className="mt-3 rounded-xl p-3"
@@ -215,9 +218,11 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
                     >
                       Response from {r.name}
                     </span>
-                    <span className="text-xs opacity-50">{relativeDate(rev.response.createdAt)}</span>
+                    <span className="text-xs text-kd-fg-subtle">
+                      {relativeDate(rev.response.createdAt)}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm opacity-80">{rev.response.body}</p>
+                  <p className="mt-1 text-sm text-kd-fg">{rev.response.body}</p>
                 </div>
               )}
             </li>

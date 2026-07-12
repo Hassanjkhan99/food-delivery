@@ -1,9 +1,22 @@
 # Herald Theme & UI Guide
 
-The canonical maintainability guide for the theme revamp. Migration agents and
-future devs follow this doc. The design system lives in
-`apps/web/src/app/globals.css` (raw `--kd-*` values in `:root`/`.dark`, mirrored
-into `@theme inline` so Tailwind emits `kd-*` utilities).
+The canonical maintainability guide for the theme. Migration agents and future devs
+follow this doc. The design system lives in `apps/web/src/app/globals.css` (raw
+`--kd-*` values in `:root`/`.dark`, mirrored into `@theme inline` so Tailwind emits
+`kd-*` utilities).
+
+**Brand (McDonald's-style, issue #48 UX-13):** cream-dominant surfaces, warm charcoal
+text, **red (`#DA291C`) for primary CTAs**, **golden yellow (`#FFC72C`) as the accent**
+(highlights, deals, rating star), green for success/free-delivery. Target usage ratio:
+cream/white 55–65%, charcoal 15–20%, red 10–15%, yellow 5–10% — yellow is an accent, not
+a background wash. No literal McDonald's assets/logos — style and energy only. The token
+_names_ are still `--kd-*` (already wired into Tailwind); only their values changed.
+
+**shadcn bridge:** the shadcn tokens (`--primary`, `--secondary`, `--destructive`,
+`--background`, `--border`, `--ring`, …) are defined in terms of the `--kd-*` values in
+`globals.css`, so every UI primitive (`Button`, `Card`, `Input`, `Badge`) inherits the
+brand palette automatically — `<Button>` default renders red, not gray. Change a brand
+value once and it cascades everywhere.
 
 **Golden rule:** do not hand-write hex/`neutral-*`/`red-*`/etc. colors in
 components. Use the `--kd-*` tokens (via their Tailwind utilities) or an existing
@@ -16,10 +29,12 @@ kd tokens automatically improves dark mode.
 
 | Token | Tailwind utilities | Meaning |
 | --- | --- | --- |
-| `--kd-primary` | `text-kd-primary` `bg-kd-primary` `border-kd-primary` | Rose brand |
-| `--kd-primary-hover` | `hover:bg-kd-primary-hover` | Brand hover |
+| `--kd-primary` | `text-kd-primary` `bg-kd-primary` `border-kd-primary` | Red brand / primary CTAs |
+| `--kd-primary-hover` | `hover:bg-kd-primary-hover` | Brand hover (darker red) |
 | `--kd-primary-soft` | `bg-kd-primary-soft` | Brand tint / soft surface |
-| `--kd-accent` | `text-kd-accent` `bg-kd-accent` | Amber accent |
+| `--kd-accent` | `text-kd-accent` `bg-kd-accent` | Golden-yellow accent / rating star |
+| `--kd-accent-soft` | `bg-kd-accent-soft` | Yellow tint (deal/offer chips) |
+| `--kd-overlay` | `bg-kd-overlay` | Scrim for image/closed overlays |
 | `--kd-success` | `text-kd-success` `border-kd-success` | Success / positive |
 | `--kd-success-soft` | `bg-kd-success-soft` | Success tint |
 | `--kd-warning` | `text-kd-warning` `border-kd-warning` | Warning / paused |
@@ -94,10 +109,13 @@ markup instead of ad-hoc `text-2xl`/`leading-*` pairs.
 Prefer the existing UI primitives in `apps/web/src/components/ui/` over
 hand-rolled markup:
 
-- **`<Button>`** — any clickable action. Use `variant="destructive"` for
-  delete/negative actions instead of `red-*` classes.
-- **`<Badge>`** — status pills, counts, tags. Use its variants rather than a
-  styled `<span>`.
+- **`<Button>`** — any clickable action. Use `variant="brand"` for the primary CTA
+  on a screen (Add to cart, Checkout — solid red with a darker-red hover). `default`
+  also renders red via the bridge; `variant="destructive"` for delete/negative actions
+  instead of `red-*` classes.
+- **`<Badge>`** — status pills, counts, tags. `variant="brand"` (red, e.g. Promoted),
+  `variant="accent"` (solid gold, deals), `variant="accent-soft"` (yellow tint, e.g.
+  "-20%"). Use variants rather than a styled `<span>`.
 - **`<Input>` / `<Textarea>`** — text entry. Do not restyle a bare `<input>`.
 - **`<Card>`** — grouped/raised content on `bg-kd-surface`, instead of an
   ad-hoc `bg-white rounded border` div.
