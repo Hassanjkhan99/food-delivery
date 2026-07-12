@@ -76,12 +76,24 @@ const onboard = await owner<{ submitOnboarding: { id: string; slug: string; stat
        id slug status
      }
    }`,
-  { name: bizName, addr: "Plot 1, Main Boulevard, Karachi", lat: LAT, lng: LNG, min: 0, fee: 12000, rad: 25000 },
+  {
+    name: bizName,
+    addr: "Plot 1, Main Boulevard, Karachi",
+    lat: LAT,
+    lng: LNG,
+    min: 0,
+    fee: 12000,
+    rad: 25000,
+  },
 );
 const restaurantId = onboard.data?.submitOnboarding.id;
 const slug = onboard.data?.submitOnboarding.slug;
 assert(Boolean(restaurantId), `onboarded "${bizName}" (slug ${slug})`, onboard);
-assert(onboard.data?.submitOnboarding.status === "pending_approval", "new restaurant is pending_approval", onboard);
+assert(
+  onboard.data?.submitOnboarding.status === "pending_approval",
+  "new restaurant is pending_approval",
+  onboard,
+);
 
 // Branch id comes from myRestaurants, where the branches relation resolves cleanly.
 const mine = await owner<{ myRestaurants: Array<{ id: string; branches: Array<{ id: string }> }> }>(
@@ -99,7 +111,11 @@ const approved = await admin<{ approveRestaurant: { status: string } }>(
   `mutation A($id: String!) { approveRestaurant(id: $id) { status } }`,
   { id: restaurantId },
 );
-assert(approved.data?.approveRestaurant.status === "approved", "admin approved restaurant", approved);
+assert(
+  approved.data?.approveRestaurant.status === "approved",
+  "admin approved restaurant",
+  approved,
+);
 
 // ---------------------------------------------------------------------------
 // 3. Owner builds the draft menu: category, item, modifier group + option, combo
@@ -108,7 +124,11 @@ const draft = await owner<{ draftMenu: { id: string; version: number } }>(
   `query D($b: String!) { draftMenu(branchId: $b) { id version } }`,
   { b: branchId },
 );
-assert(Boolean(draft.data?.draftMenu), `draft menu v${draft.data?.draftMenu.version} auto-created`, draft);
+assert(
+  Boolean(draft.data?.draftMenu),
+  `draft menu v${draft.data?.draftMenu.version} auto-created`,
+  draft,
+);
 
 const cat = await owner<{ upsertCategory: { id: string; name: string } }>(
   `mutation C($b: String!) { upsertCategory(branchId: $b, name: "Mains") { id name } }`,
@@ -167,12 +187,20 @@ const pub = await owner<{ publishMenu: { version: number; status: string } }>(
   `mutation P($b: String!) { publishMenu(branchId: $b) { version status } }`,
   { b: branchId },
 );
-assert(pub.data?.publishMenu.status === "published", `published menu v${pub.data?.publishMenu.version}`, pub);
+assert(
+  pub.data?.publishMenu.status === "published",
+  `published menu v${pub.data?.publishMenu.version}`,
+  pub,
+);
 
 // ---------------------------------------------------------------------------
 // 5. Configure the branch: all-day hours, accepting orders, busy mode
 // ---------------------------------------------------------------------------
-const hours = Array.from({ length: 7 }, (_, d) => ({ dayOfWeek: d, openMinute: 0, closeMinute: 1439 }));
+const hours = Array.from({ length: 7 }, (_, d) => ({
+  dayOfWeek: d,
+  openMinute: 0,
+  closeMinute: 1439,
+}));
 // Select a scalar: resolving `hours` off the mutation return trips the same
 // "Unable to find delegate for model Branch". We verify persistence separately below.
 const setHours = await owner<{ setBranchHours: { id: string } }>(
@@ -185,7 +213,11 @@ const accepting = await owner<{ setAcceptingOrders: { isAcceptingOrders: boolean
   `mutation AC($b: String!) { setAcceptingOrders(branchId: $b, accepting: true) { isAcceptingOrders } }`,
   { b: branchId },
 );
-assert(accepting.data?.setAcceptingOrders.isAcceptingOrders === true, "branch accepting orders", accepting);
+assert(
+  accepting.data?.setAcceptingOrders.isAcceptingOrders === true,
+  "branch accepting orders",
+  accepting,
+);
 
 const busy = await owner<{ setBusyMode: { prepBufferMinutes: number } }>(
   `mutation BM($b: String!) { setBusyMode(branchId: $b, bufferMinutes: 10) { prepBufferMinutes } }`,
@@ -217,14 +249,23 @@ const hrsCheck = await owner<{ branchBySlug: { hours: Array<{ dayOfWeek: number 
 );
 assert((hrsCheck.data?.branchBySlug?.hours.length ?? 0) === 7, "7-day hours persisted", hrsCheck);
 
-type CustItem = { id: string; name: string; modifierGroups: Array<{ id: string; options: Array<{ id: string; name: string }> }> };
+type CustItem = {
+  id: string;
+  name: string;
+  modifierGroups: Array<{ id: string; options: Array<{ id: string; name: string }> }>;
+};
 const disco = await customer<{
-  branchBySlug: { id: string; activeMenu: { categories: Array<{ items: CustItem[] }> } | null } | null;
+  branchBySlug: {
+    id: string;
+    activeMenu: { categories: Array<{ items: CustItem[] }> } | null;
+  } | null;
 }>(
   `query B($s: String!) { branchBySlug(slug: $s) { id activeMenu { categories { items { id name modifierGroups { id options { id name } } } } } } }`,
   { s: slug },
 );
-const custItem = disco.data?.branchBySlug?.activeMenu?.categories.flatMap((c) => c.items).find((i) => i.name === "Signature Handi");
+const custItem = disco.data?.branchBySlug?.activeMenu?.categories
+  .flatMap((c) => c.items)
+  .find((i) => i.name === "Signature Handi");
 assert(Boolean(custItem), "customer sees published item on live menu", disco);
 // Use the PUBLISHED option id (publishMenu re-ids everything; the draft optionId is stale).
 const custOptionId = custItem?.modifierGroups[0]?.options[0]?.id;
@@ -235,8 +276,13 @@ const orderA = await customer<{ placeOrder: { id: string; code: string; status: 
   {
     key: crypto.randomUUID(),
     input: {
-      branchId, deliveryLat: LAT, deliveryLng: LNG, addressText: "House 5, Block A, Karachi",
-      contactPhone: custPhone, paymentMode: "cod", fulfillmentMode: "delivery",
+      branchId,
+      deliveryLat: LAT,
+      deliveryLng: LNG,
+      addressText: "House 5, Block A, Karachi",
+      contactPhone: custPhone,
+      paymentMode: "cod",
+      fulfillmentMode: "delivery",
       lines: [{ menuItemId: custItem!.id, qty: 1, modifierOptionIds: [custOptionId!] }],
     },
   },
@@ -260,18 +306,28 @@ assert(
 const acc = await owner<{ acceptOrder: { status: string; prepEtaMinutes: number } }>(
   `mutation { acceptOrder(id: "${orderAId}", prepEtaMinutes: 25) { status prepEtaMinutes } }`,
 );
-assert(acc.data?.acceptOrder.prepEtaMinutes === 25, `accepted with 25m ETA (${acc.data?.acceptOrder.status})`, acc);
+assert(
+  acc.data?.acceptOrder.prepEtaMinutes === 25,
+  `accepted with 25m ETA (${acc.data?.acceptOrder.status})`,
+  acc,
+);
 await owner(`mutation { startPreparing(id: "${orderAId}") { status } }`);
 const eta = await owner<{ updatePrepEta: { prepEtaMinutes: number } }>(
   `mutation { updatePrepEta(id: "${orderAId}", prepEtaMinutes: 30) { prepEtaMinutes } }`,
 );
 assert(eta.data?.updatePrepEta.prepEtaMinutes === 30, "prep ETA updated to 30m", eta);
-const rdy = await owner<{ markReady: { status: string } }>(`mutation { markReady(id: "${orderAId}") { status } }`);
+const rdy = await owner<{ markReady: { status: string } }>(
+  `mutation { markReady(id: "${orderAId}") { status } }`,
+);
 assert(rdy.data?.markReady.status === "ready_for_pickup", "delivery order marked ready", rdy);
 const assign = await owner<{ assignRider: { status: string } }>(
   `mutation { assignRider(orderId: "${orderAId}", riderId: "${riderId}") { status } }`,
 );
-assert(assign.data?.assignRider.status === "rider_assigned", "rider assigned to delivery order", assign);
+assert(
+  assign.data?.assignRider.status === "rider_assigned",
+  "rider assigned to delivery order",
+  assign,
+);
 
 // ---------------------------------------------------------------------------
 // 9. Customer places a PICKUP order; owner takes it through to delivered
@@ -281,8 +337,13 @@ const orderB = await customer<{ placeOrder: { id: string; code: string } }>(
   {
     key: crypto.randomUUID(),
     input: {
-      branchId, deliveryLat: LAT, deliveryLng: LNG, addressText: "Pickup", contactPhone: custPhone,
-      paymentMode: "cod", fulfillmentMode: "pickup",
+      branchId,
+      deliveryLat: LAT,
+      deliveryLng: LNG,
+      addressText: "Pickup",
+      contactPhone: custPhone,
+      paymentMode: "cod",
+      fulfillmentMode: "pickup",
       lines: [{ menuItemId: custItem!.id, qty: 2, modifierOptionIds: [custOptionId!] }],
     },
   },
@@ -295,7 +356,11 @@ await owner(`mutation { markReady(id: "${orderBId}") { status } }`);
 const collected = await owner<{ markCollected: { status: string } }>(
   `mutation { markCollected(id: "${orderBId}") { status } }`,
 );
-assert(collected.data?.markCollected.status === "delivered", "pickup order collected -> delivered", collected);
+assert(
+  collected.data?.markCollected.status === "delivered",
+  "pickup order collected -> delivered",
+  collected,
+);
 
 // ---------------------------------------------------------------------------
 // 10. Customer rates the delivered order; owner responds
@@ -319,17 +384,31 @@ const today = await owner<{ todaySummary: { orders: number; revenueMinor: number
   `query T($b: String!) { todaySummary(branchId: $b) { orders revenueMinor acceptanceSlaPct } }`,
   { b: branchId },
 );
-assert((today.data?.todaySummary.orders ?? 0) >= 1, `today summary: ${today.data?.todaySummary.orders} orders`, today);
-const analytics = await owner<{ restaurantAnalytics: { totalOrders: number; topItems: Array<{ name: string }> } }>(
+assert(
+  (today.data?.todaySummary.orders ?? 0) >= 1,
+  `today summary: ${today.data?.todaySummary.orders} orders`,
+  today,
+);
+const analytics = await owner<{
+  restaurantAnalytics: { totalOrders: number; topItems: Array<{ name: string }> };
+}>(
   `query AN($b: String!) { restaurantAnalytics(branchId: $b, days: 30) { totalOrders totalRevenueMinor topItems { name } } }`,
   { b: branchId },
 );
-assert((analytics.data?.restaurantAnalytics.totalOrders ?? 0) >= 1, `analytics: ${analytics.data?.restaurantAnalytics.totalOrders} total orders`, analytics);
+assert(
+  (analytics.data?.restaurantAnalytics.totalOrders ?? 0) >= 1,
+  `analytics: ${analytics.data?.restaurantAnalytics.totalOrders} total orders`,
+  analytics,
+);
 const wallet = await owner<{ walletBalance: number; walletStatement: Array<{ memo: string }> }>(
   `query W($r: String!) { walletBalance(restaurantId: $r) walletStatement(restaurantId: $r) { memo } }`,
   { r: restaurantId },
 );
-assert(typeof wallet.data?.walletBalance === "number", `wallet balance readable (${wallet.data?.walletBalance})`, wallet);
+assert(
+  typeof wallet.data?.walletBalance === "number",
+  `wallet balance readable (${wallet.data?.walletBalance})`,
+  wallet,
+);
 
 // ---------------------------------------------------------------------------
 // 12. Owner customizes branding
@@ -348,8 +427,13 @@ const orderC = await customer<{ placeOrder: { id: string } }>(
   {
     key: crypto.randomUUID(),
     input: {
-      branchId, deliveryLat: LAT, deliveryLng: LNG, addressText: "House 9, Karachi", contactPhone: custPhone,
-      paymentMode: "cod", fulfillmentMode: "delivery",
+      branchId,
+      deliveryLat: LAT,
+      deliveryLng: LNG,
+      addressText: "House 9, Karachi",
+      contactPhone: custPhone,
+      paymentMode: "cod",
+      fulfillmentMode: "delivery",
       lines: [{ menuItemId: custItem!.id, qty: 1, modifierOptionIds: [custOptionId!] }],
     },
   },
@@ -366,7 +450,9 @@ if (orderCId) {
 // ---------------------------------------------------------------------------
 // 14. Authz guard: the customer cannot read the owner board
 // ---------------------------------------------------------------------------
-const forbidden = await customer(`query B($b: String!) { boardOrders(branchId: $b) { id } }`, { b: branchId });
+const forbidden = await customer(`query B($b: String!) { boardOrders(branchId: $b) { id } }`, {
+  b: branchId,
+});
 assert(Boolean(forbidden.errors?.length), "customer blocked from boardOrders", forbidden);
 
 console.log(`\n${failures === 0 ? "ALL PASSED" : `${failures} FAILURE(S)`}`);
