@@ -272,8 +272,7 @@ function LoginForm() {
             <form onSubmit={onVerify} className="mt-6 space-y-4">
               {devCode && (
                 <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-sm text-kd-warning">
-                  Dev mode — your code is{" "}
-                  <span className="font-mono font-bold">{devCode}</span>
+                  Dev mode — your code is <span className="font-mono font-bold">{devCode}</span>
                 </div>
               )}
               <OtpBoxes

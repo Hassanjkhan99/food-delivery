@@ -132,9 +132,8 @@ export default function CampaignsPage() {
     <main className="max-w-2xl">
       <h1 className="mb-1 text-xl font-bold">Promotions</h1>
       <p className="mb-4 text-sm text-kd-fg-muted">
-        Buy a featured slot on the home feed, or paint a deal badge on your cards. Featured
-        slots bill{" "}
-        <span className="font-semibold text-kd-fg">{formatRs(rate)}/day</span> at your{" "}
+        Buy a featured slot on the home feed, or paint a deal badge on your cards. Featured slots
+        bill <span className="font-semibold text-kd-fg">{formatRs(rate)}/day</span> at your{" "}
         {restaurant.tier === "chain" ? "chain" : "small-business"} tier
         {rate === 0 && " (free on your tier)"}. Deal badges are free.
       </p>
@@ -207,8 +206,7 @@ export default function CampaignsPage() {
               {c.dailyRateMinor > 0 ? `${formatRs(c.dailyRateMinor)}/day` : "Free"}
               {c.startsAt &&
                 ` · from ${new Date(c.startsAt as unknown as string).toLocaleDateString()}`}
-              {c.endsAt &&
-                ` · to ${new Date(c.endsAt as unknown as string).toLocaleDateString()}`}
+              {c.endsAt && ` · to ${new Date(c.endsAt as unknown as string).toLocaleDateString()}`}
             </p>
             {c.status === "rejected" && c.rejectedReason && (
               <p className="mt-1 text-xs text-kd-danger">Rejected: {c.rejectedReason}</p>

@@ -119,7 +119,10 @@ export default function TicketTriagePage({ params }: { params: Promise<{ id: str
 
   return (
     <main className="max-w-2xl">
-      <Link href="/admin/tickets" className="mb-3 inline-block text-xs text-kd-fg-muted hover:text-kd-primary">
+      <Link
+        href="/admin/tickets"
+        className="mb-3 inline-block text-xs text-kd-fg-muted hover:text-kd-primary"
+      >
         ← Back to queue
       </Link>
 
@@ -146,11 +149,15 @@ export default function TicketTriagePage({ params }: { params: Promise<{ id: str
         <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${slaBadgeClass(sla.level)}`}>
           {sla.label}
         </span>
-        <span className="text-xs text-kd-fg-subtle">age {ageLabel(tk.createdAt as unknown as string)}</span>
+        <span className="text-xs text-kd-fg-subtle">
+          age {ageLabel(tk.createdAt as unknown as string)}
+        </span>
         <span className="text-xs text-kd-fg-subtle">
           targets: response {pb.firstResponseMin}m · resolution {pb.resolutionMin}m
         </span>
-        {tk.assignedToName && <span className="text-xs text-kd-fg-muted">→ {tk.assignedToName}</span>}
+        {tk.assignedToName && (
+          <span className="text-xs text-kd-fg-muted">→ {tk.assignedToName}</span>
+        )}
       </div>
 
       <p className="mb-4 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">{tk.body}</p>
@@ -191,7 +198,11 @@ export default function TicketTriagePage({ params }: { params: Promise<{ id: str
               size="sm"
               onClick={async () => {
                 setError(null);
-                const r = await resolve({ id: tk.id, resolutionCode: code, note: note || undefined });
+                const r = await resolve({
+                  id: tk.id,
+                  resolutionCode: code,
+                  note: note || undefined,
+                });
                 if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Resolve failed");
                 else refresh();
               }}

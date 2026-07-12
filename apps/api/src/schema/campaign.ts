@@ -233,7 +233,10 @@ builder.mutationFields((t) => ({
         });
       }
       const r = await prisma.restaurant.findUniqueOrThrow({ where: { id: args.restaurantId } });
-      const dailyRateMinor = await dailyRateFor(r.tier, args.type as "featured_slot" | "deal_badge");
+      const dailyRateMinor = await dailyRateFor(
+        r.tier,
+        args.type as "featured_slot" | "deal_badge",
+      );
       return prisma.campaign.create({
         ...query,
         data: {
@@ -331,7 +334,13 @@ builder.mutationFields((t) => ({
           rejectedReason: null,
         },
       });
-      await audit(ctx.userId, "campaign.approve", args.id, { status: c.status }, { status: "active" });
+      await audit(
+        ctx.userId,
+        "campaign.approve",
+        args.id,
+        { status: c.status },
+        { status: "active" },
+      );
       return updated;
     },
   }),
@@ -379,13 +388,10 @@ builder.mutationFields((t) => ({
     resolve: async (_root, _args, ctx) => {
       const results = await accrueCampaigns();
       for (const r of results.filter((x) => x.amountMinor > 0 || x.ended)) {
-        await audit(
-          ctx.userId,
-          r.ended ? "campaign.end" : "campaign.accrue",
-          r.campaignId,
-          null,
-          { amountMinor: r.amountMinor, ended: r.ended },
-        );
+        await audit(ctx.userId, r.ended ? "campaign.end" : "campaign.accrue", r.campaignId, null, {
+          amountMinor: r.amountMinor,
+          ended: r.ended,
+        });
       }
       return results;
     },

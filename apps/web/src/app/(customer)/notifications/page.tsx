@@ -83,9 +83,7 @@ export default function NotificationsPage() {
           const inner = (
             <div
               className={`flex gap-3 rounded-xl border p-4 ${
-                n.read
-                  ? "border-kd-border bg-kd-surface"
-                  : "border-kd-primary/40 bg-kd-primary/5"
+                n.read ? "border-kd-border bg-kd-surface" : "border-kd-primary/40 bg-kd-primary/5"
               }`}
             >
               <div className="mt-0.5 text-kd-fg-subtle">

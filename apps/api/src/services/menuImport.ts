@@ -56,9 +56,12 @@ export async function parseMenuCsvAsset(userId: string, assetId: string): Promis
       extensions: { code: "not_found" },
     });
   if (asset.status !== "finalized")
-    throw new GraphQLError("This file hasn't finished uploading yet. Please try again in a moment.", {
-      extensions: { code: "invalid_state" },
-    });
+    throw new GraphQLError(
+      "This file hasn't finished uploading yet. Please try again in a moment.",
+      {
+        extensions: { code: "invalid_state" },
+      },
+    );
 
   const path = resolve(join(resolve(env.storageDir), asset.objectKey));
   const text = await readFile(path, "utf8");

@@ -669,7 +669,11 @@ export default function MenuManagerPage() {
                           disabled={uploadingPhoto}
                           onClick={() => document.getElementById("menu-item-photo")?.click()}
                         >
-                          {uploadingPhoto ? "Uploading…" : editingItem.imageUrl ? "Replace" : "Upload"}
+                          {uploadingPhoto
+                            ? "Uploading…"
+                            : editingItem.imageUrl
+                              ? "Replace"
+                              : "Upload"}
                         </Button>
                         {editingItem.imageUrl && (
                           <Button

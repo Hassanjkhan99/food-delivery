@@ -521,10 +521,9 @@ builder.mutationFields((t) => ({
       const toStatus = args.toStatus as OrderStatus;
       // #30: capture the order before the move so a cancellation policy row can be
       // written against its pre-transition state (grace-window/timing intact).
-      const before =
-        ["rejected", "auto_expired", "cancelled"].includes(toStatus)
-          ? await prisma.order.findUnique({ where: { id: args.id } })
-          : null;
+      const before = ["rejected", "auto_expired", "cancelled"].includes(toStatus)
+        ? await prisma.order.findUnique({ where: { id: args.id } })
+        : null;
       // transition() audits admin/system actors internally.
       const updated = await transition(
         args.id,
@@ -701,7 +700,9 @@ builder.mutationFields((t) => ({
         featuredSlotDailyRateSmallMinor:
           args.featuredSlotDailyRateSmallMinor ?? current?.featuredSlotDailyRateSmallMinor ?? 0,
         featuredSlotDailyRateChainMinor:
-          args.featuredSlotDailyRateChainMinor ?? current?.featuredSlotDailyRateChainMinor ?? 50_000,
+          args.featuredSlotDailyRateChainMinor ??
+          current?.featuredSlotDailyRateChainMinor ??
+          50_000,
       };
       const created = await prisma.feeConfig.create({
         data: { ...data, createdByUserId: ctx.userId },

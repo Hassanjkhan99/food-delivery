@@ -18,9 +18,12 @@ import { builder } from "./builder.js";
 const ALLOWED_AMOUNTS_MINOR = [50_000, 100_000, 200_000, 500_000];
 
 const purchaseSchema = z.object({
-  amountMinor: z.number().int().refine((v) => ALLOWED_AMOUNTS_MINOR.includes(v), {
-    message: "Unsupported gift card amount",
-  }),
+  amountMinor: z
+    .number()
+    .int()
+    .refine((v) => ALLOWED_AMOUNTS_MINOR.includes(v), {
+      message: "Unsupported gift card amount",
+    }),
   paymentMethodId: z.string().min(1),
   recipientEmail: z.string().email().max(200).optional(),
   message: z.string().max(280).optional(),
@@ -164,14 +167,20 @@ builder.mutationFields((t) => ({
           });
         }
         if (existing.status === "pending") {
-          throw new GraphQLError("Your previous gift card purchase is still being processed. Please wait a moment.", {
-            extensions: { code: "purchase_in_progress" },
-          });
+          throw new GraphQLError(
+            "Your previous gift card purchase is still being processed. Please wait a moment.",
+            {
+              extensions: { code: "purchase_in_progress" },
+            },
+          );
         }
         if (existing.status === "void") {
-          throw new GraphQLError("Your previous gift card purchase didn't go through. Please start a new one.", {
-            extensions: { code: "purchase_failed" },
-          });
+          throw new GraphQLError(
+            "Your previous gift card purchase didn't go through. Please start a new one.",
+            {
+              extensions: { code: "purchase_failed" },
+            },
+          );
         }
         return prisma.giftCard.findUniqueOrThrow({ ...query, where: { id: existing.id } });
       }
@@ -206,9 +215,12 @@ builder.mutationFields((t) => ({
       } catch (e) {
         // Concurrent duplicate won the unique(idempotencyKey) race.
         if ((e as { code?: string }).code === "P2002") {
-          throw new GraphQLError("Your previous gift card purchase is still being processed. Please wait a moment.", {
-            extensions: { code: "purchase_in_progress" },
-          });
+          throw new GraphQLError(
+            "Your previous gift card purchase is still being processed. Please wait a moment.",
+            {
+              extensions: { code: "purchase_in_progress" },
+            },
+          );
         }
         throw e;
       }
@@ -256,9 +268,12 @@ builder.mutationFields((t) => ({
             extensions: { code: "gift_card_not_found" },
           });
         if (card.status !== "active" || card.balanceMinor <= 0) {
-          throw new GraphQLError("This gift card has already been redeemed or is no longer active.", {
-            extensions: { code: "gift_card_not_redeemable" },
-          });
+          throw new GraphQLError(
+            "This gift card has already been redeemed or is no longer active.",
+            {
+              extensions: { code: "gift_card_not_redeemable" },
+            },
+          );
         }
 
         // Atomic claim: only the row still `active` transitions to redeemed.
@@ -272,9 +287,12 @@ builder.mutationFields((t) => ({
           },
         });
         if (claimed.count !== 1) {
-          throw new GraphQLError("This gift card has already been redeemed or is no longer active.", {
-            extensions: { code: "gift_card_not_redeemable" },
-          });
+          throw new GraphQLError(
+            "This gift card has already been redeemed or is no longer active.",
+            {
+              extensions: { code: "gift_card_not_redeemable" },
+            },
+          );
         }
 
         await tx.walletTransaction.create({

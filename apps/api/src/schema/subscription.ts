@@ -75,9 +75,9 @@ builder.subscriptionType({
       authScopes: { rider: true },
       subscribe: (_root, _args, ctx) => {
         if (!ctx.riderId)
-        throw new GraphQLError("You need a rider profile to receive job offers.", {
-          extensions: { code: "forbidden" },
-        });
+          throw new GraphQLError("You need a rider profile to receive job offers.", {
+            extensions: { code: "forbidden" },
+          });
         return pubsub.subscribe("riderJobs", ctx.riderId);
       },
       resolve: (payload: OrderChangedPayload) => payload,
@@ -89,9 +89,9 @@ builder.subscriptionType({
       authScopes: { loggedIn: true },
       subscribe: (_root, _args, ctx) => {
         if (!ctx.userId)
-        throw new GraphQLError("Please sign in to receive notifications.", {
-          extensions: { code: "unauthenticated" },
-        });
+          throw new GraphQLError("Please sign in to receive notifications.", {
+            extensions: { code: "unauthenticated" },
+          });
         return pubsub.subscribe("userNotifications", ctx.userId);
       },
       resolve: (payload: NotificationPayload) => payload,

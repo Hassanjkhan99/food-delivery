@@ -94,10 +94,7 @@ export default function RiderEarningsPage() {
 
         <div className="space-y-2">
           {rows.map((r) => (
-            <div
-              key={r.taskId}
-              className="rounded-2xl border border-kd-border bg-kd-surface p-4"
-            >
+            <div key={r.taskId} className="rounded-2xl border border-kd-border bg-kd-surface p-4">
               <div className="flex items-center justify-between">
                 <span className="font-semibold">{r.orderCode}</span>
                 <span className="font-semibold text-kd-success">{formatRs(r.netMinor)}</span>
@@ -130,8 +127,8 @@ export default function RiderEarningsPage() {
 
       <p className="text-xs text-kd-fg-subtle">
         Net = delivery fee + tip. COD is cash you collected at the door on the restaurant&rsquo;s
-        behalf — it is not part of your earnings. Restaurant riders are settled by their
-        restaurant; independent-rider payouts are estimated on the Payouts tab.
+        behalf — it is not part of your earnings. Restaurant riders are settled by their restaurant;
+        independent-rider payouts are estimated on the Payouts tab.
       </p>
     </main>
   );

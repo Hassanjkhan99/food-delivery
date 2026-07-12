@@ -1,12 +1,6 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
-import {
-  BROWSE_SORTS,
-  type BrowseSort,
-  haversineMeters,
-  median,
-  priceBandFor,
-} from "@fd/shared";
+import { BROWSE_SORTS, type BrowseSort, haversineMeters, median, priceBandFor } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
 import { branchOpenNow } from "../services/branchHours.js";
@@ -628,9 +622,7 @@ builder.queryFields((t) => ({
         list.push(row.priceMinor);
         pricesByMenu.set(mid, list);
       }
-      const popularityByBranch = new Map(
-        popularityRows.map((r) => [r.branchId, r._count._all]),
-      );
+      const popularityByBranch = new Map(popularityRows.map((r) => [r.branchId, r._count._all]));
 
       // Open-now is evaluated per branch (loads structured hours) only when needed for
       // the filter or the eta/relevance sort — but it's cheap and we need it for the
@@ -642,7 +634,7 @@ builder.queryFields((t) => ({
       );
 
       let hits = inRange.map(({ branch, distanceM }, i) => {
-        const prices = branch.activeMenuId ? pricesByMenu.get(branch.activeMenuId) ?? [] : [];
+        const prices = branch.activeMenuId ? (pricesByMenu.get(branch.activeMenuId) ?? []) : [];
         const rating = ratingByRestaurant.get(branch.restaurantId) ?? null;
         return {
           branchId: branch.id,

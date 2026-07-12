@@ -40,8 +40,8 @@ export default function AdminCancellationsPage() {
     <main className="max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">Cancellation &amp; refund policy</h1>
       <p className="mb-4 text-sm text-kd-fg-muted">
-        Matrix-driven engine (#30). The cancel/reject/auto-expire flows evaluate these rules to
-        set the fee, fault party, and refund. Post-acceptance edge cases still route to the refund
+        Matrix-driven engine (#30). The cancel/reject/auto-expire flows evaluate these rules to set
+        the fee, fault party, and refund. Post-acceptance edge cases still route to the refund
         workbench for review.
       </p>
 
@@ -77,8 +77,14 @@ export default function AdminCancellationsPage() {
         <div className="mt-5 rounded-2xl border border-kd-border bg-kd-surface p-4 text-sm">
           <p className="mb-3 font-semibold">Live configuration</p>
           <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <ConfigRow label="Grace window (post-accept, free)" value={`${config.gracePeriodSeconds / 60} min`} />
-            <ConfigRow label="Post-accept fee (after grace)" value={formatRs(config.postAcceptFeeMinor)} />
+            <ConfigRow
+              label="Grace window (post-accept, free)"
+              value={`${config.gracePeriodSeconds / 60} min`}
+            />
+            <ConfigRow
+              label="Post-accept fee (after grace)"
+              value={formatRs(config.postAcceptFeeMinor)}
+            />
             <ConfigRow
               label="After-prepared fee"
               value={`${config.afterPreparedSubtotalBps / 100}% of subtotal`}

@@ -57,9 +57,7 @@ function Stars({ n }: { n: number }) {
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={`h-4 w-4 ${
-            i <= n ? "fill-kd-warning text-kd-warning" : "text-kd-fg-subtle"
-          }`}
+          className={`h-4 w-4 ${i <= n ? "fill-kd-warning text-kd-warning" : "text-kd-fg-subtle"}`}
         />
       ))}
     </span>
@@ -78,13 +76,7 @@ function relativeDate(value: string): string {
   return `${Math.floor(days / 365)} yr ago`;
 }
 
-function ReviewCard({
-  review,
-  onSaved,
-}: {
-  review: ReviewRow;
-  onSaved: () => void;
-}) {
+function ReviewCard({ review, onSaved }: { review: ReviewRow; onSaved: () => void }) {
   const [, respond] = useMutation(RespondMutation);
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(review.response?.body ?? "");
@@ -210,13 +202,9 @@ export default function ConsoleReviewsPage() {
     requestPolicy: "cache-and-network",
   });
 
-  const reviews = useMemo(
-    () => (data?.restaurantReviews as ReviewRow[] | undefined) ?? [],
-    [data],
-  );
+  const reviews = useMemo(() => (data?.restaurantReviews as ReviewRow[] | undefined) ?? [], [data]);
 
-  if (!restaurant)
-    return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
+  if (!restaurant) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   const page = Math.floor(offset / PAGE) + 1;
   const hasPrev = offset > 0;

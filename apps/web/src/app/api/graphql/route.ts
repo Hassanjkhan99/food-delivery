@@ -20,6 +20,9 @@ const { handleRequest } = createYoga({
   maskedErrors: { maskError },
   // Same-origin now, so CORS is unnecessary; hand Yoga the Fetch Response Next expects.
   fetchAPI: { Response },
+  // useCookies is a Yoga/whatwg-node plugin factory, not a React hook — the `use` prefix
+  // just trips the react-hooks lint rule here.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   plugins: [useCookies()],
 });
 

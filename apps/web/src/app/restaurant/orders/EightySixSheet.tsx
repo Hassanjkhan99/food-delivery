@@ -38,9 +38,7 @@ export function EightySixSheet({
         <DialogHeader>
           <DialogTitle>86 an item</DialogTitle>
           <DialogDescription>
-            {picked
-              ? `How long is "${picked.name}" unavailable?`
-              : "Which item ran out?"}
+            {picked ? `How long is "${picked.name}" unavailable?` : "Which item ran out?"}
           </DialogDescription>
         </DialogHeader>
         {!picked ? (

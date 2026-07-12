@@ -177,11 +177,7 @@ export function AssignmentAlert({
             </Button>
           </div>
         ) : (
-          <Button
-            className="h-14 w-full text-base"
-            disabled={busy}
-            onClick={onAcknowledge}
-          >
+          <Button className="h-14 w-full text-base" disabled={busy} onClick={onAcknowledge}>
             {busy ? "…" : "Got it — start job"}
           </Button>
         )}

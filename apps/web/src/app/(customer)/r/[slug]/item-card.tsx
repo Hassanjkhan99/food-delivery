@@ -94,7 +94,9 @@ export function ItemCard({
         {!compact && item.description && (
           <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{item.description}</p>
         )}
-        {!item.isAvailable && <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>}
+        {!item.isAvailable && (
+          <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>
+        )}
       </div>
       <span className="flex shrink-0 flex-col items-end">
         {off != null && (

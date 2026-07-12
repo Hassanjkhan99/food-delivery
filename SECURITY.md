@@ -24,12 +24,12 @@ Please include:
 
 ## Our commitment (target SLA)
 
-| Stage | Target |
-| ----- | ------ |
-| Acknowledge receipt | within **2 business days** |
-| Triage + severity assessment | within **5 business days** |
-| Fix or mitigation for critical issues | within **30 days** of triage |
-| Coordinated disclosure | after a fix ships, by mutual agreement |
+| Stage                                 | Target                                 |
+| ------------------------------------- | -------------------------------------- |
+| Acknowledge receipt                   | within **2 business days**             |
+| Triage + severity assessment          | within **5 business days**             |
+| Fix or mitigation for critical issues | within **30 days** of triage           |
+| Coordinated disclosure                | after a fix ships, by mutual agreement |
 
 These are goals, not contractual guarantees, and may flex for complex issues. We will
 keep you updated on progress.

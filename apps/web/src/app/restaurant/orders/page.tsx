@@ -144,7 +144,9 @@ function Countdown({ deadline }: { deadline: string }) {
   }, [deadline]);
   const s = Math.floor(left / 1000);
   return (
-    <span className={`font-mono text-sm font-bold ${s < 30 ? "text-kd-danger" : "text-kd-warning"}`}>
+    <span
+      className={`font-mono text-sm font-bold ${s < 30 ? "text-kd-danger" : "text-kd-warning"}`}
+    >
       {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
     </span>
   );
@@ -199,7 +201,12 @@ function toTicket(order: BoardOrder): TicketOrder {
     cutleryRequested: order.cutleryRequested,
     items: order.items.map((it) => {
       const snap = it.menuSnapshotJson as ItemSnap | null;
-      return { qty: it.qty, name: snap?.name ?? "Item", modifiers: snap?.modifiers ?? null, notes: it.notes };
+      return {
+        qty: it.qty,
+        name: snap?.name ?? "Item",
+        modifiers: snap?.modifiers ?? null,
+        notes: it.notes,
+      };
     }),
   };
 }

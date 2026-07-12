@@ -21,9 +21,12 @@ export async function requestOtp(rawPhone: string): Promise<{ devCode: string | 
     where: { phone, createdAt: { gte: new Date(Date.now() - 60 * 60_000) } },
   });
   if (recent >= OTP_RATE_LIMIT_PER_HOUR) {
-    throw new GraphQLError("You've requested too many codes for this number. Please try again later.", {
-      extensions: { code: "otp_rate_limited" },
-    });
+    throw new GraphQLError(
+      "You've requested too many codes for this number. Please try again later.",
+      {
+        extensions: { code: "otp_rate_limited" },
+      },
+    );
   }
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");

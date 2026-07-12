@@ -284,7 +284,16 @@ export default function CheckoutPage() {
       if (res.data?.quoteCart) setQuotedMode(fulfillmentMode);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount, voucherCode, fulfillmentMode, redeemPoints]);
+  }, [
+    branchId,
+    cartLines,
+    deliveryLat,
+    deliveryLng,
+    tipAmount,
+    voucherCode,
+    fulfillmentMode,
+    redeemPoints,
+  ]);
 
   if (!branchId || lines.length === 0) {
     return (
@@ -362,7 +371,10 @@ export default function CheckoutPage() {
     const order = result.data?.placeOrder;
     if (result.error || !order) {
       const parsed = parseGqlError(result.error, "Could not place the order");
-      if (parsed.code === "UNAUTHENTICATED" || /not authenticated|not authorized/i.test(parsed.message)) {
+      if (
+        parsed.code === "UNAUTHENTICATED" ||
+        /not authenticated|not authorized/i.test(parsed.message)
+      ) {
         router.push("/login?next=/checkout");
         return;
       }

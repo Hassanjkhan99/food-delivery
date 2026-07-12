@@ -108,9 +108,7 @@ export function AddressSelector({ onSelect, onNew, selectedId }: Props) {
                 )}
               </span>
               <span className="mt-0.5 block truncate text-xs text-kd-fg-muted">{a.text}</span>
-              {a.phone && (
-                <span className="mt-0.5 block text-xs text-kd-fg-subtle">{a.phone}</span>
-              )}
+              {a.phone && <span className="mt-0.5 block text-xs text-kd-fg-subtle">{a.phone}</span>}
             </span>
           </Label>
         ))}

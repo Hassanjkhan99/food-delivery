@@ -200,9 +200,8 @@ export function scoreCandidate(cand: RiderCandidate, ctx: ScoreContext): ScoredC
     if (!ctx.policy || !ctx.policy.sharingEnabled) return reject("source restaurant not sharing");
     if (ctx.policy.vetoActive) return reject("lender veto active");
     // Trust-gated active-job ceiling: only trusted riders may hold >1 committed job.
-    const jobCeiling = cand.rider.trustScore >= (ctx.policy.codTrustThreshold ?? 70)
-      ? maxActive
-      : 1;
+    const jobCeiling =
+      cand.rider.trustScore >= (ctx.policy.codTrustThreshold ?? 70) ? maxActive : 1;
     if (cand.activeJobCount >= jobCeiling) return reject("rider at active-job ceiling");
     if (pickupMeters > maxPickup) return reject("pickup beyond distance ceiling");
     if (incrementalDelaySec > maxDelay) return reject("incremental delay over cap");
@@ -257,10 +256,7 @@ export type DispatchSplit = {
 };
 
 /** Deterministic split math (no I/O) — used by the ledger hook and testable on its own. */
-export function computeDispatchSplit(
-  deliveryFeeMinor: number,
-  hasLender: boolean,
-): DispatchSplit {
+export function computeDispatchSplit(deliveryFeeMinor: number, hasLender: boolean): DispatchSplit {
   const bps = (v: number) => Math.round((deliveryFeeMinor * v) / 10_000);
   return {
     platformDispatchFeeMinor: bps(SPLIT_BPS.platformDispatchFee),

@@ -295,11 +295,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <div className="flex items-center gap-2">
                   <p
                     className={`text-sm font-medium ${
-                      current
-                        ? "text-kd-primary"
-                        : done
-                          ? "text-kd-fg"
-                          : "text-kd-fg-subtle"
+                      current ? "text-kd-primary" : done ? "text-kd-fg" : "text-kd-fg-subtle"
                     }`}
                   >
                     {stage.label}
@@ -310,9 +306,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                     </Badge>
                   )}
                 </div>
-                {time && (
-                  <p className="text-xs text-kd-fg-muted">{formatStageTime(time)}</p>
-                )}
+                {time && <p className="text-xs text-kd-fg-muted">{formatStageTime(time)}</p>}
                 {current && stage.key === "placed" && (
                   <p className="text-xs text-kd-fg-muted">Waiting for the restaurant to accept</p>
                 )}
@@ -479,7 +473,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         {order.loyaltyDiscountMinor > 0 && (
           <div className="flex justify-between text-kd-success">
-            <span>Loyalty discount ({order.loyaltyPointsRedeemed.toLocaleString("en-PK")} pts)</span>
+            <span>
+              Loyalty discount ({order.loyaltyPointsRedeemed.toLocaleString("en-PK")} pts)
+            </span>
             <span>-{formatRs(order.loyaltyDiscountMinor)}</span>
           </div>
         )}

@@ -148,7 +148,9 @@ export default function OrderHelpPage({ params }: { params: Promise<{ orderId: s
       orderId: order.id,
       category: cat.value,
       note: note.trim() || undefined,
-      items: cat.needsItems ? [...selectedItems].map((orderItemId) => ({ orderItemId })) : undefined,
+      items: cat.needsItems
+        ? [...selectedItems].map((orderItemId) => ({ orderItemId }))
+        : undefined,
     });
     if (res.error) {
       setError(res.error.graphQLErrors[0]?.message ?? "Something went wrong. Please try again.");
@@ -328,12 +330,10 @@ export default function OrderHelpPage({ params }: { params: Promise<{ orderId: s
 
           {error && <p className="mt-2 text-xs text-kd-danger">{error}</p>}
 
-          <Button
-            className="mt-4 w-full"
-            disabled={createState.fetching}
-            onClick={submit}
-          >
-            {cat.autoRefund && selectedItems.size > 0 ? "Submit & request refund" : "Submit request"}
+          <Button className="mt-4 w-full" disabled={createState.fetching} onClick={submit}>
+            {cat.autoRefund && selectedItems.size > 0
+              ? "Submit & request refund"
+              : "Submit request"}
           </Button>
         </div>
       )}

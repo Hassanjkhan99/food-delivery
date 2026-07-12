@@ -113,9 +113,12 @@ export async function placeOrder(
       extensions: { code: "outside_delivery_radius" },
     });
   if (!quote.meetsMinimum)
-    throw new GraphQLError("Your order is below this restaurant's minimum. Please add a bit more.", {
-      extensions: { code: "below_minimum_order" },
-    });
+    throw new GraphQLError(
+      "Your order is below this restaurant's minimum. Please add a bit more.",
+      {
+        extensions: { code: "below_minimum_order" },
+      },
+    );
   // A supplied voucher must validate for real at placement — never silently dropped.
   // quoteCart swallows voucher errors for the preview; here we re-throw so checkout fails
   // loudly rather than charging the customer the undiscounted total.
@@ -301,9 +304,12 @@ export async function placeOrder(
         );
         // Guard against a race between the preview discount and the committed one.
         if (applied.discountMinor !== quote.discountMinor) {
-          throw new GraphQLError("Your voucher discount changed — please review your order and try again.", {
-            extensions: { code: "voucher_value_changed" },
-          });
+          throw new GraphQLError(
+            "Your voucher discount changed — please review your order and try again.",
+            {
+              extensions: { code: "voucher_value_changed" },
+            },
+          );
         }
         await recordRedemption(tx, applied, created.id, customerId);
       }
@@ -441,7 +447,8 @@ export async function transition(
     where: { id: orderId },
     include: { deliveryTask: true, payment: true, branch: true },
   });
-  if (!order) throw new GraphQLError("We couldn't find that order.", { extensions: { code: "not_found" } });
+  if (!order)
+    throw new GraphQLError("We couldn't find that order.", { extensions: { code: "not_found" } });
 
   const from = order.status as OrderStatus;
   if (opts.expectedFrom && from !== opts.expectedFrom) {

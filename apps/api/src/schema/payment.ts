@@ -6,10 +6,7 @@ import { mockProvider } from "../services/payments/mockProvider.js";
 import { builder } from "./builder.js";
 
 const cardInputSchema = z.object({
-  number: z
-    .string()
-    .min(13, "Enter a valid card number.")
-    .max(23, "Enter a valid card number."),
+  number: z.string().min(13, "Enter a valid card number.").max(23, "Enter a valid card number."),
   expMonth: z
     .number()
     .int()

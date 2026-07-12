@@ -57,7 +57,8 @@ export function useOrderAlarm(count: number, label: string) {
   useEffect(() => {
     if (!active || !soundOn || typeof window === "undefined") return;
     const AudioCtor =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtor) return;
     let ctx = ctxRef.current;
     if (!ctx) {
@@ -124,7 +125,11 @@ export function useOrderAlarm(count: number, label: string) {
   function toggleSound() {
     // First enable also serves as the user gesture that unlocks the AudioContext.
     setSoundOn((s) => !s);
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
       void Notification.requestPermission().catch(() => {});
     }
   }

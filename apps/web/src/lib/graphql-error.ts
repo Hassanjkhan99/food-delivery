@@ -22,11 +22,14 @@ type GqlErrorLike = {
   } | null;
 };
 
-type CombinedErrorLike = {
-  graphQLErrors?: GqlErrorLike[];
-  networkError?: Error | null;
-  message?: string;
-} | null | undefined;
+type CombinedErrorLike =
+  | {
+      graphQLErrors?: GqlErrorLike[];
+      networkError?: Error | null;
+      message?: string;
+    }
+  | null
+  | undefined;
 
 /**
  * Normalize a urql error into `{ message, code, fieldErrors }`.
@@ -58,7 +61,10 @@ export function parseGqlError(
 }
 
 /** Message for a specific field path, if the backend flagged it. */
-export function fieldError(parsed: ParsedGqlError | null | undefined, path: string): string | undefined {
+export function fieldError(
+  parsed: ParsedGqlError | null | undefined,
+  path: string,
+): string | undefined {
   return parsed?.fieldErrors?.[path];
 }
 

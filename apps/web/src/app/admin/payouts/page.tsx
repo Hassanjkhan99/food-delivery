@@ -57,7 +57,9 @@ export default function AdminPayoutsPage() {
         </Button>
       </div>
 
-      {message && <p className="mb-4 rounded-lg bg-kd-surface-muted px-3 py-2 text-sm">{message}</p>}
+      {message && (
+        <p className="mb-4 rounded-lg bg-kd-surface-muted px-3 py-2 text-sm">{message}</p>
+      )}
 
       <div className="space-y-2">
         {candidates.map((c) => (

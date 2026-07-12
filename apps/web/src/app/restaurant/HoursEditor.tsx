@@ -46,7 +46,15 @@ const SetBranchHoursMutation = graphql(`
   }
 `);
 
-const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+const DAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
 
 // A single editable day row. `null` open/close = closed that day.
 type DayRow = { open: string; close: string; closed: boolean };
@@ -144,9 +152,7 @@ export function HoursEditor({ branchId }: { branchId: string }) {
         </div>
         {branch && (
           <Badge variant={branch.isOpenNow ? "default" : "secondary"}>
-            {branch.isOpenNow
-              ? "Open now"
-              : (branch.opensAtLabel ?? "Closed")}
+            {branch.isOpenNow ? "Open now" : (branch.opensAtLabel ?? "Closed")}
           </Badge>
         )}
       </div>
@@ -198,7 +204,8 @@ export function HoursEditor({ branchId }: { branchId: string }) {
 
       <div className="mt-4 flex items-center justify-between">
         <p className="text-xs text-kd-fg-subtle">
-          An overnight service (e.g. 20:00 to 02:00) is fine — just set closing earlier than opening.
+          An overnight service (e.g. 20:00 to 02:00) is fine — just set closing earlier than
+          opening.
         </p>
         <Button size="sm" onClick={onSave} disabled={saveState.fetching}>
           {saveState.fetching ? "Saving…" : "Save hours"}

@@ -56,8 +56,7 @@ const CANCEL_REASON_LABELS: Record<string, string> = {
 
 function cancelReasonLabel(code: string): string {
   return (
-    CANCEL_REASON_LABELS[code] ??
-    code.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+    CANCEL_REASON_LABELS[code] ?? code.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
   );
 }
 
@@ -102,8 +101,7 @@ export default function AnalyticsPage() {
     requestPolicy: "cache-and-network",
   });
 
-  if (!restaurant || !branch)
-    return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
+  if (!restaurant || !branch) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   const a = data?.restaurantAnalytics;
 
@@ -238,9 +236,7 @@ export default function AnalyticsPage() {
                       {it.name}
                       <span className="ml-2 text-xs text-kd-fg-subtle">×{it.qty}</span>
                     </span>
-                    <span className="ml-3 shrink-0 font-semibold">
-                      {formatRs(it.revenueMinor)}
-                    </span>
+                    <span className="ml-3 shrink-0 font-semibold">{formatRs(it.revenueMinor)}</span>
                   </div>
                 ))}
               </div>

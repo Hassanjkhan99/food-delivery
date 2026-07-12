@@ -165,10 +165,7 @@ export default function MembershipPage() {
           const freeThreshold = plan.freeDeliveryThresholdMinor;
           const discountPct = Math.round(plan.deliveryDiscountBps / 100);
           return (
-            <div
-              key={plan.id}
-              className="rounded-xl border border-kd-border bg-kd-surface p-4"
-            >
+            <div key={plan.id} className="rounded-xl border border-kd-border bg-kd-surface p-4">
               <div className="flex items-baseline justify-between">
                 <p className="text-lg font-semibold">{plan.name}</p>
                 <p className="text-lg font-bold text-kd-primary">

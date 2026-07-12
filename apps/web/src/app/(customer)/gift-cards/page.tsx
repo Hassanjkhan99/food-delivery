@@ -112,7 +112,9 @@ export default function GiftCardsPage() {
       setRedeemError(friendlyMessage(parseGqlError(result.error, "We couldn't redeem that code.")));
       return;
     }
-    setRedeemMsg(`Redeemed! Wallet balance is now ${formatRs(result.data!.redeemGiftCard.balanceMinor)}.`);
+    setRedeemMsg(
+      `Redeemed! Wallet balance is now ${formatRs(result.data!.redeemGiftCard.balanceMinor)}.`,
+    );
     setRedeemCode("");
     refetch({ requestPolicy: "network-only" });
   }

@@ -49,7 +49,9 @@ export function campaignWindowContains(
  * Each campaign is its own transaction so one bad row can't roll back the batch; a Rs 0
  * rate (small-business / deal_badge) still stamps lastAccruedAt but posts no ledger legs.
  */
-export async function accrueCampaigns(now = new Date()): Promise<
+export async function accrueCampaigns(
+  now = new Date(),
+): Promise<
   Array<{ campaignId: string; restaurantId: string; amountMinor: number; ended: boolean }>
 > {
   const today = utcDayStart(now);

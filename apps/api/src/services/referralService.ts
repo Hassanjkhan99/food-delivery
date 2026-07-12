@@ -124,25 +124,21 @@ export async function onRefereeOrderDelivered(
   if (claimed.count === 0) return;
 
   const total = referral.refereeRewardMinor + referral.referrerRewardMinor;
-  const txId = await postLedgerTx(
-    tx,
-    `Referral reward ${referral.code}`,
-    [
-      { code: "platform:referral_expense", ownerType: "platform", debit: total },
-      {
-        code: `customer:${referral.refereeId}:prepaid`,
-        ownerType: "customer",
-        ownerId: referral.refereeId,
-        credit: referral.refereeRewardMinor,
-      },
-      {
-        code: `customer:${referral.referrerId}:prepaid`,
-        ownerType: "customer",
-        ownerId: referral.referrerId,
-        credit: referral.referrerRewardMinor,
-      },
-    ],
-  );
+  const txId = await postLedgerTx(tx, `Referral reward ${referral.code}`, [
+    { code: "platform:referral_expense", ownerType: "platform", debit: total },
+    {
+      code: `customer:${referral.refereeId}:prepaid`,
+      ownerType: "customer",
+      ownerId: referral.refereeId,
+      credit: referral.refereeRewardMinor,
+    },
+    {
+      code: `customer:${referral.referrerId}:prepaid`,
+      ownerType: "customer",
+      ownerId: referral.referrerId,
+      credit: referral.referrerRewardMinor,
+    },
+  ]);
 
   // Record the balanced ledger tx on the now-qualified referral.
   await tx.referral.update({

@@ -162,9 +162,7 @@ builder.queryFields((t) => ({
           ...(args.status
             ? { status: args.status as never }
             : { status: { in: ["open", "in_progress"] } }),
-          ...(args.category
-            ? { category: { in: ticketCategoryFilterValues(args.category) } }
-            : {}),
+          ...(args.category ? { category: { in: ticketCategoryFilterValues(args.category) } } : {}),
         },
         orderBy: { createdAt: "asc" },
         take: Math.min(args.take ?? 100, 200),
@@ -196,9 +194,7 @@ builder.mutationFields((t) => ({
           extensions: { code: "invalid_state" },
         });
       }
-      const agent = ctx.userId
-        ? await prisma.user.findUnique({ where: { id: ctx.userId } })
-        : null;
+      const agent = ctx.userId ? await prisma.user.findUnique({ where: { id: ctx.userId } }) : null;
       const updated = await prisma.supportTicket.update({
         ...query,
         where: { id: args.id },

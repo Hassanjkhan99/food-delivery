@@ -147,8 +147,8 @@ export default function BrandingPage() {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <span>
                 Low contrast: your text on the background is{" "}
-                <strong>{textBgRatio!.toFixed(1)}:1</strong>, below the recommended{" "}
-                {WCAG_AA_NORMAL}:1. Customers with low vision may struggle to read your menu.
+                <strong>{textBgRatio!.toFixed(1)}:1</strong>, below the recommended {WCAG_AA_NORMAL}
+                :1. Customers with low vision may struggle to read your menu.
               </span>
             </p>
           )}

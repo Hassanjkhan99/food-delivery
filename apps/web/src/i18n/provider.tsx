@@ -17,13 +17,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import {
-  DEFAULT_LOCALE,
-  isLocale,
-  isRtl,
-  translate,
-  type Locale,
-} from "./dictionaries";
+import { DEFAULT_LOCALE, isLocale, isRtl, translate, type Locale } from "./dictionaries";
 
 const STORAGE_KEY = "kd.locale";
 

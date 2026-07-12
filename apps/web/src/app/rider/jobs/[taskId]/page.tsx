@@ -239,48 +239,48 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
       {["assigned", "arrived_pickup"].includes(job.status) &&
         job.pickupPinRequired &&
         !job.pickupVerifiedAt && (
-        <div className="space-y-3 rounded-2xl border border-kd-border bg-kd-surface p-4">
-          <div>
-            <label className="text-sm font-medium">Pickup PIN</label>
-            <p className="mt-1 text-kd-caption text-kd-fg-muted">
-              Ask the restaurant for the 4-digit PIN on this order and enter it to confirm
-              you&apos;re collecting the right one.
-            </p>
+          <div className="space-y-3 rounded-2xl border border-kd-border bg-kd-surface p-4">
+            <div>
+              <label className="text-sm font-medium">Pickup PIN</label>
+              <p className="mt-1 text-kd-caption text-kd-fg-muted">
+                Ask the restaurant for the 4-digit PIN on this order and enter it to confirm
+                you&apos;re collecting the right one.
+              </p>
+            </div>
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+              placeholder="••••"
+              className="text-center text-lg tracking-[0.5em]"
+            />
+            <Button
+              className="w-full"
+              disabled={verifyPinState.fetching || pinInput.length === 0}
+              onClick={async () => {
+                setError(null);
+                const r = await verifyPin({ taskId, pin: pinInput });
+                if (r.error) {
+                  setError(r.error.graphQLErrors[0]?.message ?? "Incorrect PIN");
+                  return;
+                }
+                setPinInput("");
+                refresh();
+              }}
+            >
+              Verify PIN
+            </Button>
           </div>
-          <Input
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
-            placeholder="••••"
-            className="text-center text-lg tracking-[0.5em]"
-          />
-          <Button
-            className="w-full"
-            disabled={verifyPinState.fetching || pinInput.length === 0}
-            onClick={async () => {
-              setError(null);
-              const r = await verifyPin({ taskId, pin: pinInput });
-              if (r.error) {
-                setError(r.error.graphQLErrors[0]?.message ?? "Incorrect PIN");
-                return;
-              }
-              setPinInput("");
-              refresh();
-            }}
-          >
-            Verify PIN
-          </Button>
-        </div>
-      )}
+        )}
 
       {["assigned", "arrived_pickup"].includes(job.status) &&
         job.pickupPinRequired &&
         job.pickupVerifiedAt && (
-        <p className="rounded-lg bg-kd-success-soft p-2 text-center text-sm font-medium text-kd-success">
-          Pickup PIN verified
-        </p>
-      )}
+          <p className="rounded-lg bg-kd-success-soft p-2 text-center text-sm font-medium text-kd-success">
+            Pickup PIN verified
+          </p>
+        )}
 
       {job.status === "picked_up" && (
         <div className="space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4">

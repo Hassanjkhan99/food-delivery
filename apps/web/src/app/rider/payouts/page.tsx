@@ -55,10 +55,7 @@ export default function RiderPayoutsPage() {
 
       <div className="space-y-2">
         {payouts.map((p) => (
-          <div
-            key={p.periodKey}
-            className="rounded-2xl border border-kd-border bg-kd-surface p-4"
-          >
+          <div key={p.periodKey} className="rounded-2xl border border-kd-border bg-kd-surface p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-semibold">
@@ -82,9 +79,8 @@ export default function RiderPayoutsPage() {
       </div>
 
       <p className="text-xs text-kd-fg-subtle">
-        Payouts are grouped by week (Mon–Sun) and estimated from your delivered jobs
-        (delivery fee + tip). Actual settlement is handled by your restaurant or the
-        platform and may differ.
+        Payouts are grouped by week (Mon–Sun) and estimated from your delivered jobs (delivery fee +
+        tip). Actual settlement is handled by your restaurant or the platform and may differ.
       </p>
     </main>
   );

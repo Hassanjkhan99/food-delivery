@@ -236,11 +236,7 @@ const PKT_OFFSET_MS = 5 * 60 * 60_000;
 // Start of the current PKT calendar day as a UTC instant.
 function pktStartOfToday(): Date {
   const nowPkt = new Date(Date.now() + PKT_OFFSET_MS);
-  const midnightPkt = Date.UTC(
-    nowPkt.getUTCFullYear(),
-    nowPkt.getUTCMonth(),
-    nowPkt.getUTCDate(),
-  );
+  const midnightPkt = Date.UTC(nowPkt.getUTCFullYear(), nowPkt.getUTCMonth(), nowPkt.getUTCDate());
   return new Date(midnightPkt - PKT_OFFSET_MS);
 }
 
@@ -770,9 +766,12 @@ builder.mutationFields((t) => ({
       // Cash-variance auto-disable (#25): a rider flagged for repeated short remittance
       // can't be handed COD orders until an admin clears them.
       if (order.paymentMode === "cod" && rider.codDisabled) {
-        throw new GraphQLError("This rider is currently blocked from taking cash-on-delivery orders.", {
-          extensions: { code: "rider_cod_disabled" },
-        });
+        throw new GraphQLError(
+          "This rider is currently blocked from taking cash-on-delivery orders.",
+          {
+            extensions: { code: "rider_cod_disabled" },
+          },
+        );
       }
       await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
@@ -840,9 +839,12 @@ builder.mutationFields((t) => ({
       }
       // Fraud control (#25): a rider whose COD was auto-disabled can't take cash orders.
       if (order.paymentMode === "cod" && rider.codDisabled) {
-        throw new GraphQLError("This rider is currently blocked from taking cash-on-delivery orders.", {
-          extensions: { code: "rider_cod_disabled" },
-        });
+        throw new GraphQLError(
+          "This rider is currently blocked from taking cash-on-delivery orders.",
+          {
+            extensions: { code: "rider_cod_disabled" },
+          },
+        );
       }
       // Don't clobber a task that has already progressed (assigned/picked up/etc.);
       // only a fresh (unassigned) or re-offerable (offered) task may be (re)offered. (#21)
@@ -1073,9 +1075,8 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Please enter a price greater than zero.", {
           extensions: { code: "validation_error" },
         });
-      const compareAt = args.compareAtPriceMinor && args.compareAtPriceMinor > 0
-        ? args.compareAtPriceMinor
-        : null;
+      const compareAt =
+        args.compareAtPriceMinor && args.compareAtPriceMinor > 0 ? args.compareAtPriceMinor : null;
       if (compareAt != null && compareAt <= args.priceMinor) {
         throw new GraphQLError("The 'was' price must be higher than the current price.", {
           extensions: { code: "validation_error" },

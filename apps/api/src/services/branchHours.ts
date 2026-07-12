@@ -6,7 +6,12 @@
 // "no hours" as always-open. This keeps un-migrated (seed) branches working unchanged while
 // new branches use the structured model.
 import { prisma, type Prisma } from "@fd/db";
-import { branchHoursOpenState, branchOpenState, type BranchHours, type OpenState } from "@fd/shared";
+import {
+  branchHoursOpenState,
+  branchOpenState,
+  type BranchHours,
+  type OpenState,
+} from "@fd/shared";
 
 type BranchLike = { id: string; hoursJson: Prisma.JsonValue };
 

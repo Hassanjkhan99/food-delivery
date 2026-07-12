@@ -173,7 +173,10 @@ export default function WalletPage() {
         </div>
       </section>
 
-      <Link href="/account" className={buttonVariants({ variant: "outline", className: "mt-6 w-full" })}>
+      <Link
+        href="/account"
+        className={buttonVariants({ variant: "outline", className: "mt-6 w-full" })}
+      >
         Back to account
       </Link>
     </main>

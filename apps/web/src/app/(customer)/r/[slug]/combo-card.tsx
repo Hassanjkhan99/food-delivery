@@ -19,7 +19,11 @@ export type ComboForCard = {
   originalPriceMinor: number;
   isAvailable: boolean;
   imageUrl?: string | null;
-  items: { id: string; qty: number; menuItem: { id: string; name: string; isAvailable: boolean } }[];
+  items: {
+    id: string;
+    qty: number;
+    menuItem: { id: string; name: string; isAvailable: boolean };
+  }[];
 };
 
 /** Whole-number % off for a combo vs its a-la-carte total, or null if no saving. */
@@ -52,7 +56,9 @@ export function ComboCard({
 
   return (
     <div className="relative">
-      <div className={`flex w-full items-start justify-between gap-3 rounded-2xl p-4 text-sm ${cardClasses(cardStyle)} ${disabled ? "opacity-50" : ""}`}>
+      <div
+        className={`flex w-full items-start justify-between gap-3 rounded-2xl p-4 text-sm ${cardClasses(cardStyle)} ${disabled ? "opacity-50" : ""}`}
+      >
         <ItemImage
           url={combo.imageUrl}
           name={combo.name}

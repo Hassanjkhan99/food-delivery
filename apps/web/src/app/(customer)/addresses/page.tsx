@@ -173,12 +173,7 @@ export default function AddressesPage() {
               <Button variant="ghost" size="sm" title="Edit" onClick={() => startEdit(a)}>
                 <Pencil className="h-4 w-4 text-kd-fg-subtle" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Delete"
-                onClick={() => onDelete(a.id)}
-              >
+              <Button variant="ghost" size="sm" title="Delete" onClick={() => onDelete(a.id)}>
                 <Trash2 className="h-4 w-4 text-kd-fg-subtle" />
               </Button>
             </div>
@@ -272,7 +267,10 @@ export default function AddressesPage() {
         </form>
       )}
 
-      <Link href="/checkout" className={buttonVariants({ variant: "ghost", className: "mt-4 w-full" })}>
+      <Link
+        href="/checkout"
+        className={buttonVariants({ variant: "ghost", className: "mt-4 w-full" })}
+      >
         Back to checkout
       </Link>
     </main>

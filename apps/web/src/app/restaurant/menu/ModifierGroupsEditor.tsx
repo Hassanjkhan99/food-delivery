@@ -46,7 +46,12 @@ const UpsertOptionMutation = graphql(`
     $name: String!
     $priceDeltaMinor: Int!
   ) {
-    upsertModifierOption(groupId: $groupId, id: $id, name: $name, priceDeltaMinor: $priceDeltaMinor) {
+    upsertModifierOption(
+      groupId: $groupId
+      id: $id
+      name: $name
+      priceDeltaMinor: $priceDeltaMinor
+    ) {
       id
     }
   }
@@ -223,9 +228,7 @@ export function ModifierGroupsEditor({
                 <span className="min-w-0">
                   {opt.name}
                   {opt.priceDeltaMinor !== 0 && (
-                    <span className="ml-1 text-kd-fg-muted">
-                      +{formatRs(opt.priceDeltaMinor)}
-                    </span>
+                    <span className="ml-1 text-kd-fg-muted">+{formatRs(opt.priceDeltaMinor)}</span>
                   )}
                 </span>
                 <div className="flex shrink-0 items-center gap-1">
@@ -260,9 +263,7 @@ export function ModifierGroupsEditor({
             <Button
               size="xs"
               variant="ghost"
-              onClick={() =>
-                setOptionDraft({ groupId: group.id, name: "", priceRs: "0" })
-              }
+              onClick={() => setOptionDraft({ groupId: group.id, name: "", priceRs: "0" })}
             >
               + Add option
             </Button>

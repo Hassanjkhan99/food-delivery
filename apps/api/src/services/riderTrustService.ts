@@ -9,10 +9,7 @@
 //   • cash variance         — COD-mismatch incident tickets
 //   • incident count        — rider "incident" delivery events
 import { prisma } from "@fd/db";
-import {
-  RIDER_TRUST_START,
-  RIDER_TRUST_SHARED_MIN,
-} from "@fd/shared";
+import { RIDER_TRUST_START, RIDER_TRUST_SHARED_MIN } from "@fd/shared";
 
 export type TrustBreakdown = {
   riderId: string;
@@ -97,8 +94,7 @@ export async function computeTrustScore(riderId: string): Promise<TrustBreakdown
 export async function recomputeTrustScore(riderId: string): Promise<TrustBreakdown> {
   const breakdown = await computeTrustScore(riderId);
   const rider = await prisma.rider.findUnique({ where: { id: riderId } });
-  const autoDisableShared =
-    rider?.sharedModeEnabled && breakdown.score < RIDER_TRUST_SHARED_MIN;
+  const autoDisableShared = rider?.sharedModeEnabled && breakdown.score < RIDER_TRUST_SHARED_MIN;
   await prisma.rider.update({
     where: { id: riderId },
     data: {
