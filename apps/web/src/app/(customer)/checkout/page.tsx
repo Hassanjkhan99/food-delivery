@@ -298,6 +298,7 @@ export default function CheckoutPage() {
   if (!branchId || lines.length === 0) {
     return (
       <main className="py-16 text-center">
+        <h1 className="mb-2 text-2xl font-bold">Checkout</h1>
         <p className="text-kd-fg-muted">Nothing to check out.</p>
         <Link href="/" className={buttonVariants({ className: "mt-4" })}>
           Browse restaurants

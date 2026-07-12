@@ -28,6 +28,6 @@ test.describe("restaurant UI", () => {
   test("restaurant dashboard is reachable", async ({ page }) => {
     await loginAs(page, "ownerKarachiBiryani");
     await page.goto("/restaurant");
-    await expect(page.locator("main, body")).not.toBeEmpty();
+    await expect(page.locator("main")).not.toBeEmpty();
   });
 });

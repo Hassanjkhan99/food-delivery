@@ -32,6 +32,6 @@ test.describe("restaurant theme page", () => {
     await expect(page.locator("h1")).toBeVisible();
 
     // Sanity: no unhandled error blanked the page.
-    await expect(page.locator("main, body")).not.toBeEmpty();
+    await expect(page.locator("main")).not.toBeEmpty();
   });
 });
