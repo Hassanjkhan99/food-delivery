@@ -738,7 +738,7 @@ export default function CheckoutPage() {
               </div>
               {quote.membershipApplied && quote.membershipDeliverySavingMinor > 0 && (
                 <p className="text-xs font-medium text-kd-success">
-                  Herald Pro saved you {formatRs(quote.membershipDeliverySavingMinor)} on delivery
+                  KhaanaDo Pro saved you {formatRs(quote.membershipDeliverySavingMinor)} on delivery
                 </p>
               )}
               <div className="flex justify-between">

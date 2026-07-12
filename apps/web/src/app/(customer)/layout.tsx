@@ -35,7 +35,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     <div className="flex min-h-screen flex-col bg-kd-bg">
       <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
         <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-12">
-          <Link href="/" className="text-kd-fg" aria-label="Herald home">
+          <Link href="/" className="text-kd-fg" aria-label="KhaanaDo home">
             <Wordmark />
           </Link>
           <nav className="flex items-center gap-4 text-[17px] font-medium sm:gap-6 lg:gap-8">

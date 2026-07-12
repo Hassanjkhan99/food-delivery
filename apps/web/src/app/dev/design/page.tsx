@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export const metadata = { title: "Design System — Herald" };
+export const metadata = { title: "Design System — KhaanaDo" };
 
 const SWATCHES: { name: string; className: string; note?: string }[] = [
   { name: "primary (red / CTA)", className: "bg-kd-primary text-white" },
@@ -43,7 +43,7 @@ export default function DesignKitPage() {
       <header className="space-y-2">
         <Badge variant="accent">Design System</Badge>
         <h1 className="text-kd-display font-extrabold tracking-tight text-kd-fg">
-          Herald — Fast-food identity
+          KhaanaDo — Fast-food identity
         </h1>
         <p className="max-w-2xl text-kd-body text-kd-fg-muted">
           Cream-dominant surfaces, warm charcoal text, red for primary actions, golden yellow

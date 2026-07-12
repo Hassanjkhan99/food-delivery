@@ -35,7 +35,7 @@ export function Wordmark({ className }: { className?: string }) {
         style={{ fontFamily: "var(--font-herald), Georgia, serif" }}
         className="font-semibold tracking-[0.12em]"
       >
-        Herald
+        KhaanaDo
       </span>
     </span>
   );
