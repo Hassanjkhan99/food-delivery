@@ -63,6 +63,9 @@ jobs:
       NEXT_PUBLIC_API_URL: http://localhost:4000/graphql
       E2E_WEB_URL: http://localhost:3000
       E2E_API_URL: http://localhost:4000/graphql
+      # e2e reuses seeded phone numbers across many tests; lift the per-number OTP
+      # ceiling so login-heavy specs don't trip the production default (5/hour).
+      OTP_RATE_LIMIT_PER_HOUR: "1000"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

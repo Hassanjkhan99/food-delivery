@@ -20,7 +20,10 @@ export async function requestOtp(rawPhone: string): Promise<{ devCode: string | 
   const recent = await prisma.otpCode.count({
     where: { phone, createdAt: { gte: new Date(Date.now() - 60 * 60_000) } },
   });
-  if (recent >= OTP_RATE_LIMIT_PER_HOUR) {
+  // Env-overridable so CI/e2e (which reuse seeded phones across many tests) can raise the
+  // ceiling without weakening the production default (unset in prod → uses the constant).
+  const rateLimitPerHour = Number(process.env.OTP_RATE_LIMIT_PER_HOUR) || OTP_RATE_LIMIT_PER_HOUR;
+  if (recent >= rateLimitPerHour) {
     throw new GraphQLError(
       "You've requested too many codes for this number. Please try again later.",
       {
