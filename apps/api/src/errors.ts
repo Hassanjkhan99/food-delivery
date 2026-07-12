@@ -158,5 +158,17 @@ export const maskError = (error: unknown, message: string): Error => {
     // Other Prisma errors: fall through to default masking (never leak internals).
   }
 
-  return defaultMaskError(error, message) as Error;
+  // Let Yoga apply its default masking. When it produces the generic internal-error mask
+  // (i.e. the throw wasn't an already-client-safe GraphQLError), swap the terse
+  // "Unexpected error." copy for something a customer can actually read. Real client-safe
+  // GraphQLErrors pass through untouched (their message !== the mask message).
+  const masked = defaultMaskError(error, message) as GraphQLError;
+  if (masked.message === message) {
+    // Override ONLY the message — keep Yoga's masked-error metadata intact. In particular
+    // extensions.unexpected is what makes Yoga serve internal failures as HTTP 500;
+    // returning a fresh GraphQLError would drop it (and the `path`), so the failure would
+    // look client-safe and return HTTP 200, breaking status-based monitoring/retries.
+    masked.message = "Something went wrong on our end. Please try again in a moment.";
+  }
+  return masked;
 };
