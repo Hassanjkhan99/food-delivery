@@ -197,7 +197,11 @@ export async function placeOrder(
       // pre-txn check-then-insert wasn't atomic (Codex P2 / follow-up #115).
       let pickupCode: string | null = null;
       if (isPickup) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${quote.branchId})::bigint)`;
+        // $executeRaw, not $queryRaw: pg_advisory_xact_lock() returns void, which the
+        // Prisma 7 pg driver adapter cannot deserialize as a result column ("Failed to
+        // deserialize column of type 'void'"). $executeRaw runs the statement without
+        // decoding a row set — same primitive db/index.ts uses for set_config/SET LOCAL.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${quote.branchId})::bigint)`;
         pickupCode = await generateUniquePickupCode(tx, quote.branchId);
       }
 
