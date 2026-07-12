@@ -5,6 +5,7 @@ import { prisma } from "@fd/db";
 import type { Role } from "@fd/shared";
 import { SESSION_COOKIE_NAME } from "@fd/shared";
 import { verifySessionToken } from "./auth/session.js";
+import { logger } from "./logger.js";
 
 export type RoleBinding = { role: Role; restaurantId: string | null };
 
@@ -34,24 +35,32 @@ export async function buildContext(initial: YogaInitialContext): Promise<AppCont
   const claims = await verifySessionToken(cookie.value);
   if (!claims) return base;
 
-  const session = await prisma.session.findFirst({
-    where: { id: claims.sid, revokedAt: null, expiresAt: { gte: new Date() } },
-    include: { user: { include: { roles: true, rider: true } } },
-  });
-  if (!session) return base;
+  try {
+    const session = await prisma.session.findFirst({
+      where: { id: claims.sid, revokedAt: null, expiresAt: { gte: new Date() } },
+      include: { user: { include: { roles: true, rider: true } } },
+    });
+    if (!session) return base;
 
-  const roles: RoleBinding[] = session.user.roles.map((r) => ({
-    role: r.role as Role,
-    restaurantId: r.restaurantId,
-  }));
+    const roles: RoleBinding[] = session.user.roles.map((r) => ({
+      role: r.role as Role,
+      restaurantId: r.restaurantId,
+    }));
 
-  return {
-    ...initial,
-    userId: session.userId,
-    sessionId: session.id,
-    roles,
-    restaurantIds: [...new Set(roles.flatMap((r) => (r.restaurantId ? [r.restaurantId] : [])))],
-    riderId: session.user.rider?.id ?? null,
-    hasRole: (role: Role) => roles.some((r) => r.role === role),
-  } as AppContext;
+    return {
+      ...initial,
+      userId: session.userId,
+      sessionId: session.id,
+      roles,
+      restaurantIds: [...new Set(roles.flatMap((r) => (r.restaurantId ? [r.restaurantId] : [])))],
+      riderId: session.user.rider?.id ?? null,
+      hasRole: (role: Role) => roles.some((r) => r.role === role),
+    } as AppContext;
+  } catch (err) {
+    // Fail-closed: a DB error while loading the session must not turn an otherwise-valid
+    // request (e.g. an anonymous requestOtp) into a 500. Degrade to anonymous context and
+    // let scope-auth reject any resolver that actually needs a signed-in user.
+    logger.error({ err }, "buildContext: session lookup failed; degrading to anonymous");
+    return base;
+  }
 }
