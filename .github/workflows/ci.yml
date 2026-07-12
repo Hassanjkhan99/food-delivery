@@ -81,12 +81,20 @@ jobs:
             sleep 2
           done
           echo "postgres did not become ready" >&2; exit 1
-      # Build + start web/api in production mode is heavier; dev servers are fine
-      # for smoke and boot fast. Started detached; Playwright waits on the URL.
-      - run: pnpm dev &
-      - name: Wait for web
-        run: npx --yes wait-on http://localhost:3000 http://localhost:4000/graphql --timeout 120000
-      - run: pnpm --filter @fd/e2e e2e
+      # Start the web (:3000) and api (:4000) dev servers DIRECTLY — not via `turbo dev`,
+      # whose interactive UI doesn't stream reliably under non-TTY CI and could leave the
+      # api task unstarted (which is exactly why the old `pnpm dev &` timed out on :4000).
+      # Background both, wait for BOTH ports, then run Playwright — all in one step so the
+      # servers stay alive for its whole duration. Dump the server logs if a port never
+      # binds so the failure is diagnosable instead of a bare timeout.
+      - name: Run E2E (start servers + Playwright)
+        run: |
+          pnpm --filter @fd/api dev > /tmp/api.log 2>&1 &
+          pnpm --filter @fd/web dev > /tmp/web.log 2>&1 &
+          npx --yes wait-on http://localhost:3000 http://localhost:4000/graphql --timeout 180000 \
+            || { echo "::group::api.log"; cat /tmp/api.log; echo "::endgroup::"; \
+                 echo "::group::web.log"; cat /tmp/web.log; echo "::endgroup::"; exit 1; }
+          pnpm --filter @fd/e2e e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
