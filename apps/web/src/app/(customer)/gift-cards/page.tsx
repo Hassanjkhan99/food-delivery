@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "urql";
 import { Gift, Wallet } from "lucide-react";
 import { formatRs } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
+import { parseGqlError, friendlyMessage } from "@/lib/graphql-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,7 +94,7 @@ export default function GiftCardsPage() {
       },
     });
     if (result.error) {
-      setBuyError(result.error.graphQLErrors[0]?.message ?? "Could not buy gift card");
+      setBuyError(friendlyMessage(parseGqlError(result.error, "We couldn't buy that gift card.")));
       return;
     }
     setLastCode(result.data?.purchaseGiftCard.code ?? null);
@@ -108,7 +109,7 @@ export default function GiftCardsPage() {
     setRedeemMsg(null);
     const result = await redeem({ code: redeemCode.trim() });
     if (result.error) {
-      setRedeemError(result.error.graphQLErrors[0]?.message ?? "Could not redeem");
+      setRedeemError(friendlyMessage(parseGqlError(result.error, "We couldn't redeem that code.")));
       return;
     }
     setRedeemMsg(`Redeemed! Wallet balance is now ${formatRs(result.data!.redeemGiftCard.balanceMinor)}.`);

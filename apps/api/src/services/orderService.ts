@@ -82,7 +82,9 @@ async function generateUniquePickupCode(
   }
   // 40 checked attempts across ~900k codes only exhaust if a single branch has an absurd
   // number of simultaneously-active pickups — fail loudly rather than risk a collision.
-  throw new GraphQLError("Could not allocate a unique pickup code, please retry");
+  throw new GraphQLError("We couldn't set up your pickup code just now. Please try again.", {
+    extensions: { code: "pickup_code_allocation_failed" },
+  });
 }
 
 export async function placeOrder(
@@ -93,7 +95,10 @@ export async function placeOrder(
   // Idempotent replay: same key returns the same order (owner-verified).
   const existing = await prisma.order.findUnique({ where: { idempotencyKey } });
   if (existing) {
-    if (existing.customerId !== customerId) throw new GraphQLError("Idempotency key conflict");
+    if (existing.customerId !== customerId)
+      throw new GraphQLError("This looks like a duplicate request — please try again.", {
+        extensions: { code: "idempotency_key_conflict" },
+      });
     return existing;
   }
 
@@ -103,8 +108,14 @@ export async function placeOrder(
 
   // Pickup skips the radius check entirely (quoteCart already forces inRadius=true). (#54)
   const quote = await quoteCart(input, customerId);
-  if (!quote.inRadius) throw new GraphQLError("Delivery address is outside the delivery radius");
-  if (!quote.meetsMinimum) throw new GraphQLError("Order is below the restaurant's minimum");
+  if (!quote.inRadius)
+    throw new GraphQLError("Sorry, this restaurant doesn't deliver to that address.", {
+      extensions: { code: "outside_delivery_radius" },
+    });
+  if (!quote.meetsMinimum)
+    throw new GraphQLError("Your order is below this restaurant's minimum. Please add a bit more.", {
+      extensions: { code: "below_minimum_order" },
+    });
   // A supplied voucher must validate for real at placement — never silently dropped.
   // quoteCart swallows voucher errors for the preview; here we re-throw so checkout fails
   // loudly rather than charging the customer the undiscounted total.
@@ -120,7 +131,9 @@ export async function placeOrder(
   // "New" lane until then is the follow-up that makes scheduling fully functional.
   const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null;
   if (scheduledFor && scheduledFor.getTime() <= Date.now()) {
-    throw new GraphQLError("Scheduled time must be in the future");
+    throw new GraphQLError("Please choose a scheduled time in the future.", {
+      extensions: { code: "scheduled_time_in_past" },
+    });
   }
 
   // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
@@ -129,7 +142,10 @@ export async function placeOrder(
   // model (#19) and falls back to the legacy hoursJson. Uses a stable error code the
   // client maps to a friendly "closed" message.
   const branch = await prisma.branch.findUnique({ where: { id: quote.branchId } });
-  if (!branch) throw new GraphQLError("Restaurant not available");
+  if (!branch)
+    throw new GraphQLError("This restaurant could not be found.", {
+      extensions: { code: "branch_not_found" },
+    });
   const openNow = (await branchOpenNow(branch)).isOpen;
   if (!branch.isAcceptingOrders || !openNow) {
     throw new GraphQLError("This restaurant is currently closed", {
@@ -140,11 +156,17 @@ export async function placeOrder(
   // Card orders charge at placement (Foodpanda-style): validate the saved method first.
   let cardToken: string | null = null;
   if (input.paymentMode === "card") {
-    if (!input.paymentMethodId) throw new GraphQLError("Select a saved card");
+    if (!input.paymentMethodId)
+      throw new GraphQLError("Please select a saved card to pay with.", {
+        extensions: { code: "payment_method_required" },
+      });
     const method = await prisma.paymentMethod.findUnique({
       where: { id: input.paymentMethodId },
     });
-    if (!method || method.userId !== customerId) throw new GraphQLError("Card not found");
+    if (!method || method.userId !== customerId)
+      throw new GraphQLError("We couldn't find that saved card.", {
+        extensions: { code: "payment_method_not_found" },
+      });
     cardToken = method.providerToken;
   }
 
@@ -279,7 +301,9 @@ export async function placeOrder(
         );
         // Guard against a race between the preview discount and the committed one.
         if (applied.discountMinor !== quote.discountMinor) {
-          throw new GraphQLError("Voucher value changed — please review your order");
+          throw new GraphQLError("Your voucher discount changed — please review your order and try again.", {
+            extensions: { code: "voucher_value_changed" },
+          });
         }
         await recordRedemption(tx, applied, created.id, customerId);
       }
@@ -352,7 +376,12 @@ export async function placeOrder(
           // on an order that never succeeded. No-op when nothing was redeemed.
           await onOrderReversalLoyalty(tx, order, "cancelled");
         });
-        throw new GraphQLError(result.declineReason);
+        // Surface the issuer's own reason — it's the most useful, human message for a
+        // decline (e.g. "Card declined by issuer"). Falls back to generic copy if absent.
+        throw new GraphQLError(
+          result.declineReason || "Your card was declined. Please try another card.",
+          { extensions: { code: "card_declined", declineReason: result.declineReason } },
+        );
       }
       const chargedOrder = await prisma.$transaction(async (tx) => {
         await tx.payment.updateMany({
@@ -412,11 +441,13 @@ export async function transition(
     where: { id: orderId },
     include: { deliveryTask: true, payment: true, branch: true },
   });
-  if (!order) throw new GraphQLError("Order not found");
+  if (!order) throw new GraphQLError("We couldn't find that order.", { extensions: { code: "not_found" } });
 
   const from = order.status as OrderStatus;
   if (opts.expectedFrom && from !== opts.expectedFrom) {
-    throw new GraphQLError(`Order is no longer '${opts.expectedFrom}'`);
+    throw new GraphQLError("This order has already moved on — please refresh and try again.", {
+      extensions: { code: "order_status_changed" },
+    });
   }
   assertTransition(from, to, actor.role);
 
@@ -431,7 +462,10 @@ export async function transition(
         ...(timestampField ? { [timestampField]: new Date() } : {}),
       },
     });
-    if (res.count === 0) throw new GraphQLError("Order changed — refresh and retry");
+    if (res.count === 0)
+      throw new GraphQLError("This order has already moved on — please refresh and try again.", {
+        extensions: { code: "order_status_changed" },
+      });
 
     await tx.orderEvent.create({
       data: {

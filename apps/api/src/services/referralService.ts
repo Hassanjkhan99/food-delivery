@@ -46,7 +46,9 @@ export async function getOrCreateReferralCode(userId: string): Promise<string> {
       throw e;
     }
   }
-  throw new GraphQLError("Could not generate a referral code — please retry");
+  throw new GraphQLError("We couldn't generate your referral code just now. Please try again.", {
+    extensions: { code: "conflict" },
+  });
 }
 
 /**
@@ -57,16 +59,27 @@ export async function getOrCreateReferralCode(userId: string): Promise<string> {
 export async function applyReferralCode(userId: string, rawCode: string) {
   const code = rawCode.trim().toUpperCase();
   const owner = await prisma.referralCode.findUnique({ where: { code } });
-  if (!owner) throw new GraphQLError("That referral code is not valid");
-  if (owner.userId === userId) throw new GraphQLError("You can't use your own referral code");
+  if (!owner)
+    throw new GraphQLError("That referral code isn't valid.", {
+      extensions: { code: "validation_error" },
+    });
+  if (owner.userId === userId)
+    throw new GraphQLError("You can't use your own referral code.", {
+      extensions: { code: "validation_error" },
+    });
 
   const already = await prisma.referral.findUnique({ where: { refereeId: userId } });
-  if (already) throw new GraphQLError("A referral code has already been applied to your account");
+  if (already)
+    throw new GraphQLError("A referral code has already been applied to your account.", {
+      extensions: { code: "conflict" },
+    });
 
   // First-order-only qualification: a code can't be applied once you've ordered.
   const priorOrders = await prisma.order.count({ where: { customerId: userId } });
   if (priorOrders > 0) {
-    throw new GraphQLError("Referral codes only apply before your first order");
+    throw new GraphQLError("Referral codes can only be applied before your first order.", {
+      extensions: { code: "invalid_state" },
+    });
   }
 
   return prisma.referral.create({

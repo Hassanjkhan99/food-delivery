@@ -91,21 +91,34 @@ function validatePayload(input: {
   valueMinor?: number | null;
   restaurantId?: string | null;
 }) {
-  if (!VOUCHER_TYPES.includes(input.type as never)) throw new GraphQLError("Invalid voucher type");
+  if (!VOUCHER_TYPES.includes(input.type as never))
+    throw new GraphQLError("Please choose a valid voucher type.", {
+      extensions: { code: "validation_error" },
+    });
   if (input.scope && !VOUCHER_SCOPES.includes(input.scope as never)) {
-    throw new GraphQLError("Invalid voucher scope");
+    throw new GraphQLError("Please choose a valid voucher scope.", {
+      extensions: { code: "validation_error" },
+    });
   }
   if (input.funder && !VOUCHER_FUNDERS.includes(input.funder as never)) {
-    throw new GraphQLError("Invalid voucher funder");
+    throw new GraphQLError("Please choose a valid voucher funder.", {
+      extensions: { code: "validation_error" },
+    });
   }
   if (input.type === "percentage" && !(input.valueBps && input.valueBps > 0)) {
-    throw new GraphQLError("Percentage vouchers need a valueBps > 0");
+    throw new GraphQLError("Percentage vouchers need a discount value greater than zero.", {
+      extensions: { code: "validation_error" },
+    });
   }
   if (input.type === "fixed" && !(input.valueMinor && input.valueMinor > 0)) {
-    throw new GraphQLError("Fixed vouchers need a valueMinor > 0");
+    throw new GraphQLError("Fixed vouchers need a discount amount greater than zero.", {
+      extensions: { code: "validation_error" },
+    });
   }
   if ((input.scope ?? "platform") === "restaurant" && !input.restaurantId) {
-    throw new GraphQLError("Restaurant-scoped vouchers need a restaurantId");
+    throw new GraphQLError("Restaurant-scoped vouchers need a restaurant to be selected.", {
+      extensions: { code: "validation_error" },
+    });
   }
 }
 
@@ -168,9 +181,15 @@ builder.mutationFields((t) => ({
       const { input } = args;
       validatePayload(input);
       const code = normalizeVoucherCode(input.code);
-      if (!code) throw new GraphQLError("Code is required");
+      if (!code)
+        throw new GraphQLError("Please enter a voucher code.", {
+          extensions: { code: "validation_error" },
+        });
       const existing = await prisma.voucher.findUnique({ where: { code } });
-      if (existing) throw new GraphQLError("A voucher with that code already exists");
+      if (existing)
+        throw new GraphQLError("A voucher with that code already exists.", {
+          extensions: { code: "already_exists" },
+        });
 
       const created = await prisma.voucher.create({
         ...query,
@@ -208,7 +227,10 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       const before = await prisma.voucher.findUnique({ where: { id: args.id } });
-      if (!before) throw new GraphQLError("Voucher not found");
+      if (!before)
+        throw new GraphQLError("We couldn't find that voucher.", {
+          extensions: { code: "not_found" },
+        });
       const { input } = args;
       // Merge for validation so partial edits are checked against the resulting state.
       validatePayload({
@@ -222,7 +244,10 @@ builder.mutationFields((t) => ({
       const code = normalizeVoucherCode(input.code);
       if (code !== before.code) {
         const clash = await prisma.voucher.findUnique({ where: { code } });
-        if (clash) throw new GraphQLError("A voucher with that code already exists");
+        if (clash)
+          throw new GraphQLError("A voucher with that code already exists.", {
+            extensions: { code: "already_exists" },
+          });
       }
       const updated = await prisma.voucher.update({
         ...query,
@@ -264,7 +289,10 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }), active: t.arg.boolean({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       const before = await prisma.voucher.findUnique({ where: { id: args.id } });
-      if (!before) throw new GraphQLError("Voucher not found");
+      if (!before)
+        throw new GraphQLError("We couldn't find that voucher.", {
+          extensions: { code: "not_found" },
+        });
       const updated = await prisma.voucher.update({
         ...query,
         where: { id: args.id },

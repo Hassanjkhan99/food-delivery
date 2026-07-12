@@ -122,7 +122,10 @@ builder.mutationFields((t) => ({
         linkHref: args.linkHref ?? undefined,
         restaurantId: args.restaurantId ?? undefined,
       });
-      if (!parsed.success) throw new GraphQLError("Invalid promo blast input");
+      if (!parsed.success)
+        throw new GraphQLError("Please check the promo details and try again.", {
+          extensions: { code: "validation_error" },
+        });
       return blastPromo({
         segment: parsed.data.segment as PromoSegment,
         title: parsed.data.title,

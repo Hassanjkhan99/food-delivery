@@ -257,7 +257,10 @@ builder.queryFields((t) => ({
         where: { id: args.riderId },
         include: { verificationDocs: true },
       });
-      if (!rider) throw new GraphQLError("Rider not found");
+      if (!rider)
+        throw new GraphQLError("We couldn't find that rider.", {
+          extensions: { code: "not_found" },
+        });
       return missingRequirements(rider);
     },
   }),
@@ -398,7 +401,10 @@ builder.mutationFields((t) => ({
     authScopes: { admin: true },
     args: { id: t.arg.string({ required: true }), tier: t.arg.string({ required: true }) },
     resolve: async (_q, _root, args, ctx) => {
-      if (!["small_business", "chain"].includes(args.tier)) throw new GraphQLError("Invalid tier");
+      if (!["small_business", "chain"].includes(args.tier))
+        throw new GraphQLError("Please choose a valid restaurant tier.", {
+          extensions: { code: "validation_error" },
+        });
       const before = await prisma.restaurant.findUniqueOrThrow({ where: { id: args.id } });
       const updated = await prisma.restaurant.update({
         where: { id: args.id },
@@ -428,10 +434,16 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         include: { verificationDocs: true },
       });
-      if (!before) throw new GraphQLError("Rider not found");
+      if (!before)
+        throw new GraphQLError("We couldn't find that rider.", {
+          extensions: { code: "not_found" },
+        });
       const missing = missingRequirements(before);
       if (missing.length > 0) {
-        throw new GraphQLError(`Cannot verify — missing: ${missing.join(", ")}`);
+        throw new GraphQLError(
+          `This rider can't be verified yet. The following is still required: ${missing.join(", ")}.`,
+          { extensions: { code: "invalid_state" } },
+        );
       }
       const updated = await prisma.rider.update({
         where: { id: args.id },
@@ -540,8 +552,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         include: { order: { include: { payment: true, branch: true } } },
       });
-      if (!refund) throw new GraphQLError("Refund not found");
-      if (refund.status !== "refund_pending") throw new GraphQLError("Refund already decided");
+      if (!refund)
+        throw new GraphQLError("We couldn't find that refund.", {
+          extensions: { code: "not_found" },
+        });
+      if (refund.status !== "refund_pending")
+        throw new GraphQLError("This refund has already been decided.", {
+          extensions: { code: "invalid_state" },
+        });
 
       if (!args.approve) {
         const updated = await prisma.refund.update({
@@ -669,7 +687,10 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       for (const [k, v] of Object.entries(args)) {
-        if (v != null && (v < 0 || v > 100_000)) throw new GraphQLError(`${k} out of range`);
+        if (v != null && (v < 0 || v > 100_000))
+          throw new GraphQLError(`Please enter a value between 0 and 100,000 for ${k}.`, {
+            extensions: { code: "validation_error" },
+          });
       }
       const current = await prisma.feeConfig.findFirst({ orderBy: { createdAt: "desc" } });
       const data = {
@@ -755,10 +776,15 @@ builder.mutationFields((t) => ({
     resolve: async (_root, args, ctx) => {
       // Bound the credit so a mis-click can't mint an unlimited balance (Rs 1 – Rs 50,000).
       if (args.amountMinor < 100 || args.amountMinor > 5_000_000) {
-        throw new GraphQLError("Goodwill credit must be between Rs 1 and Rs 50,000");
+        throw new GraphQLError("Goodwill credit must be between Rs 1 and Rs 50,000.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const customer = await prisma.user.findUnique({ where: { id: args.customerId } });
-      if (!customer) throw new GraphQLError("Customer not found");
+      if (!customer)
+        throw new GraphQLError("We couldn't find that customer.", {
+          extensions: { code: "not_found" },
+        });
 
       const balance = await prisma.$transaction(async (tx) => {
         await onGoodwillCredit(

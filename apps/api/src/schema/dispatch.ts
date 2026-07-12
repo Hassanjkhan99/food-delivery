@@ -25,16 +25,16 @@ async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
     where: { id: orderId },
     include: { branch: true },
   });
-  if (!order) throw new GraphQLError("Order not found");
+  if (!order) throw new GraphQLError("We couldn't find that order.", { extensions: { code: "not_found" } });
   if (!ctx.restaurantIds.includes(order.branch.restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", { extensions: { code: "forbidden" } });
   }
   return order;
 }
 
 async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
   if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", { extensions: { code: "forbidden" } });
   }
 }
 
@@ -100,7 +100,7 @@ async function loadOrderForDispatch(orderId: string) {
     where: { id: orderId },
     include: { branch: true },
   });
-  if (!order) throw new GraphQLError("Order not found");
+  if (!order) throw new GraphQLError("We couldn't find that order.", { extensions: { code: "not_found" } });
   return order;
 }
 
@@ -346,9 +346,9 @@ builder.mutationFields((t) => ({
             data: { status: "offered", offeredAt: now, riderId: null },
           });
         } else if (existing.status !== "offered") {
-          throw new GraphQLError("Order's delivery is already committed to a rider");
+          throw new GraphQLError("This order's delivery is already assigned to a rider.", { extensions: { code: "conflict" } });
         }
-        if (!task) throw new GraphQLError("Failed to prepare delivery task");
+        if (!task) throw new GraphQLError("We couldn't set up this delivery. Please try again.", { extensions: { code: "invalid_state" } });
         // Supersede any still-pending offers for this task before re-offering.
         await tx.deliveryOffer.updateMany({
           where: { taskId: task.id, status: "pending" },
@@ -388,10 +388,10 @@ builder.mutationFields((t) => ({
         where: { id: args.offerId },
         include: { task: true },
       });
-      if (!offer) throw new GraphQLError("Offer not found");
-      if (offer.riderId !== ctx.riderId) throw new GraphQLError("Not your offer");
-      if (offer.status !== "pending") throw new GraphQLError("Offer is no longer available");
-      if (offer.expiresAt.getTime() <= Date.now()) throw new GraphQLError("Offer has expired");
+      if (!offer) throw new GraphQLError("We couldn't find that offer.", { extensions: { code: "not_found" } });
+      if (offer.riderId !== ctx.riderId) throw new GraphQLError("This offer isn't assigned to you.", { extensions: { code: "forbidden" } });
+      if (offer.status !== "pending") throw new GraphQLError("This offer is no longer available.", { extensions: { code: "conflict" } });
+      if (offer.expiresAt.getTime() <= Date.now()) throw new GraphQLError("This offer has expired.", { extensions: { code: "conflict" } });
 
       const now = new Date();
       await prisma.$transaction(async (tx) => {
@@ -407,14 +407,14 @@ builder.mutationFields((t) => ({
           },
         });
         if (alreadyCommitted > 0) {
-          throw new GraphQLError("You already have an active job and cannot take another");
+          throw new GraphQLError("You already have an active job, so you can't take another one right now.", { extensions: { code: "not_allowed" } });
         }
         // Lock the task to this rider ONLY if it is still open (offered + no rider committed).
         const locked = await tx.deliveryTask.updateMany({
           where: { id: offer.taskId, status: "offered", riderId: null },
           data: { status: "assigned", riderId: offer.riderId, acceptedAt: now, assignedAt: now },
         });
-        if (locked.count === 0) throw new GraphQLError("Task is no longer available");
+        if (locked.count === 0) throw new GraphQLError("This job has already been taken by another rider.", { extensions: { code: "conflict" } });
         // Accept THIS offer only if still pending AND unexpired — enforcing the TTL at the point
         // of locking closes the window where a request that started just before expiry lands here
         // after the offer has elapsed.
@@ -422,7 +422,7 @@ builder.mutationFields((t) => ({
           where: { id: offer.id, status: "pending", expiresAt: { gt: now } },
           data: { status: "accepted", respondedAt: now },
         });
-        if (won.count === 0) throw new GraphQLError("Offer is no longer available");
+        if (won.count === 0) throw new GraphQLError("This offer is no longer available.", { extensions: { code: "conflict" } });
         // Withdraw sibling pending offers for the same task.
         await tx.deliveryOffer.updateMany({
           where: { taskId: offer.taskId, status: "pending", id: { not: offer.id } },
@@ -459,7 +459,7 @@ builder.mutationFields((t) => ({
         where: { id: args.offerId, riderId: ctx.riderId!, status: "pending" },
         data: { status: "declined", respondedAt: new Date(), declineReason: args.reason ?? null },
       });
-      if (res.count === 0) throw new GraphQLError("Offer is no longer available");
+      if (res.count === 0) throw new GraphQLError("This offer is no longer available.", { extensions: { code: "conflict" } });
       return true;
     },
   }),
@@ -482,9 +482,9 @@ builder.mutationFields((t) => ({
         include: { rider: true },
       });
       if (!task || task.status !== "delivered") {
-        throw new GraphQLError("Order has no delivered task");
+        throw new GraphQLError("This order hasn't been delivered yet.", { extensions: { code: "invalid_state" } });
       }
-      if (!task.rider) throw new GraphQLError("Task has no rider");
+      if (!task.rider) throw new GraphQLError("This delivery doesn't have a rider assigned.", { extensions: { code: "invalid_state" } });
 
       const sourceRestaurantId = order.branch.restaurantId;
       const lenderRestaurantId =

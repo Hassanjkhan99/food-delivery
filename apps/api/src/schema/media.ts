@@ -10,9 +10,14 @@ import { builder } from "./builder.js";
 
 async function assertBranchMember(ctx: AppContext, branchId: string) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
-  if (!branch) throw new GraphQLError("Branch not found");
+  if (!branch)
+    throw new GraphQLError("We couldn't find that branch.", {
+      extensions: { code: "not_found" },
+    });
   if (!ctx.restaurantIds.includes(branch.restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
   }
   return branch;
 }
@@ -116,9 +121,15 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       await assertBranchMember(ctx, args.branchId);
-      if (!["photo", "pdf", "csv"].includes(args.kind)) throw new GraphQLError("Invalid kind");
+      if (!["photo", "pdf", "csv"].includes(args.kind))
+        throw new GraphQLError("Please choose a valid document type: photo, PDF, or CSV.", {
+          extensions: { code: "validation_error" },
+        });
       const asset = await prisma.mediaAsset.findUnique({ where: { id: args.assetId } });
-      if (!asset || asset.status !== "finalized") throw new GraphQLError("Asset not finalized");
+      if (!asset || asset.status !== "finalized")
+        throw new GraphQLError("Please finish uploading the file before continuing.", {
+          extensions: { code: "invalid_state" },
+        });
       return prisma.menuSourceDoc.create({
         data: { branchId: args.branchId, assetId: args.assetId, kind: args.kind as never },
       });
@@ -179,17 +190,26 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       const color = /^#[0-9a-fA-F]{6}$/;
       for (const c of [args.primaryColor, args.accentColor, args.backgroundColor, args.textColor]) {
-        if (c && !color.test(c)) throw new GraphQLError("Colors must be #rrggbb");
+        if (c && !color.test(c))
+          throw new GraphQLError("Please enter colors as a 6-digit hex code, like #ff5733.", {
+            extensions: { code: "validation_error" },
+          });
       }
       if (args.cardStyle && !["flat", "tilt3d", "glass"].includes(args.cardStyle)) {
-        throw new GraphQLError("Invalid card style");
+        throw new GraphQLError("Please choose a valid card style.", {
+          extensions: { code: "validation_error" },
+        });
       }
       if (args.heroEffect && !["none", "parallax", "depth"].includes(args.heroEffect)) {
-        throw new GraphQLError("Invalid hero effect");
+        throw new GraphQLError("Please choose a valid hero effect.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const data = {
         ...(args.primaryColor ? { primaryColor: args.primaryColor } : {}),
@@ -220,16 +240,27 @@ builder.mutationFields((t) => ({
       comment: t.arg.string({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      if (args.stars < 1 || args.stars > 5) throw new GraphQLError("Stars must be 1-5");
+      if (args.stars < 1 || args.stars > 5)
+        throw new GraphQLError("Please give a rating between 1 and 5 stars.", {
+          extensions: { code: "validation_error" },
+        });
       const order = await prisma.order.findUnique({
         where: { id: args.orderId },
         include: { branch: true },
       });
-      if (!order || order.customerId !== ctx.userId) throw new GraphQLError("Order not found");
+      if (!order || order.customerId !== ctx.userId)
+        throw new GraphQLError("We couldn't find that order.", {
+          extensions: { code: "not_found" },
+        });
       if (order.status !== "delivered")
-        throw new GraphQLError("Only delivered orders can be rated");
+        throw new GraphQLError("You can only rate an order once it has been delivered.", {
+          extensions: { code: "invalid_state" },
+        });
       const existing = await prisma.rating.findUnique({ where: { orderId: args.orderId } });
-      if (existing) throw new GraphQLError("Order already rated");
+      if (existing)
+        throw new GraphQLError("You've already rated this order.", {
+          extensions: { code: "already_exists" },
+        });
       return prisma.rating.create({
         data: {
           orderId: args.orderId,
@@ -255,12 +286,23 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       const body = args.body.trim();
-      if (!body) throw new GraphQLError("A response cannot be empty");
-      if (body.length > 1000) throw new GraphQLError("Response is too long (max 1000 chars)");
+      if (!body)
+        throw new GraphQLError("Please enter a response before submitting.", {
+          extensions: { code: "validation_error" },
+        });
+      if (body.length > 1000)
+        throw new GraphQLError("Your response is too long. Please keep it under 1000 characters.", {
+          extensions: { code: "validation_error" },
+        });
       const rating = await prisma.rating.findUnique({ where: { id: args.ratingId } });
-      if (!rating) throw new GraphQLError("Review not found");
+      if (!rating)
+        throw new GraphQLError("We couldn't find that review.", {
+          extensions: { code: "not_found" },
+        });
       if (!ctx.restaurantIds.includes(rating.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       return prisma.ratingResponse.upsert({
         where: { ratingId: args.ratingId },

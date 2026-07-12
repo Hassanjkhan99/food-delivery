@@ -192,7 +192,9 @@ builder.mutationFields((t) => ({
     resolve: async (query, _root, args, ctx) => {
       const before = await prisma.supportTicket.findUniqueOrThrow({ where: { id: args.id } });
       if (before.status === "resolved" || before.status === "closed") {
-        throw new GraphQLError("Ticket already closed");
+        throw new GraphQLError("This ticket is already closed.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       const agent = ctx.userId
         ? await prisma.user.findUnique({ where: { id: ctx.userId } })
@@ -230,11 +232,15 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       if (!(TICKET_RESOLUTION_CODES as readonly string[]).includes(args.resolutionCode)) {
-        throw new GraphQLError("Invalid resolution code");
+        throw new GraphQLError("Please choose a valid resolution code.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const before = await prisma.supportTicket.findUniqueOrThrow({ where: { id: args.id } });
       if (before.status === "resolved" || before.status === "closed") {
-        throw new GraphQLError("Ticket already closed");
+        throw new GraphQLError("This ticket is already closed.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       const now = new Date();
       const updated = await prisma.supportTicket.update({

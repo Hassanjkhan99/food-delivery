@@ -6,10 +6,21 @@ import { mockProvider } from "../services/payments/mockProvider.js";
 import { builder } from "./builder.js";
 
 const cardInputSchema = z.object({
-  number: z.string().min(13).max(23),
-  expMonth: z.number().int().min(1).max(12),
-  expYear: z.number().int().min(2024).max(2050),
-  cvc: z.string().min(3).max(4),
+  number: z
+    .string()
+    .min(13, "Enter a valid card number.")
+    .max(23, "Enter a valid card number."),
+  expMonth: z
+    .number()
+    .int()
+    .min(1, "Enter a valid expiry month (1–12).")
+    .max(12, "Enter a valid expiry month (1–12)."),
+  expYear: z
+    .number()
+    .int()
+    .min(2024, "This card looks expired.")
+    .max(2050, "Enter a valid expiry year."),
+  cvc: z.string().min(3, "Enter a valid CVC.").max(4, "Enter a valid CVC."),
   holderName: z.string().max(100).optional(),
 });
 
@@ -79,7 +90,10 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
       const method = await prisma.paymentMethod.findUnique({ where: { id: args.id } });
-      if (!method || method.userId !== ctx.userId) throw new GraphQLError("Card not found");
+      if (!method || method.userId !== ctx.userId)
+        throw new GraphQLError("Card not found", {
+          extensions: { code: "payment_method_not_found" },
+        });
       // Keep the row referenced by past payments intact? Payments keep methodId FK —
       // deleting would violate it, so detach then delete.
       await prisma.payment.updateMany({

@@ -21,15 +21,23 @@ function detectBrand(pan: string): string {
 export const mockProvider: PaymentProvider = {
   async tokenize(card: CardInput) {
     const pan = card.number.replace(/\s/g, "");
-    if (!/^\d{13,19}$/.test(pan)) throw new GraphQLError("Invalid card number");
+    if (!/^\d{13,19}$/.test(pan))
+      throw new GraphQLError("Please enter a valid card number.", {
+        extensions: { code: "validation_error" },
+      });
     const now = new Date();
     if (
       card.expYear < now.getFullYear() ||
       (card.expYear === now.getFullYear() && card.expMonth < now.getMonth() + 1)
     ) {
-      throw new GraphQLError("Card is expired");
+      throw new GraphQLError("This card has expired. Please use a different card.", {
+        extensions: { code: "validation_error" },
+      });
     }
-    if (!/^\d{3,4}$/.test(card.cvc)) throw new GraphQLError("Invalid CVC");
+    if (!/^\d{3,4}$/.test(card.cvc))
+      throw new GraphQLError("Please enter a valid security code (CVC).", {
+        extensions: { code: "validation_error" },
+      });
 
     // The PAN survives only inside this call: the token embeds a one-way fingerprint
     // so the decline test-card stays recognizable, never the number itself.

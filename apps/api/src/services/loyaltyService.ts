@@ -33,7 +33,9 @@ export async function postLoyaltyTx(
   const balanceAfter = account.pointsBalance + delta;
   if (balanceAfter < 0) {
     // Insufficient balance — a concurrent spend already drained the points.
-    throw new GraphQLError("Not enough loyalty points to redeem");
+    throw new GraphQLError("You don't have enough loyalty points to redeem.", {
+      extensions: { code: "insufficient_loyalty_points" },
+    });
   }
 
   await tx.loyaltyAccount.update({

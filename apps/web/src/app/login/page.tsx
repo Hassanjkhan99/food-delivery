@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "urql";
 import { graphql } from "@/graphql/generated";
 import { OTP_RATE_LIMIT_PER_HOUR } from "@fd/shared";
+import { parseGqlError, friendlyMessage } from "@/lib/graphql-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,11 +166,11 @@ function LoginForm() {
     setError(null);
     const result = await requestOtp({ phone });
     if (result.error) {
-      const msg = result.error.graphQLErrors[0]?.message ?? "Failed to send code";
+      const parsed = parseGqlError(result.error, "We couldn't send the code.");
       setError(
-        msg.toLowerCase().includes("too many")
+        parsed.message.toLowerCase().includes("too many")
           ? `Too many codes requested (limit ${OTP_RATE_LIMIT_PER_HOUR}/hour). Please try again later.`
-          : msg,
+          : friendlyMessage(parsed),
       );
       triggerShake();
       return false;
@@ -192,7 +193,7 @@ function LoginForm() {
     const result = await verifyOtp({ phone, code: fullCode });
     const viewer = result.data?.verifyOtp;
     if (result.error || !viewer) {
-      setError(result.error?.graphQLErrors[0]?.message ?? "Verification failed");
+      setError(friendlyMessage(parseGqlError(result.error, "We couldn't verify that code.")));
       setCode("");
       triggerShake();
       return;

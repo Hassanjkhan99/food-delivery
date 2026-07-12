@@ -827,7 +827,10 @@ builder.mutationFields((t) => ({
         lat: args.lat ?? undefined,
         lng: args.lng ?? undefined,
       });
-      if (!parsed.success) throw new GraphQLError("Enter a valid email address");
+      if (!parsed.success)
+        throw new GraphQLError("Please enter a valid email address.", {
+          extensions: { code: "validation_error" },
+        });
       const email = parsed.data.email.trim().toLowerCase();
       const data = {
         areaLabel: parsed.data.areaLabel ?? null,

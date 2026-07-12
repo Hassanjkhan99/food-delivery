@@ -21,9 +21,9 @@ async function assertMyTask(ctx: AppContext, taskId: string) {
     where: { id: taskId },
     include: { order: { include: { branch: true } } },
   });
-  if (!task) throw new GraphQLError("Job not found");
+  if (!task) throw new GraphQLError("We couldn't find that job.", { extensions: { code: "not_found" } });
   if (task.riderId !== ctx.riderId && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not your job");
+    throw new GraphQLError("This job isn't assigned to you.", { extensions: { code: "forbidden" } });
   }
   return task;
 }
@@ -393,7 +393,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_root, args, ctx) => {
       if (args.lat < -90 || args.lat > 90 || args.lng < -180 || args.lng > 180) {
-        throw new GraphQLError("Invalid coordinates");
+        throw new GraphQLError("We couldn't read your location.", { extensions: { code: "invalid_state" } });
       }
       // Only update the last GPS fix — never flip availability. Creating the row with
       // isOnline: true here would silently bring an offline rider "online" (both
@@ -418,7 +418,7 @@ builder.mutationFields((t) => ({
     args: { taskId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
-      if (task.status !== "offered") throw new GraphQLError("Job is not awaiting acceptance");
+      if (task.status !== "offered") throw new GraphQLError("This job is no longer waiting for you to accept it.", { extensions: { code: "invalid_state" } });
       // Re-check the COD block at accept time (#25): a rider can be handed a COD offer and
       // only later cross the cash-variance threshold. offerTask's guard ran when the offer
       // was created, so without this an already-blocked rider could still accept the stale
@@ -429,7 +429,7 @@ builder.mutationFields((t) => ({
           select: { codDisabled: true },
         });
         if (rider?.codDisabled) {
-          throw new GraphQLError("You are currently blocked from cash-on-delivery orders", {
+          throw new GraphQLError("You're currently blocked from taking cash-on-delivery orders.", {
             extensions: { code: "rider_cod_disabled" },
           });
         }
@@ -440,7 +440,7 @@ builder.mutationFields((t) => ({
         where: { id: task.id, status: "offered" },
         data: { status: "assigned", acceptedAt: now, assignedAt: now, declineReason: null },
       });
-      if (res.count === 0) throw new GraphQLError("Offer is no longer available");
+      if (res.count === 0) throw new GraphQLError("This offer is no longer available.", { extensions: { code: "conflict" } });
       await prisma.deliveryEvent.create({
         data: { taskId: task.id, type: "accepted", actorUserId: ctx.userId },
       });
@@ -462,7 +462,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
-      if (task.status !== "offered") throw new GraphQLError("Job is not awaiting acceptance");
+      if (task.status !== "offered") throw new GraphQLError("This job is no longer waiting for you to accept it.", { extensions: { code: "invalid_state" } });
       const res = await prisma.deliveryTask.updateMany({
         where: { id: task.id, status: "offered" },
         data: {
@@ -472,7 +472,7 @@ builder.mutationFields((t) => ({
           declineReason: args.reason ?? null,
         },
       });
-      if (res.count === 0) throw new GraphQLError("Offer is no longer available");
+      if (res.count === 0) throw new GraphQLError("This offer is no longer available.", { extensions: { code: "conflict" } });
       await prisma.deliveryEvent.create({
         data: {
           taskId: task.id,
@@ -491,7 +491,7 @@ builder.mutationFields((t) => ({
     args: { taskId: t.arg.string({ required: true }) },
     resolve: async (_q, _root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
-      if (task.status !== "assigned") throw new GraphQLError("Job is not awaiting pickup");
+      if (task.status !== "assigned") throw new GraphQLError("This job isn't ready for pickup yet.", { extensions: { code: "invalid_state" } });
       await prisma.deliveryEvent.create({
         data: { taskId: task.id, type: "arrived_pickup", actorUserId: ctx.userId },
       });
@@ -509,13 +509,13 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
       if (!["assigned", "arrived_pickup"].includes(task.status)) {
-        throw new GraphQLError("Job is not awaiting pickup");
+        throw new GraphQLError("This job isn't ready for pickup yet.", { extensions: { code: "invalid_state" } });
       }
       // Pickup PIN gate (#25): if the order carries a PIN, the rider must have verified it
       // (verifyPickupPin) before collecting — the wrong-rider collection guard. Legacy
       // PIN-less orders (pickupPin == null) skip the gate so they still flow.
       if (task.order.pickupPin && !task.pickupVerifiedAt) {
-        throw new GraphQLError("Enter the pickup PIN from the restaurant first", {
+        throw new GraphQLError("Please enter the pickup PIN from the restaurant before marking this order as picked up.", {
           extensions: { code: "pickup_pin_required" },
         });
       }
@@ -544,13 +544,13 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
-      if (task.status !== "picked_up") throw new GraphQLError("Job is not out for delivery");
+      if (task.status !== "picked_up") throw new GraphQLError("This job isn't out for delivery yet.", { extensions: { code: "invalid_state" } });
 
       // Validate the POD asset (if supplied) before we mark delivered.
       if (args.podMediaId) {
         const asset = await prisma.mediaAsset.findUnique({ where: { id: args.podMediaId } });
         if (!asset || asset.status !== "finalized") {
-          throw new GraphQLError("Proof-of-delivery photo is not finalized");
+          throw new GraphQLError("Your proof-of-delivery photo hasn't finished uploading. Please try again.", { extensions: { code: "invalid_state" } });
         }
       }
 
@@ -633,7 +633,7 @@ builder.mutationFields((t) => ({
     resolve: async (_root, args, ctx) => {
       const task = await assertMyTask(ctx, args.taskId);
       if (!["assigned", "arrived_pickup"].includes(task.status)) {
-        throw new GraphQLError("Job is not awaiting pickup");
+        throw new GraphQLError("This job isn't ready for pickup yet.", { extensions: { code: "invalid_state" } });
       }
       if (task.pickupVerifiedAt) return true;
       // No PIN on the order (legacy) — nothing to verify; treat as passed.
@@ -647,7 +647,7 @@ builder.mutationFields((t) => ({
             note: "Incorrect pickup PIN entered",
           },
         });
-        throw new GraphQLError("Incorrect pickup PIN", {
+        throw new GraphQLError("That pickup PIN doesn't match. Please check with the restaurant and try again.", {
           extensions: { code: "pickup_pin_incorrect" },
         });
       }
@@ -706,18 +706,18 @@ builder.mutationFields((t) => ({
       assetId: t.arg.string({ required: true }),
     },
     resolve: async (query, _root, args, ctx) => {
-      if (!ctx.riderId) throw new GraphQLError("No rider profile");
+      if (!ctx.riderId) throw new GraphQLError("We couldn't find your rider profile.", { extensions: { code: "not_found" } });
       if (!RIDER_DOC_KINDS.includes(args.kind as never)) {
-        throw new GraphQLError("Invalid document kind");
+        throw new GraphQLError("That document type isn't one we accept.", { extensions: { code: "not_allowed" } });
       }
       const asset = await prisma.mediaAsset.findUnique({ where: { id: args.assetId } });
       if (!asset || asset.status !== "finalized") {
-        throw new GraphQLError("Document upload is not finalized");
+        throw new GraphQLError("Your document hasn't finished uploading. Please try again.", { extensions: { code: "invalid_state" } });
       }
       // The asset must belong to the submitting user (ownerId is set at presign). Without
       // this a rider could attach someone else's finalized upload to satisfy a doc gate.
       if (asset.ownerId !== ctx.userId) {
-        throw new GraphQLError("Document upload is not finalized");
+        throw new GraphQLError("We couldn't use that upload for your document. Please upload it again.", { extensions: { code: "forbidden" } });
       }
       // Replace any existing doc of the same kind for this rider.
       await prisma.riderVerificationDoc.deleteMany({
@@ -747,7 +747,7 @@ builder.mutationFields((t) => ({
       agreementAccepted: t.arg.boolean({ required: false }),
     },
     resolve: async (query, _root, args, ctx) => {
-      if (!ctx.riderId) throw new GraphQLError("No rider profile");
+      if (!ctx.riderId) throw new GraphQLError("We couldn't find your rider profile.", { extensions: { code: "not_found" } });
       return prisma.rider.update({
         ...query,
         where: { id: ctx.riderId },

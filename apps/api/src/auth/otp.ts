@@ -21,7 +21,9 @@ export async function requestOtp(rawPhone: string): Promise<{ devCode: string | 
     where: { phone, createdAt: { gte: new Date(Date.now() - 60 * 60_000) } },
   });
   if (recent >= OTP_RATE_LIMIT_PER_HOUR) {
-    throw new GraphQLError("Too many OTP requests for this number. Try again later.");
+    throw new GraphQLError("You've requested too many codes for this number. Please try again later.", {
+      extensions: { code: "otp_rate_limited" },
+    });
   }
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -47,14 +49,21 @@ export async function verifyOtp(rawPhone: string, code: string): Promise<{ userI
     where: { phone, consumedAt: null, expiresAt: { gte: new Date() } },
     orderBy: { createdAt: "desc" },
   });
-  if (!otp) throw new GraphQLError("No active code for this number. Request a new one.");
+  if (!otp)
+    throw new GraphQLError("This code has expired. Please request a new one.", {
+      extensions: { code: "otp_expired" },
+    });
   if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-    throw new GraphQLError("Too many attempts. Request a new code.");
+    throw new GraphQLError("Too many incorrect attempts. Please request a new code.", {
+      extensions: { code: "otp_too_many_attempts" },
+    });
   }
 
   if (otp.codeHash !== hash(code)) {
     await prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-    throw new GraphQLError("Incorrect code.");
+    throw new GraphQLError("That code isn't correct. Please check it and try again.", {
+      extensions: { code: "otp_incorrect" },
+    });
   }
 
   await prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });

@@ -57,14 +57,19 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       const cat = helpCategory(args.category);
-      if (!cat) throw new GraphQLError("Unknown help category");
+      if (!cat)
+        throw new GraphQLError("Please choose a valid help topic.", {
+          extensions: { code: "validation_error" },
+        });
 
       const order = await prisma.order.findUnique({
         where: { id: args.orderId },
         include: { items: true },
       });
       if (!order || order.customerId !== ctx.userId) {
-        throw new GraphQLError("Order not found");
+        throw new GraphQLError("We couldn't find that order.", {
+          extensions: { code: "not_found" },
+        });
       }
 
       // Resolve any selected items against the order (ignore ids that aren't on it).
@@ -72,7 +77,9 @@ builder.mutationFields((t) => ({
       const selectedItems = order.items.filter((i) => selectedIds.has(i.id));
 
       if (cat.needsItems && selectedItems.length === 0) {
-        throw new GraphQLError("Select at least one item for this issue");
+        throw new GraphQLError("Please select at least one item for this issue.", {
+          extensions: { code: "validation_error" },
+        });
       }
 
       const note = args.note?.trim() || null;

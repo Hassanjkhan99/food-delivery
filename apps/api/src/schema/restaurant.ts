@@ -19,9 +19,14 @@ function dateRangeWhere(field: string, from?: Date | null, to?: Date | null) {
 
 async function assertBranchMember(ctx: AppContext, branchId: string) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
-  if (!branch) throw new GraphQLError("Branch not found");
+  if (!branch)
+    throw new GraphQLError("We couldn't find that branch.", {
+      extensions: { code: "not_found" },
+    });
   if (!ctx.restaurantIds.includes(branch.restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
   }
   return branch;
 }
@@ -31,9 +36,14 @@ async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
     where: { id: orderId },
     include: { branch: true },
   });
-  if (!order) throw new GraphQLError("Order not found");
+  if (!order)
+    throw new GraphQLError("We couldn't find that order.", {
+      extensions: { code: "not_found" },
+    });
   if (!ctx.restaurantIds.includes(order.branch.restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
   }
   return order;
 }
@@ -336,7 +346,9 @@ builder.queryFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       return prisma.rating.findMany({
         ...query,
@@ -377,7 +389,9 @@ builder.queryFields((t) => ({
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       return prisma.$transaction((tx) =>
         accountBalance(tx as never, `restaurant:${args.restaurantId}:payable`),
@@ -391,7 +405,9 @@ builder.queryFields((t) => ({
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       return prisma.ledgerEntry.findMany({
         ...query,
@@ -408,7 +424,9 @@ builder.queryFields((t) => ({
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       // Reference adoption of the #33 RLS withTenant() pattern (see packages/db/RLS.md).
       // Admin cuts across tenants (no single restaurantId) so it must run OUTSIDE the wrapper;
@@ -568,7 +586,9 @@ builder.queryFields((t) => ({
     },
     resolve: async (_root, args, ctx) => {
       if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("Not a member of this restaurant");
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
       }
       const orders = await prisma.order.findMany({
         where: {
@@ -641,7 +661,10 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       await assertOrderBranchMember(ctx, args.id);
-      if (!args.reason.trim()) throw new GraphQLError("A rejection reason is required");
+      if (!args.reason.trim())
+        throw new GraphQLError("Please provide a reason for rejecting this order.", {
+          extensions: { code: "validation_error" },
+        });
       // #30: restaurant-fault cancellation (full refund + ranking penalty). Evaluate
       // pre-transition, persist the policy row only after the transition succeeds.
       const order = await prisma.order.findUniqueOrThrow({ where: { id: args.id } });
@@ -705,7 +728,9 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       const order = await assertOrderBranchMember(ctx, args.id);
       if (order.fulfillmentMode !== "pickup") {
-        throw new GraphQLError("Only pickup orders can be marked collected");
+        throw new GraphQLError("Only pickup orders can be marked as collected.", {
+          extensions: { code: "not_allowed" },
+        });
       }
       return transition(args.id, "delivered", restaurantActor(ctx), {
         expectedFrom: "ready_for_pickup",
@@ -726,20 +751,26 @@ builder.mutationFields((t) => ({
       // Pickup orders have no rider leg (#54): the customer collects at the counter, so
       // never let one enter the delivery workflow via a stale UI or restaurant client.
       if (order.fulfillmentMode === "pickup") {
-        throw new GraphQLError("Pickup orders can't be assigned to a rider");
+        throw new GraphQLError("Pickup orders can't be assigned to a rider.", {
+          extensions: { code: "not_allowed" },
+        });
       }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
-        throw new GraphQLError("Rider is not on this restaurant's roster");
+        throw new GraphQLError("This rider isn't on your restaurant's roster.", {
+          extensions: { code: "not_found" },
+        });
       }
       // Rider verification gate (#28): a rejected rider can't be assigned jobs.
       if (rider.verificationStatus === "rejected") {
-        throw new GraphQLError("Rider has been rejected and cannot be assigned jobs");
+        throw new GraphQLError("This rider was rejected and can't be assigned orders.", {
+          extensions: { code: "not_allowed" },
+        });
       }
       // Cash-variance auto-disable (#25): a rider flagged for repeated short remittance
       // can't be handed COD orders until an admin clears them.
       if (order.paymentMode === "cod" && rider.codDisabled) {
-        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+        throw new GraphQLError("This rider is currently blocked from taking cash-on-delivery orders.", {
           extensions: { code: "rider_cod_disabled" },
         });
       }
@@ -784,24 +815,32 @@ builder.mutationFields((t) => ({
       const order = await assertOrderBranchMember(ctx, args.orderId);
       // Pickup orders have no rider leg (#54): never offer one to a rider.
       if (order.fulfillmentMode === "pickup") {
-        throw new GraphQLError("Pickup orders can't be offered to a rider");
+        throw new GraphQLError("Pickup orders can't be offered to a rider.", {
+          extensions: { code: "not_allowed" },
+        });
       }
       // Only orders still awaiting a rider can be offered. Guards against offering a
       // pending/cancelled/delivered order and surfacing a bogus job to the rider.
       if (order.status !== "ready_for_pickup") {
-        throw new GraphQLError("Order is not ready for pickup");
+        throw new GraphQLError("This order isn't ready for pickup yet.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       const rider = await prisma.rider.findUnique({ where: { id: args.riderId } });
       if (!rider || rider.restaurantId !== order.branch.restaurantId) {
-        throw new GraphQLError("Rider is not on this restaurant's roster");
+        throw new GraphQLError("This rider isn't on your restaurant's roster.", {
+          extensions: { code: "not_found" },
+        });
       }
       // Rider verification gate (#28): a rejected rider can't be offered jobs.
       if (rider.verificationStatus === "rejected") {
-        throw new GraphQLError("Rider has been rejected and cannot be offered jobs");
+        throw new GraphQLError("This rider was rejected and can't be offered orders.", {
+          extensions: { code: "not_allowed" },
+        });
       }
       // Fraud control (#25): a rider whose COD was auto-disabled can't take cash orders.
       if (order.paymentMode === "cod" && rider.codDisabled) {
-        throw new GraphQLError("This rider is blocked from cash-on-delivery orders", {
+        throw new GraphQLError("This rider is currently blocked from taking cash-on-delivery orders.", {
           extensions: { code: "rider_cod_disabled" },
         });
       }
@@ -812,7 +851,9 @@ builder.mutationFields((t) => ({
         select: { status: true },
       });
       if (existing && existing.status !== "unassigned" && existing.status !== "offered") {
-        throw new GraphQLError("This delivery is already in progress");
+        throw new GraphQLError("This delivery is already in progress.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       const task = await prisma.deliveryTask.upsert({
         where: { orderId: args.orderId },
@@ -895,9 +936,14 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       await assertBranchMember(ctx, args.branchId);
       for (const h of args.hours) {
-        if (h.dayOfWeek < 0 || h.dayOfWeek > 6) throw new GraphQLError("dayOfWeek must be 0-6");
+        if (h.dayOfWeek < 0 || h.dayOfWeek > 6)
+          throw new GraphQLError("Please choose a valid day of the week.", {
+            extensions: { code: "validation_error" },
+          });
         if (h.openMinute < 0 || h.openMinute > 1439 || h.closeMinute < 0 || h.closeMinute > 1439) {
-          throw new GraphQLError("Minutes must be within a day (0-1439)");
+          throw new GraphQLError("Opening and closing times must fall within a single day.", {
+            extensions: { code: "validation_error" },
+          });
         }
       }
       await prisma.$transaction(async (tx) => {
@@ -927,14 +973,20 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       const branch = await assertBranchMember(ctx, args.branchId);
-      if (!/^\+92\d{10}$/.test(args.phone)) throw new GraphQLError("Invalid phone");
+      if (!/^\+92\d{10}$/.test(args.phone))
+        throw new GraphQLError("Please enter a valid phone number, for example +923001234567.", {
+          extensions: { code: "validation_error" },
+        });
       const user = await prisma.user.upsert({
         where: { phone: args.phone },
         update: {},
         create: { phone: args.phone, name: args.name },
       });
       const existingRider = await prisma.rider.findUnique({ where: { userId: user.id } });
-      if (existingRider) throw new GraphQLError("This person is already a rider");
+      if (existingRider)
+        throw new GraphQLError("This person is already registered as a rider.", {
+          extensions: { code: "already_exists" },
+        });
       const hasRole = await prisma.userRole.findFirst({
         where: { userId: user.id, role: "rider" },
       });
@@ -969,7 +1021,10 @@ builder.mutationFields((t) => ({
       const draft = await ensureDraft(args.branchId);
       if (args.id) {
         const cat = await prisma.menuCategory.findUnique({ where: { id: args.id } });
-        if (!cat || cat.menuId !== draft.id) throw new GraphQLError("Category not in draft");
+        if (!cat || cat.menuId !== draft.id)
+          throw new GraphQLError("That category isn't part of your draft menu.", {
+            extensions: { code: "not_found" },
+          });
         return prisma.menuCategory.update({
           where: { id: args.id },
           data: {
@@ -1011,13 +1066,20 @@ builder.mutationFields((t) => ({
       const draft = await ensureDraft(args.branchId);
       const category = await prisma.menuCategory.findUnique({ where: { id: args.categoryId } });
       if (!category || category.menuId !== draft.id)
-        throw new GraphQLError("Category not in draft");
-      if (args.priceMinor <= 0) throw new GraphQLError("Price must be positive");
+        throw new GraphQLError("That category isn't part of your draft menu.", {
+          extensions: { code: "not_found" },
+        });
+      if (args.priceMinor <= 0)
+        throw new GraphQLError("Please enter a price greater than zero.", {
+          extensions: { code: "validation_error" },
+        });
       const compareAt = args.compareAtPriceMinor && args.compareAtPriceMinor > 0
         ? args.compareAtPriceMinor
         : null;
       if (compareAt != null && compareAt <= args.priceMinor) {
-        throw new GraphQLError("The 'was' price must be higher than the current price");
+        throw new GraphQLError("The 'was' price must be higher than the current price.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const data = {
         categoryId: args.categoryId,
@@ -1032,7 +1094,10 @@ builder.mutationFields((t) => ({
           where: { id: args.id },
           include: { category: true },
         });
-        if (!item || item.category.menuId !== draft.id) throw new GraphQLError("Item not in draft");
+        if (!item || item.category.menuId !== draft.id)
+          throw new GraphQLError("That item isn't part of your draft menu.", {
+            extensions: { code: "not_found" },
+          });
         return prisma.menuItem.update({ where: { id: args.id }, data });
       }
       return prisma.menuItem.create({ data });
@@ -1055,7 +1120,10 @@ builder.mutationFields((t) => ({
         where: { id: args.itemId },
         include: { category: { include: { menu: true } } },
       });
-      if (!item) throw new GraphQLError("Item not found");
+      if (!item)
+        throw new GraphQLError("We couldn't find that menu item.", {
+          extensions: { code: "not_found" },
+        });
       await assertBranchMember(ctx, item.category.menu.branchId);
       // Availability applies to BOTH the live menu item and the draft twin (by name) —
       // stock-outs must hit customers immediately, not on next publish.
@@ -1084,9 +1152,14 @@ builder.mutationFields((t) => ({
         where: { id: args.itemId },
         include: { category: { include: { menu: true } } },
       });
-      if (!item) throw new GraphQLError("Item not found");
+      if (!item)
+        throw new GraphQLError("We couldn't find that menu item.", {
+          extensions: { code: "not_found" },
+        });
       if (item.category.menu.status !== "draft")
-        throw new GraphQLError("Only draft items can be deleted");
+        throw new GraphQLError("Only items in your draft menu can be deleted.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, item.category.menu.branchId);
       await prisma.$transaction(async (tx) => {
         // Remove the item's join rows first, including any combo (#53) it belongs to —
@@ -1120,9 +1193,14 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       await assertBranchMember(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
-      if (!args.name.trim()) throw new GraphQLError("Group name is required");
+      if (!args.name.trim())
+        throw new GraphQLError("Please enter a name for this option group.", {
+          extensions: { code: "validation_error" },
+        });
       if (args.minSelect < 0 || args.maxSelect < 1 || args.minSelect > args.maxSelect) {
-        throw new GraphQLError("Invalid min/max selection");
+        throw new GraphQLError("Please choose a valid minimum and maximum number of selections.", {
+          extensions: { code: "validation_error" },
+        });
       }
       if (args.itemId) {
         const item = await prisma.menuItem.findUnique({
@@ -1130,13 +1208,17 @@ builder.mutationFields((t) => ({
           include: { category: true },
         });
         if (!item || item.category.menuId !== draft.id)
-          throw new GraphQLError("Item not in draft");
+          throw new GraphQLError("That item isn't part of your draft menu.", {
+            extensions: { code: "not_found" },
+          });
       }
       let group;
       if (args.id) {
         const existing = await prisma.modifierGroup.findUnique({ where: { id: args.id } });
         if (!existing || existing.menuId !== draft.id)
-          throw new GraphQLError("Group not in draft");
+          throw new GraphQLError("That option group isn't part of your draft menu.", {
+            extensions: { code: "not_found" },
+          });
         group = await prisma.modifierGroup.update({
           where: { id: args.id },
           data: { name: args.name, minSelect: args.minSelect, maxSelect: args.maxSelect },
@@ -1174,9 +1256,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         include: { menu: true },
       });
-      if (!group) throw new GraphQLError("Group not found");
+      if (!group)
+        throw new GraphQLError("We couldn't find that option group.", {
+          extensions: { code: "not_found" },
+        });
       if (group.menu.status !== "draft")
-        throw new GraphQLError("Only draft modifier groups can be deleted");
+        throw new GraphQLError("Only option groups in your draft menu can be deleted.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, group.menu.branchId);
       await prisma.$transaction(async (tx) => {
         await tx.menuItemModifierGroup.deleteMany({ where: { groupId: args.id } });
@@ -1202,16 +1289,29 @@ builder.mutationFields((t) => ({
         where: { id: args.groupId },
         include: { menu: true },
       });
-      if (!group) throw new GraphQLError("Group not found");
+      if (!group)
+        throw new GraphQLError("We couldn't find that option group.", {
+          extensions: { code: "not_found" },
+        });
       if (group.menu.status !== "draft")
-        throw new GraphQLError("Only draft modifier options can be edited");
+        throw new GraphQLError("Only options in your draft menu can be edited.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, group.menu.branchId);
-      if (!args.name.trim()) throw new GraphQLError("Option name is required");
-      if (args.priceDeltaMinor < 0) throw new GraphQLError("Price delta cannot be negative");
+      if (!args.name.trim())
+        throw new GraphQLError("Please enter a name for this option.", {
+          extensions: { code: "validation_error" },
+        });
+      if (args.priceDeltaMinor < 0)
+        throw new GraphQLError("The extra charge for this option can't be negative.", {
+          extensions: { code: "validation_error" },
+        });
       if (args.id) {
         const existing = await prisma.modifierOption.findUnique({ where: { id: args.id } });
         if (!existing || existing.groupId !== args.groupId)
-          throw new GraphQLError("Option not in group");
+          throw new GraphQLError("That option doesn't belong to this option group.", {
+            extensions: { code: "not_found" },
+          });
         // On edit, only touch isAvailable when the caller explicitly sends it — omitting
         // it must NOT silently restock an option the restaurant had disabled.
         return prisma.modifierOption.update({
@@ -1245,9 +1345,14 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         include: { group: { include: { menu: true } } },
       });
-      if (!option) throw new GraphQLError("Option not found");
+      if (!option)
+        throw new GraphQLError("We couldn't find that option.", {
+          extensions: { code: "not_found" },
+        });
       if (option.group.menu.status !== "draft")
-        throw new GraphQLError("Only draft modifier options can be deleted");
+        throw new GraphQLError("Only options in your draft menu can be deleted.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, option.group.menu.branchId);
       await prisma.modifierOption.delete({ where: { id: args.id } });
       return true;
@@ -1270,14 +1375,21 @@ builder.mutationFields((t) => ({
         where: { id: args.menuItemId },
         include: { category: { include: { menu: true } } },
       });
-      if (!item) throw new GraphQLError("Item not found");
+      if (!item)
+        throw new GraphQLError("We couldn't find that menu item.", {
+          extensions: { code: "not_found" },
+        });
       if (item.category.menu.status !== "draft")
-        throw new GraphQLError("Only draft items can be edited");
+        throw new GraphQLError("Only items in your draft menu can be edited.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, item.category.menu.branchId);
       if (args.mediaId) {
         const asset = await prisma.mediaAsset.findUnique({ where: { id: args.mediaId } });
         if (!asset || asset.status !== "finalized")
-          throw new GraphQLError("Asset not finalized");
+          throw new GraphQLError("That photo hasn't finished uploading yet. Please try again.", {
+            extensions: { code: "invalid_state" },
+          });
       }
       return prisma.menuItem.update({
         where: { id: args.menuItemId },
@@ -1304,8 +1416,14 @@ builder.mutationFields((t) => ({
     resolve: async (_q, _root, args, ctx) => {
       await assertBranchMember(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
-      if (!args.name.trim()) throw new GraphQLError("Deal name is required");
-      if (args.priceMinor <= 0) throw new GraphQLError("Price must be positive");
+      if (!args.name.trim())
+        throw new GraphQLError("Please enter a name for this deal.", {
+          extensions: { code: "validation_error" },
+        });
+      if (args.priceMinor <= 0)
+        throw new GraphQLError("Please enter a price greater than zero.", {
+          extensions: { code: "validation_error" },
+        });
       const data = {
         name: args.name,
         description: args.description,
@@ -1314,7 +1432,9 @@ builder.mutationFields((t) => ({
       if (args.id) {
         const existing = await prisma.combo.findUnique({ where: { id: args.id } });
         if (!existing || existing.menuId !== draft.id)
-          throw new GraphQLError("Deal not in draft");
+          throw new GraphQLError("That deal isn't part of your draft menu.", {
+            extensions: { code: "not_found" },
+          });
         return prisma.combo.update({ where: { id: args.id }, data });
       }
       const sortOrder = await prisma.combo.count({ where: { menuId: draft.id } });
@@ -1334,7 +1454,10 @@ builder.mutationFields((t) => ({
         where: { id: args.comboId },
         include: { menu: true },
       });
-      if (!combo) throw new GraphQLError("Deal not found");
+      if (!combo)
+        throw new GraphQLError("We couldn't find that deal.", {
+          extensions: { code: "not_found" },
+        });
       await assertBranchMember(ctx, combo.menu.branchId);
       return prisma.combo.update({
         where: { id: args.comboId },
@@ -1352,9 +1475,14 @@ builder.mutationFields((t) => ({
         where: { id: args.comboId },
         include: { menu: true },
       });
-      if (!combo) throw new GraphQLError("Deal not found");
+      if (!combo)
+        throw new GraphQLError("We couldn't find that deal.", {
+          extensions: { code: "not_found" },
+        });
       if (combo.menu.status !== "draft")
-        throw new GraphQLError("Only draft deals can be deleted");
+        throw new GraphQLError("Only deals in your draft menu can be deleted.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, combo.menu.branchId);
       await prisma.$transaction(async (tx) => {
         await tx.comboItem.deleteMany({ where: { comboId: args.comboId } });
@@ -1378,16 +1506,23 @@ builder.mutationFields((t) => ({
         where: { id: args.comboId },
         include: { menu: true },
       });
-      if (!combo) throw new GraphQLError("Deal not found");
+      if (!combo)
+        throw new GraphQLError("We couldn't find that deal.", {
+          extensions: { code: "not_found" },
+        });
       if (combo.menu.status !== "draft")
-        throw new GraphQLError("Only draft deals can be edited");
+        throw new GraphQLError("Only deals in your draft menu can be edited.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, combo.menu.branchId);
       const item = await prisma.menuItem.findUnique({
         where: { id: args.menuItemId },
         include: { category: true },
       });
       if (!item || item.category.menuId !== combo.menuId)
-        throw new GraphQLError("Item not in this draft menu");
+        throw new GraphQLError("That item isn't part of your draft menu.", {
+          extensions: { code: "not_found" },
+        });
       const existing = await prisma.comboItem.findFirst({
         where: { comboId: args.comboId, menuItemId: args.menuItemId },
       });
@@ -1416,9 +1551,14 @@ builder.mutationFields((t) => ({
         where: { id: args.comboItemId },
         include: { combo: { include: { menu: true } } },
       });
-      if (!ci) throw new GraphQLError("Deal item not found");
+      if (!ci)
+        throw new GraphQLError("We couldn't find that deal item.", {
+          extensions: { code: "not_found" },
+        });
       if (ci.combo.menu.status !== "draft")
-        throw new GraphQLError("Only draft deals can be edited");
+        throw new GraphQLError("Only deals in your draft menu can be edited.", {
+          extensions: { code: "not_allowed" },
+        });
       await assertBranchMember(ctx, ci.combo.menu.branchId);
       await prisma.comboItem.delete({ where: { id: args.comboItemId } });
       return prisma.combo.findUniqueOrThrow({ ...query, where: { id: ci.comboId } });
