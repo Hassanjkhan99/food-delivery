@@ -310,14 +310,19 @@ export default function HomePage() {
 
   return (
     <main className="space-y-6">
-      {/* Top bar: address + search */}
-      <div className="space-y-3">
+      {/* Branded hero band: full-bleed warm-yellow wash with a bold greeting, the
+          delivery address, and a prominent search entry. Bleeds to the container edges
+          (-mx-4) and up to the sticky header (-mt-6) for a fast-food home feel. */}
+      <section className="-mx-4 -mt-6 bg-gradient-to-b from-kd-accent/30 via-kd-accent/10 to-transparent px-4 pb-3 pt-6">
         <AddressChip />
+        <h1 className="mt-3 text-kd-heading font-extrabold tracking-tight text-kd-fg">
+          What are you craving?
+        </h1>
         {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
             the dedicated /search screen, which also matches dishes (#37). */}
         <form
           role="search"
-          className="relative"
+          className="relative mt-3"
           onSubmit={(e) => {
             e.preventDefault();
             const q = search.trim();
@@ -327,28 +332,28 @@ export default function HomePage() {
           <button
             type="submit"
             aria-label="Search restaurants and dishes"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-kd-fg-subtle hover:text-kd-fg"
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-5 w-5" />
           </button>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search restaurants, cuisines or dishes…"
-            className="w-full rounded-xl border border-kd-border bg-kd-surface py-2.5 pl-9 pr-9 text-sm text-kd-fg outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+            className="w-full rounded-2xl border border-kd-border bg-kd-surface py-3 pl-11 pr-10 text-sm text-kd-fg shadow-sm outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
             >
               <X className="h-4 w-4" />
             </button>
           )}
         </form>
-      </div>
+      </section>
 
       {!online && (
         <div className="flex items-center gap-2 rounded-xl bg-kd-warning-soft px-3 py-2 text-sm text-kd-warning">
@@ -404,7 +409,9 @@ export default function HomePage() {
               <OrderAgainRow targets={reorderTargets} />
               {promoted.length > 0 && (
                 <section className="space-y-3">
-                  <h2 className="text-lg font-bold text-kd-fg">Promoted</h2>
+                  <h2 className="text-kd-heading font-extrabold tracking-tight text-kd-fg">
+                    Promoted
+                  </h2>
                   <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex gap-4">
                       {promoted.map((hit) => (
@@ -425,7 +432,7 @@ export default function HomePage() {
             <EmptyState label={loc.label} lat={loc.lat} lng={loc.lng} />
           ) : (
             <section className="space-y-3">
-              <h2 className="text-lg font-bold text-kd-fg">
+              <h2 className="text-kd-heading font-extrabold tracking-tight text-kd-fg">
                 {filtering
                   ? `${feed.length} result${feed.length === 1 ? "" : "s"}`
                   : "All restaurants"}

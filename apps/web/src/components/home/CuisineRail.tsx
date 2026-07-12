@@ -19,8 +19,10 @@ export function CuisineRail({
 }) {
   if (cuisines.length === 0) return null;
 
+  // py-2 gives the selected chip's ring-offset room so it isn't clipped by the
+  // horizontal scroll track (was pb-1, which cut off the ring around "All").
   return (
-    <div className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="-mx-4 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex gap-4">
         <CuisineButton
           label="All"

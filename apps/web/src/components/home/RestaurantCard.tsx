@@ -106,7 +106,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
           <h3 className="font-semibold leading-tight tracking-tight text-kd-fg">{r.name}</h3>
 
           {r.dealBadge && (
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-kd-primary-soft px-2 py-0.5 text-xs font-semibold text-kd-primary">
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-kd-accent-soft px-2 py-0.5 text-xs font-semibold text-kd-warning">
               <Tag className="h-3 w-3" />
               {r.dealBadge}
             </span>
