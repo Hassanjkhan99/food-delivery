@@ -133,11 +133,11 @@
      golden-yellow accent, cream-dominant surfaces, warm charcoal text. Usage ratio ~
      cream/white 55–65%, charcoal 15–20%, red 10–15%, yellow 5–10%. Style/energy only —
      no literal McDonald's assets. */
-  --kd-primary: #da291c; /* red — primary CTAs (Add to cart, Checkout) */
-  --kd-primary-hover: #b91c1c;
-  --kd-primary-soft: #fee2e2;
-  --kd-accent: #ffc72c; /* golden yellow — brand accent, highlights, rating star */
-  --kd-accent-soft: #fff4d1;
+  --kd-primary: #ea580c; /* warm orange — everyday brand: CTAs, links, active states */
+  --kd-primary-hover: #c2410c;
+  --kd-primary-soft: #ffedd5; /* peach tint — hero wash, soft chips */
+  --kd-accent: #f59e0b; /* amber — rating stars, subtle warm highlights */
+  --kd-accent-soft: #fef3c7;
   --kd-success: #059669;
   --kd-success-soft: #d1fae5;
   --kd-bg: #fff8e7; /* cream — dominant app background */
@@ -192,9 +192,9 @@
 
   /* Brand — dark. Dark charcoal surfaces, brighter red CTA, golden-yellow accent.
      (Dark mode is out of v1 per #48, but kept consistent so the token system is complete.) */
-  --kd-primary: #ef4444;
-  --kd-primary-hover: #f87171;
-  --kd-primary-soft: #450a0a;
+  --kd-primary: #fb923c;
+  --kd-primary-hover: #fdba74;
+  --kd-primary-soft: #431407;
   --kd-accent: #fbbf24;
   --kd-accent-soft: #3d2f05;
   --kd-success: #34d399;

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
-import { Search, WifiOff, X } from "lucide-react";
+import { ChevronRight, Search, WifiOff, X } from "lucide-react";
 import { CUISINE_TAGS, type BrowseSort } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
 import type { BrowseSort as GqlBrowseSort } from "@/graphql/generated/graphql";
@@ -19,7 +19,11 @@ import {
 } from "@/components/home/BrowseControls";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { OrderAgainRow, type ReorderTarget } from "@/components/home/OrderAgainRow";
-import { RestaurantCard, RestaurantMiniCard } from "@/components/home/RestaurantCard";
+import {
+  RestaurantCard,
+  RestaurantMiniCard,
+  RestaurantRowCard,
+} from "@/components/home/RestaurantCard";
 import { Swimlane } from "@/components/home/Swimlane";
 import { HomeSkeleton } from "@/components/home/HomeSkeleton";
 import { useOnlineStatus, useScrollRestoration } from "@/components/home/hooks";
@@ -310,49 +314,75 @@ export default function HomePage() {
 
   return (
     <main className="space-y-6">
-      {/* Branded hero band: full-bleed warm-yellow wash with a bold greeting, the
-          delivery address, and a prominent search entry. Bleeds to the container edges
-          (-mx-4) and up to the sticky header (-mt-6) for a fast-food home feel. */}
-      <section className="-mx-4 -mt-6 bg-gradient-to-b from-kd-accent/30 via-kd-accent/10 to-transparent px-4 pb-3 pt-6">
-        <AddressChip />
-        <h1 className="mt-3 text-kd-heading font-extrabold tracking-tight text-kd-fg">
-          What are you craving?
-        </h1>
-        {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
-            the dedicated /search screen, which also matches dishes (#37). */}
-        <form
-          role="search"
-          className="relative mt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = search.trim();
-            router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
-          }}
-        >
-          <button
-            type="submit"
-            aria-label="Search restaurants and dishes"
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
+      {/* Hero: warm peach card with a bold greeting, delivery address, a prominent search,
+          and the filter row (spaced below search). A decorative food image bleeds in on the
+          right (md+) — swap /banners/hero-dish.* for a real photo. Full-bleed on mobile,
+          a rounded inset card on sm+. */}
+      <section className="relative -mx-4 -mt-6 overflow-hidden px-4 pb-5 pt-6 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:px-8 sm:pt-7">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 bg-gradient-to-br from-kd-primary-soft via-kd-primary-soft/50 to-kd-surface"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/banners/biryani.svg"
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute -right-8 top-0 hidden h-full w-[45%] object-cover object-left opacity-95 md:block [mask-image:linear-gradient(to_right,transparent,#000_40%)]"
+        />
+        <div className="relative max-w-xl">
+          <AddressChip />
+          <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-kd-fg sm:text-3xl">
+            What are you craving?
+          </h1>
+          {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
+              the dedicated /search screen, which also matches dishes (#37). */}
+          <form
+            role="search"
+            className="relative mt-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = search.trim();
+              router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
+            }}
           >
-            <Search className="h-5 w-5" />
-          </button>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search restaurants, cuisines or dishes…"
-            className="w-full rounded-2xl border border-kd-border bg-kd-surface py-3 pl-11 pr-10 text-sm text-kd-fg shadow-sm outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
-          />
-          {search && (
             <button
-              type="button"
-              onClick={() => setSearch("")}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
+              type="submit"
+              aria-label="Search restaurants and dishes"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
             >
-              <X className="h-4 w-4" />
+              <Search className="h-5 w-5" />
             </button>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search restaurants, cuisines or dishes…"
+              className="w-full rounded-2xl border border-kd-border bg-kd-surface py-3.5 pl-12 pr-10 text-sm text-kd-fg shadow-sm outline-none placeholder:text-kd-fg-subtle focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-kd-fg-subtle hover:bg-kd-surface-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </form>
+
+          {/* Filter row lives in the hero, spaced below the search (was cramped against it). */}
+          {data && (hits.length > 0 || serverFiltering) && (
+            <div className="mt-4">
+              <BrowseControls
+                sort={sort}
+                onSortChange={setSort}
+                filter={filter}
+                onFilterChange={setFilter}
+              />
+            </div>
           )}
-        </form>
+        </div>
       </section>
 
       {!online && (
@@ -381,17 +411,6 @@ export default function HomePage() {
 
       {data && (
         <>
-          {/* Filter sheet + sort selector + quick chips (#51). Hidden only in a truly
-              empty delivery area with no filters (nothing to filter). */}
-          {(hits.length > 0 || serverFiltering) && (
-            <BrowseControls
-              sort={sort}
-              onSortChange={setSort}
-              filter={filter}
-              onFilterChange={setFilter}
-            />
-          )}
-
           {/* Cuisine rail */}
           <CuisineRail
             cuisines={availableCuisines}
@@ -421,7 +440,27 @@ export default function HomePage() {
                   </div>
                 </section>
               )}
-              <Swimlane title="Top rated near you" hits={topRated} />
+              {topRated.length > 0 && (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-kd-heading font-extrabold tracking-tight text-kd-fg">
+                      Top rated near you
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setSort("rating")}
+                      className="flex items-center gap-0.5 text-sm font-semibold text-kd-primary hover:underline"
+                    >
+                      View all <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {topRated.slice(0, 6).map((hit) => (
+                      <RestaurantRowCard key={hit.branchId} hit={hit} />
+                    ))}
+                  </div>
+                </section>
+              )}
               <Swimlane title="Free delivery" hits={freeDelivery} />
             </>
           )}

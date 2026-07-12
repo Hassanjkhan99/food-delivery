@@ -145,6 +145,52 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
   );
 }
 
+/** Horizontal card (photo left, details right) — used for the "Top rated" rail so it
+ *  matches the polished list layout. Shows a free-delivery pill, gold rating, ETA + min. */
+export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
+  const r = hit.restaurant;
+  const avail = availability(hit);
+  return (
+    <Link
+      href={`/r/${r.slug}`}
+      className="group relative flex gap-3 overflow-hidden rounded-2xl border border-kd-border bg-kd-surface p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <RestaurantImage
+        photo={hit.photo}
+        name={r.name}
+        tint={r.primaryColor}
+        className={cn("h-24 w-24 shrink-0 rounded-xl", avail.closed && "grayscale-[0.6]")}
+        sizes="96px"
+      />
+      <div className="min-w-0 flex-1 py-0.5 pr-6">
+        {hit.deliveryFeeMinor === 0 && !avail.closed && (
+          <span className="inline-flex items-center rounded-full bg-kd-success-soft px-2 py-0.5 text-xs font-semibold text-kd-success">
+            Free delivery
+          </span>
+        )}
+        <p className="mt-1 truncate font-bold text-kd-fg">{r.name}</p>
+        {r.avgRating != null && (
+          <div className="mt-0.5 flex items-center gap-1 text-sm tabular-nums">
+            <Star className="h-3.5 w-3.5 fill-kd-accent text-kd-accent" />
+            <span className="font-semibold text-kd-fg">{r.avgRating.toFixed(1)}</span>
+            <span className="text-kd-fg-muted">({r.ratingCount})</span>
+          </div>
+        )}
+        <p className="mt-0.5 truncate text-sm text-kd-fg-muted tabular-nums">
+          {avail.closed ? (
+            <span className="font-semibold text-kd-danger">{avail.label}</span>
+          ) : (
+            <>
+              {hit.etaMinutes}–{hit.etaMinutes + 10} min · Min {formatRs(hit.minOrderMinor)}
+            </>
+          )}
+        </p>
+      </div>
+      <FavoriteButton />
+    </Link>
+  );
+}
+
 /** Compact card for horizontal swimlanes / "order again". */
 export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
   const r = hit.restaurant;

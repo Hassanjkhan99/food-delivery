@@ -59,22 +59,22 @@ function CuisineButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-16 shrink-0 flex-col items-center gap-1.5 text-center"
+      className="flex w-[76px] shrink-0 flex-col items-center gap-1.5 text-center"
       aria-pressed={selected}
     >
       <span
         className={cn(
-          "flex h-16 w-16 items-center justify-center rounded-full text-2xl transition-all",
+          "grid h-[68px] w-[68px] place-items-center rounded-2xl border text-3xl transition-all",
           selected
-            ? "bg-kd-primary-soft ring-2 ring-kd-primary ring-offset-2"
-            : "bg-kd-surface-muted hover:bg-kd-border",
+            ? "border-kd-primary bg-kd-primary-soft shadow-sm"
+            : "border-kd-border bg-kd-surface hover:border-kd-primary/50 hover:shadow-sm",
         )}
       >
         {emoji}
       </span>
       <span
         className={cn(
-          "line-clamp-1 text-[11px] leading-tight",
+          "line-clamp-1 text-xs leading-tight",
           selected ? "font-semibold text-kd-primary" : "text-kd-fg-muted",
         )}
       >

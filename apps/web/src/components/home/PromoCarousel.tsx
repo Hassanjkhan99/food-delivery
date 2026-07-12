@@ -43,27 +43,35 @@ export function PromoCarousel({ banners }: { banners: HomeBanner[] }) {
         className="flex transition-transform duration-500 ease-out"
         style={{ transform: `translateX(-${safeIndex * 100}%)` }}
       >
-        {banners.map((b) => {
-          const inner = (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={b.imageUrl}
-              alt={b.title}
-              className="aspect-[10/3] w-full shrink-0 object-cover"
-            />
-          );
-          return (
-            <div key={b.id} className="w-full shrink-0">
-              {b.linkHref ? (
-                <Link href={b.linkHref} aria-label={b.title}>
-                  {inner}
-                </Link>
-              ) : (
-                inner
-              )}
+        {banners.map((b) => (
+          <div key={b.id} className="w-full shrink-0">
+            {/* Structured brand banner: orange gradient, headline + CTA on the left, a
+                decorative dish bleeding in on the right. Per-banner art (b.imageUrl) can
+                be wired to a real photo later; the seeded illustration is a placeholder. */}
+            <div className="relative flex min-h-[9rem] items-center overflow-hidden rounded-2xl bg-gradient-to-r from-kd-primary to-kd-primary-hover sm:min-h-[11rem]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={b.imageUrl || "/banners/biryani.svg"}
+                alt=""
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 h-full w-1/2 object-cover object-center opacity-95 [mask-image:linear-gradient(to_right,transparent,#000_45%)]"
+              />
+              <div className="relative z-10 max-w-[62%] p-5 sm:p-7">
+                <h3 className="text-lg font-extrabold leading-tight text-white sm:text-2xl">
+                  {b.title}
+                </h3>
+                {b.linkHref && (
+                  <Link
+                    href={b.linkHref}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-kd-primary shadow-sm transition hover:bg-white/90"
+                  >
+                    Explore menu <span aria-hidden>→</span>
+                  </Link>
+                )}
+              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {count > 1 && (
