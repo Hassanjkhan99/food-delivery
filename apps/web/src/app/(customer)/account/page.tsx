@@ -279,7 +279,7 @@ export default function AccountPage() {
           className="flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface p-4 text-sm font-medium text-kd-fg hover:border-kd-primary"
         >
           <CreditCard className="h-5 w-5 text-kd-fg-subtle" />
-          Herald Pro membership
+          KhaanaDo Pro membership
         </Link>
       </nav>
 

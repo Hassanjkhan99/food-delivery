@@ -1,6 +1,6 @@
 {
-  "name": "Herald — Restaurant-first delivery",
-  "short_name": "Herald",
+  "name": "KhaanaDo — Restaurant-first delivery",
+  "short_name": "KhaanaDo",
   "description": "Order from local restaurants that own their delivery.",
   "start_url": "/",
   "display": "standalone",

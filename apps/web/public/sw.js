@@ -1,6 +1,6 @@
 // Service worker: offline shell (precache), network-first navigation with offline
 // fallback, cache-first static assets. The GraphQL API (POST + SSE) is never cached.
-const SHELL_CACHE = "fd-shell-v1";
+const SHELL_CACHE = "fd-shell-v2";
 const SHELL_URLS = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -54,9 +54,9 @@ self.addEventListener("fetch", (event) => {
 
 // Web push stub — payloads render as a basic notification once VAPID is configured.
 self.addEventListener("push", (event) => {
-  const data = event.data?.json?.() ?? { title: "Herald", body: "Order update" };
+  const data = event.data?.json?.() ?? { title: "KhaanaDo", body: "Order update" };
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Herald", {
+    self.registration.showNotification(data.title ?? "KhaanaDo", {
       body: data.body ?? "",
       icon: "/icons/icon-192.png",
     }),

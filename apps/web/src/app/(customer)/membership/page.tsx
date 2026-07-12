@@ -107,7 +107,7 @@ export default function MembershipPage() {
     <main className="mx-auto max-w-lg">
       <div className="mb-6 flex items-center gap-2">
         <Bike className="h-6 w-6 text-kd-primary" />
-        <h1 className="text-2xl font-bold">Herald Pro</h1>
+        <h1 className="text-2xl font-bold">KhaanaDo Pro</h1>
       </div>
       <p className="mb-6 text-sm text-kd-fg-muted">
         A membership that pays for itself: free or discounted delivery on every order.

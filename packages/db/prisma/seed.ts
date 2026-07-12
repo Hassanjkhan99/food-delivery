@@ -109,7 +109,7 @@ async function main() {
   // otherwise 50% off delivery. Mock-billed at sign-up.
   await prisma.membershipPlan.create({
     data: {
-      name: "Herald Pro",
+      name: "KhaanaDo Pro",
       priceMinor: 19_900,
       freeDeliveryThresholdMinor: 50_000,
       deliveryDiscountBps: 5_000,

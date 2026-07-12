@@ -60,10 +60,10 @@ export default function ReferralsPage() {
 
   async function onShare() {
     if (!summary?.code) return;
-    const text = `Join me on Herald! Use my code ${summary.code} to get credit on your first order.`;
+    const text = `Join me on KhaanaDo! Use my code ${summary.code} to get credit on your first order.`;
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title: "Herald", text });
+        await navigator.share({ title: "KhaanaDo", text });
         return;
       } catch {
         // User dismissed the share sheet — fall through to copy.

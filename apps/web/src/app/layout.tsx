@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Herald brand serif (inscriptional Roman) — used only by the Wordmark component.
+// KhaanaDo brand serif (inscriptional Roman) — used only by the Wordmark component.
 const cinzel = Cinzel({
   variable: "--font-herald",
   subsets: ["latin"],
@@ -32,7 +32,7 @@ const cinzel = Cinzel({
 });
 
 export const metadata: Metadata = {
-  title: "Herald — Food Delivery",
+  title: "KhaanaDo — Food Delivery",
   description: "Restaurant-first delivery marketplace",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/icon-192.png" },
