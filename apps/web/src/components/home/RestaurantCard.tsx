@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Clock, Heart, Star, Tag } from "lucide-react";
 import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
+import { restaurantCoverPlaceholder } from "@/components/media/placeholders";
 import { cn } from "@/lib/utils";
 import type { FeedHit } from "./types";
 
@@ -58,6 +59,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             photo={hit.photo}
             name={r.name}
             tint={r.primaryColor}
+            fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
             className={cn(
               "aspect-[16/10] w-full transition-transform duration-300 group-hover:scale-[1.03]",
               avail.closed && "grayscale-[0.6]",
@@ -159,6 +161,7 @@ export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
         photo={hit.photo}
         name={r.name}
         tint={r.primaryColor}
+        fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
         className={cn(
           "h-32 w-32 shrink-0 rounded-[18px] sm:h-40 sm:w-40",
           avail.closed && "grayscale-[0.6]",
@@ -205,6 +208,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           photo={hit.photo}
           name={r.name}
           tint={r.primaryColor}
+          fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
           className={cn("aspect-[16/10] w-44 rounded-xl", avail.closed && "grayscale-[0.6]")}
           sizes="176px"
           // Scrim inside the image so the Google attribution stays visible — #36 review.

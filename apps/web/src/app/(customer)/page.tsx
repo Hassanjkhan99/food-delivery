@@ -319,14 +319,20 @@ export default function HomePage() {
           right (md+) — swap /banners/hero-dish.* for a real photo. Full-bleed on mobile,
           a rounded inset card on sm+. */}
       <section className="relative -mx-4 -mt-6 overflow-hidden bg-[#FFF9F2] px-4 pb-6 pt-6 sm:mx-0 sm:mt-0 sm:rounded-[28px] sm:px-8 lg:min-h-[370px] lg:px-12 lg:py-12">
-        {/* Decorative dish, right ~40% (md+). Swap /banners/biryani.svg for a real photo. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/banners/biryani.svg"
-          alt=""
+        {/* Decorative dish (md+): the top-down bowl framed as a circular plate. The source
+            has a baked-in transparency checkerboard, so we scale it (>1.2×) inside the round
+            crop to keep only the bowl. Swap for a clean transparent PNG later if available. */}
+        <div
           aria-hidden
-          className="pointer-events-none absolute -right-6 top-0 hidden h-full w-[42%] object-cover object-left opacity-95 md:block [mask-image:linear-gradient(to_right,transparent,#000_38%)]"
-        />
+          className="pointer-events-none absolute right-2 top-1/2 hidden aspect-square w-[300px] -translate-y-1/2 overflow-hidden rounded-full shadow-[0_24px_60px_rgba(0,0,0,0.12)] ring-8 ring-white/70 md:block lg:right-8 lg:w-[340px]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/Biryani/biryani-hero.jpg"
+            alt=""
+            className="h-full w-full scale-[1.28] object-cover"
+          />
+        </div>
         <div className="relative flex h-full flex-col justify-center lg:w-[60%]">
           <AddressChip />
           <h1 className="mt-4 text-3xl font-bold tracking-tight text-kd-fg sm:text-5xl lg:text-[56px] lg:leading-[64px]">

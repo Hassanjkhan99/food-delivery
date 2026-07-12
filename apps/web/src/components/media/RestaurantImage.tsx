@@ -23,6 +23,7 @@ export function RestaurantImage({
   className,
   sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
   overlay,
+  fallbackSrc,
 }: {
   photo?: BranchPhoto;
   name: string;
@@ -30,6 +31,8 @@ export function RestaurantImage({
   tint?: string | null;
   className?: string;
   sizes?: string;
+  /** On-cuisine placeholder photo shown when there's no real photo (else gradient tile). */
+  fallbackSrc?: string | null;
   /**
    * Optional overlay (e.g. a closed/paused scrim). Rendered inside this container
    * BEFORE the Google attribution so the ToS-required credit stays visible on top of
@@ -39,12 +42,14 @@ export function RestaurantImage({
   overlay?: ReactNode;
 }) {
   const [errored, setErrored] = useState(false);
+  const [fallbackErrored, setFallbackErrored] = useState(false);
   const show = photo && !errored;
+  const useFallback = !show && !!fallbackSrc && !fallbackErrored;
 
   return (
     <div
       className={cn("relative overflow-hidden bg-kd-surface-muted", className)}
-      style={show ? undefined : { background: fallbackGradient(name, tint) }}
+      style={show || useFallback ? undefined : { background: fallbackGradient(name, tint) }}
     >
       {show ? (
         <Image
@@ -56,6 +61,14 @@ export function RestaurantImage({
           // Google photos must not be cached by Next's optimizer (ToS): serve as-is.
           unoptimized={photo.source === "google"}
           onError={() => setErrored(true)}
+        />
+      ) : useFallback ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={fallbackSrc}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setFallbackErrored(true)}
         />
       ) : (
         <span className="absolute inset-0 flex select-none items-center justify-center text-3xl font-bold text-white/90 drop-shadow-sm">

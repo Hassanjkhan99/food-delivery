@@ -271,8 +271,8 @@ async function main() {
         sortOrder: 0,
       },
       {
-        title: "Biryani cravings sorted",
-        imageUrl: "/banners/biryani.svg",
+        title: "Biryani cravings? Sorted.",
+        imageUrl: "/Biryani/gourmet-chicken-biryani-placeholder.jpg",
         linkHref: "/r/karachi-biryani-house",
         sortOrder: 1,
       },

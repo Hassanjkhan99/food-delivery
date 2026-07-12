@@ -34,11 +34,13 @@ export function ComboCard({
   cardStyle,
   accepting,
   onAdd,
+  imageFallback,
 }: {
   combo: ComboForCard;
   cardStyle: string;
   accepting: boolean;
   onAdd: (combo: ComboForCard) => void;
+  imageFallback?: string | null;
 }) {
   const reduced = useReducedMotion();
   const disabled = !combo.isAvailable || !accepting;
@@ -51,7 +53,12 @@ export function ComboCard({
   return (
     <div className="relative">
       <div className={`flex w-full items-start justify-between gap-3 rounded-2xl p-4 text-sm ${cardClasses(cardStyle)} ${disabled ? "opacity-50" : ""}`}>
-        <ItemImage url={combo.imageUrl} name={combo.name} className="h-20 w-20 rounded-xl" />
+        <ItemImage
+          url={combo.imageUrl}
+          name={combo.name}
+          fallbackSrc={imageFallback}
+          className="h-20 w-20 rounded-xl"
+        />
         <div className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{combo.name}</span>

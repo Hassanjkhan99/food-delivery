@@ -29,6 +29,7 @@ import { ParallaxHero } from "@/components/theme/ParallaxHero";
 import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
 import { useCart } from "@/lib/cart";
 import { ItemModal, type EditContext, type MenuItemForModal } from "./item-modal";
+import { itemImagePlaceholder } from "@/components/media/placeholders";
 import { ItemCard, percentOff, type ItemForCard } from "./item-card";
 import { ComboCard, type ComboForCard } from "./combo-card";
 import { MenuNav, type NavSection } from "./menu-nav";
@@ -52,6 +53,7 @@ const BranchQuery = graphql(`
         slug
         avgRating
         ratingCount
+        cuisineTags
         theme {
           primaryColor
           accentColor
@@ -307,6 +309,8 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
 
   const r = branch.restaurant;
   const reviewsHref = `/r/${r.slug}/reviews`;
+  // Cuisine-aware dish placeholder for items without their own photo (else gradient tile).
+  const itemFallback = itemImagePlaceholder(r.cuisineTags);
   // Deals is pinned first in the rail (hidden while searching, matching Popular's behaviour).
   const showDeals = hasDeals && !q;
   const navSections: NavSection[] = [
@@ -476,6 +480,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                 cardStyle={theme.cardStyle}
                 accepting={orderable}
                 onAdd={(c) => addCombo(c)}
+                imageFallback={itemFallback}
               />
             ))}
             {discountedItems.map((item) => (
@@ -487,6 +492,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                 accepting={orderable}
                 onOpen={(it) => setOpenItem(it)}
                 onQuickAdd={(it) => quickAdd(it)}
+                imageFallback={itemFallback}
               />
             ))}
           </div>
@@ -537,6 +543,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                     accepting={orderable}
                     onOpen={(it) => setOpenItem(it)}
                     onQuickAdd={(it) => quickAdd(it)}
+                    imageFallback={itemFallback}
                   />
                 ))}
               </div>

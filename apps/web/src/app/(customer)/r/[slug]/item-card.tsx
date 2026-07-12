@@ -44,6 +44,7 @@ export function ItemCard({
   accepting,
   onOpen,
   onQuickAdd,
+  imageFallback,
 }: {
   item: ItemForCard;
   mode: string;
@@ -51,6 +52,7 @@ export function ItemCard({
   accepting: boolean;
   onOpen: (item: ItemForCard) => void;
   onQuickAdd: (item: ItemForCard) => void;
+  imageFallback?: string | null;
 }) {
   const reduced = useReducedMotion();
   const compact = mode === "compact";
@@ -62,7 +64,12 @@ export function ItemCard({
   const inner = (
     <>
       {!compact && (
-        <ItemImage url={item.imageUrl} name={item.name} className="h-20 w-20 rounded-xl" />
+        <ItemImage
+          url={item.imageUrl}
+          name={item.name}
+          fallbackSrc={imageFallback}
+          className="h-20 w-20 rounded-xl"
+        />
       )}
       <div className="min-w-0 flex-1 text-left">
         <div className="flex flex-wrap items-center gap-2">
