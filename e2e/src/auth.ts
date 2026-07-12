@@ -85,7 +85,12 @@ export async function loginViaUi(page: Page, user: SeedUserKey): Promise<void> {
   const code = text.replace(/\D/g, "").slice(-6);
   expect(code, "could not read dev OTP code from banner").toHaveLength(6);
 
-  await page.getByRole("textbox", { name: /6-digit code/i }).fill(code);
-  await page.getByRole("button", { name: /verify & sign in/i }).click();
+  // The code UI is six single-digit boxes (aria-label "Digit 1".."Digit 6"), not one
+  // field, and the submit button reads "Verify & continue".
+  const digits = code.split("");
+  for (let i = 0; i < digits.length; i++) {
+    await page.getByRole("textbox", { name: `Digit ${i + 1}` }).fill(digits[i]!);
+  }
+  await page.getByRole("button", { name: /verify & continue/i }).click();
   await expect(page).not.toHaveURL(/\/login/);
 }
