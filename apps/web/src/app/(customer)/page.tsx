@@ -227,7 +227,11 @@ export default function HomePage() {
     for (const f of data?.featuredBranches ?? []) {
       const hit = byBranch.get(f.branch.id);
       if (!hit) continue;
-      out.push({ ...hit, promoted: true, restaurant: { ...hit.restaurant, dealBadge: f.label ?? hit.restaurant.dealBadge } });
+      out.push({
+        ...hit,
+        promoted: true,
+        restaurant: { ...hit.restaurant, dealBadge: f.label ?? hit.restaurant.dealBadge },
+      });
     }
     return out;
   }, [data, hits]);

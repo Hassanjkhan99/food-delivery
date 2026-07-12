@@ -9,11 +9,7 @@ export type FaultParty = "customer" | "restaurant" | "rider" | "dispatch" | "pla
 
 /** Coarse policy outcome persisted on Cancellation.policyOutcome and shown to admins. */
 export type PolicyOutcome =
-  | "full_refund"
-  | "partial_refund"
-  | "fee_charged"
-  | "no_charge"
-  | "support_review";
+  "full_refund" | "partial_refund" | "fee_charged" | "no_charge" | "support_review";
 
 /** How the fee is derived. Percentages are of the order subtotal (food cost). */
 export type FeeBasis = "none" | "flat" | "subtotal_pct" | "delivery_fee";
@@ -217,9 +213,14 @@ export function evaluateCancellation(
   const acceptedAt = toDate(order.acceptedAt);
   const foodPrepared =
     timing.foodPrepared ??
-    ["preparing", "ready_for_pickup", "rider_assigned", "reassigning", "picked_up", "out_for_delivery"].includes(
-      order.status,
-    );
+    [
+      "preparing",
+      "ready_for_pickup",
+      "rider_assigned",
+      "reassigning",
+      "picked_up",
+      "out_for_delivery",
+    ].includes(order.status);
 
   // Pre-acceptance: always free.
   if (!acceptedAt && order.status === "pending_acceptance") {

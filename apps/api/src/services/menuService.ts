@@ -148,10 +148,16 @@ export async function cloneMenu(
 /** Publish the branch draft: clone -> published vNext, repoint activeMenuId, archive prior. */
 export async function publishDraft(branchId: string) {
   const draft = await prisma.menu.findFirst({ where: { branchId, status: "draft" } });
-  if (!draft) throw new GraphQLError("No draft menu to publish");
+  if (!draft)
+    throw new GraphQLError("There's no draft menu to publish.", {
+      extensions: { code: "not_found" },
+    });
 
   const hasItems = await prisma.menuItem.count({ where: { category: { menuId: draft.id } } });
-  if (hasItems === 0) throw new GraphQLError("Draft menu has no items");
+  if (hasItems === 0)
+    throw new GraphQLError("Add at least one item to your draft menu before publishing.", {
+      extensions: { code: "invalid_state" },
+    });
 
   const maxVersion = await prisma.menu.aggregate({ where: { branchId }, _max: { version: true } });
   const published = await cloneMenu(draft.id, {

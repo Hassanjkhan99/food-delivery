@@ -81,7 +81,10 @@ export async function recordCashVariance(args: {
             action: "rider.cod_disabled.cash_variance",
             subjectType: "Rider",
             subjectId: riderId,
-            afterJson: { rollingAbsVarianceMinor: rollingAbs, windowDays: CASH_VARIANCE_WINDOW_DAYS },
+            afterJson: {
+              rollingAbsVarianceMinor: rollingAbs,
+              windowDays: CASH_VARIANCE_WINDOW_DAYS,
+            },
           },
         });
         logger.warn({ riderId, rollingAbs }, "rider COD auto-disabled on cash variance");
@@ -113,11 +116,7 @@ export async function recordRiderLocation(args: {
 
   let anomaly = false;
   let speedKmh: number | undefined;
-  if (
-    prev?.lat != null &&
-    prev.lng != null &&
-    prev.lastLocationAt != null
-  ) {
+  if (prev?.lat != null && prev.lng != null && prev.lastLocationAt != null) {
     const elapsedSec = (now.getTime() - prev.lastLocationAt.getTime()) / 1_000;
     // Only compare against a recent, positive-elapsed previous fix.
     if (elapsedSec > 0 && elapsedSec <= RIDER_LOCATION_STALE_SECONDS) {

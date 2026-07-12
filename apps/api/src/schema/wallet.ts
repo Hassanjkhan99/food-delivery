@@ -15,8 +15,12 @@ const MIN_TOPUP_MINOR = 10_000;
 const MAX_TOPUP_MINOR = 10_000_000;
 
 const topUpSchema = z.object({
-  amountMinor: z.number().int().min(MIN_TOPUP_MINOR).max(MAX_TOPUP_MINOR),
-  paymentMethodId: z.string().min(1),
+  amountMinor: z
+    .number()
+    .int()
+    .min(MIN_TOPUP_MINOR, `Enter at least Rs ${MIN_TOPUP_MINOR / 100}.`)
+    .max(MAX_TOPUP_MINOR, `You can top up at most Rs ${(MAX_TOPUP_MINOR / 100).toLocaleString()}.`),
+  paymentMethodId: z.string().min(1, "Choose a payment method."),
 });
 
 // One ledger movement on the prepaid account, presented as a signed wallet entry.
@@ -89,14 +93,20 @@ builder.mutationFields((t) => ({
       const { amountMinor, paymentMethodId } = topUpSchema.parse(args);
 
       const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
-      if (!method || method.userId !== customerId) throw new GraphQLError("Card not found");
+      if (!method || method.userId !== customerId)
+        throw new GraphQLError("We couldn't find that card.", {
+          extensions: { code: "payment_method_not_found" },
+        });
 
       const result = await mockProvider.charge({
         token: method.providerToken,
         amountMinor,
         reference: `topup_${customerId}_${Date.now().toString(36)}`,
       });
-      if (!result.ok) throw new GraphQLError(result.declineReason);
+      if (!result.ok)
+        throw new GraphQLError(result.declineReason, {
+          extensions: { code: "payment_declined" },
+        });
 
       await prisma.$transaction((tx) => onWalletToppedUp(tx, customerId, amountMinor));
       return loadWallet(customerId);

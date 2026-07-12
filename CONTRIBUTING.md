@@ -19,10 +19,10 @@ contact listed there.
 Herald is a **dual-licensed monorepo** — read [`NOTICE`](./NOTICE) for the exact
 boundary. In short:
 
-| Area | License | SPDX identifier |
-| ---- | ------- | --------------- |
+| Area                                                           | License               | SPDX identifier     |
+| -------------------------------------------------------------- | --------------------- | ------------------- |
 | Core: `apps/api`, `apps/web`, `packages/db`, `packages/config` | GNU AGPL-3.0-or-later | `AGPL-3.0-or-later` |
-| SDK / shareable lib: `packages/shared` | Apache License 2.0 | `Apache-2.0` |
+| SDK / shareable lib: `packages/shared`                         | Apache License 2.0    | `Apache-2.0`        |
 
 By submitting a contribution you agree it is licensed under the license of the area you
 are touching. **Do not copy code from an AGPL area into `packages/shared`** — that would

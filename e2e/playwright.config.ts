@@ -19,7 +19,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Serial in CI: several specs log in with the same seeded phone, and parallel
+  // workers interleave requestOtp/verifyOtp on that number (latest code wins), so a
+  // concurrent login can verify against another worker's code. One worker avoids it.
+  workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["list"]],
   timeout: 30_000,
   expect: { timeout: 10_000 },

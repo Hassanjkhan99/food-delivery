@@ -110,8 +110,8 @@ export default function AdminVouchersPage() {
     <main className="max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">Vouchers</h1>
       <p className="mb-4 text-sm text-kd-fg-muted">
-        Platform-funded promo codes. Discounts post a balanced ledger entry against the funder
-        at settlement.
+        Platform-funded promo codes. Discounts post a balanced ledger entry against the funder at
+        settlement.
       </p>
 
       <div className="mb-8 space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4 text-sm">

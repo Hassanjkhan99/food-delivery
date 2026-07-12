@@ -124,14 +124,31 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     where: { id: input.branchId },
     include: { restaurant: true, taxProfile: true },
   });
-  if (!branch || branch.restaurant.status !== "approved") {
-    throw new GraphQLError("Restaurant not available");
+  if (!branch) {
+    throw new GraphQLError("This restaurant could not be found.", {
+      extensions: { code: "branch_not_found" },
+    });
+  }
+  if (branch.restaurant.status !== "approved") {
+    // Distinguish why, so the UI can say the right thing instead of a flat "not available".
+    const status = branch.restaurant.status;
+    const [message, code] =
+      status === "pending_approval"
+        ? ["This restaurant isn't open for orders yet.", "restaurant_pending"]
+        : status === "suspended"
+          ? ["This restaurant is temporarily unavailable.", "restaurant_suspended"]
+          : ["This restaurant isn't available right now.", "restaurant_unavailable"];
+    throw new GraphQLError(message, { extensions: { code } });
   }
   if (!branch.isAcceptingOrders) {
-    throw new GraphQLError("Restaurant is not accepting orders right now");
+    throw new GraphQLError("This restaurant isn't accepting orders right now.", {
+      extensions: { code: "not_accepting_orders" },
+    });
   }
   if (!branch.activeMenuId) {
-    throw new GraphQLError("Restaurant has no published menu");
+    throw new GraphQLError("This restaurant hasn't published a menu yet.", {
+      extensions: { code: "no_published_menu" },
+    });
   }
 
   const distanceM = haversineMeters(
@@ -173,13 +190,23 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     // ── combo line (#53): one bundled, server-priced line with a frozen component list ──
     if (line.comboId) {
       const combo = comboById.get(line.comboId);
-      if (!combo) throw new GraphQLError(`Deal no longer available`);
-      if (!combo.isAvailable) throw new GraphQLError(`'${combo.name}' is currently unavailable`);
-      if (combo.items.length === 0) throw new GraphQLError(`'${combo.name}' has no items`);
+      if (!combo)
+        throw new GraphQLError("This deal is no longer available.", {
+          extensions: { code: "item_unavailable" },
+        });
+      if (!combo.isAvailable)
+        throw new GraphQLError(`"${combo.name}" is currently unavailable.`, {
+          extensions: { code: "item_unavailable" },
+        });
+      if (combo.items.length === 0)
+        throw new GraphQLError(`"${combo.name}" is currently unavailable.`, {
+          extensions: { code: "item_unavailable" },
+        });
       const unavailable = combo.items.find((ci) => !ci.menuItem.isAvailable);
       if (unavailable) {
         throw new GraphQLError(
-          `'${combo.name}' includes '${unavailable.menuItem.name}', which is unavailable`,
+          `"${combo.name}" includes "${unavailable.menuItem.name}", which is currently unavailable.`,
+          { extensions: { code: "item_unavailable" } },
         );
       }
       const comboComponents = combo.items.map((ci) => ({
@@ -203,8 +230,14 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     }
 
     const item = line.menuItemId ? byId.get(line.menuItemId) : undefined;
-    if (!item) throw new GraphQLError(`Item no longer on the menu`);
-    if (!item.isAvailable) throw new GraphQLError(`'${item.name}' is currently unavailable`);
+    if (!item)
+      throw new GraphQLError("One of your items is no longer on the menu.", {
+        extensions: { code: "item_unavailable" },
+      });
+    if (!item.isAvailable)
+      throw new GraphQLError(`"${item.name}" is currently unavailable.`, {
+        extensions: { code: "item_unavailable" },
+      });
 
     const selected = new Set(line.modifierOptionIds);
     const modifiers: ResolvedLine["modifiers"] = [];
@@ -214,11 +247,15 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       const chosen = group.options.filter((o) => selected.has(o.id));
       if (chosen.length < group.minSelect || chosen.length > group.maxSelect) {
         throw new GraphQLError(
-          `'${item.name}': choose between ${group.minSelect} and ${group.maxSelect} of '${group.name}'`,
+          `For "${item.name}", please choose between ${group.minSelect} and ${group.maxSelect} option(s) for "${group.name}".`,
+          { extensions: { code: "modifier_selection_invalid" } },
         );
       }
       for (const opt of chosen) {
-        if (!opt.isAvailable) throw new GraphQLError(`Option '${opt.name}' is unavailable`);
+        if (!opt.isAvailable)
+          throw new GraphQLError(`The option "${opt.name}" is currently unavailable.`, {
+            extensions: { code: "item_unavailable" },
+          });
         delta += opt.priceDeltaMinor;
         modifiers.push({
           groupName: group.name,
@@ -231,7 +268,9 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       chosen.forEach((o) => selected.delete(o.id));
     }
     if (selected.size > 0) {
-      throw new GraphQLError(`'${item.name}': unknown modifier option selected`);
+      throw new GraphQLError(`Please review your options for "${item.name}".`, {
+        extensions: { code: "modifier_selection_invalid" },
+      });
     }
 
     // priceMinor is always the charged price; compareAtPriceMinor (#53) is display-only.
@@ -254,7 +293,10 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   const tax = applyBps(subtotal, branch.taxProfile.rateBps);
 
   const fee = await prisma.feeConfig.findFirst({ orderBy: { createdAt: "desc" } });
-  if (!fee) throw new GraphQLError("Platform fees are not configured");
+  if (!fee)
+    throw new GraphQLError("We couldn't price this order right now. Please try again shortly.", {
+      extensions: { code: "pricing_unavailable" },
+    });
   const isChain = branch.restaurant.tier === "chain";
   const commissionBps = isChain ? fee.chainCommissionBps : fee.smallBusinessCommissionBps;
   const platformFee = isChain ? fee.chainPlatformFeeMinor : fee.smallBusinessPlatformFeeMinor;

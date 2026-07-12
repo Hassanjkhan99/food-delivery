@@ -4,6 +4,7 @@
 // splitting the API back out later is just re-pointing at server.ts.
 export { schema } from "./schema/index.js";
 export { buildContext, type AppContext } from "./context.js";
+export { maskError, type FieldError } from "./errors.js";
 export { pubsub } from "./pubsub.js";
 export { handleLocalUploadPut, handleLocalFileGet } from "./services/storage/objectStore.js";
 export { sweepExpiredOrders } from "./jobs/expirePendingOrders.js";

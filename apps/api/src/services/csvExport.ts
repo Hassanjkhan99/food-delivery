@@ -50,16 +50,10 @@ function isoDate(d: Date | null | undefined): string {
  * total, so the restaurant:{id}:payable movement (this net) never includes it.
  * Deducting it made every card row's net lower than the ledger by the platform fee.
  */
-export function orderNetMinor(o: Pick<
-  Order,
-  "subtotalMinor" | "taxTotalMinor" | "deliveryFeeMinor" | "commissionMinor"
->): number {
-  return (
-    o.subtotalMinor +
-    o.taxTotalMinor +
-    o.deliveryFeeMinor -
-    o.commissionMinor
-  );
+export function orderNetMinor(
+  o: Pick<Order, "subtotalMinor" | "taxTotalMinor" | "deliveryFeeMinor" | "commissionMinor">,
+): number {
+  return o.subtotalMinor + o.taxTotalMinor + o.deliveryFeeMinor - o.commissionMinor;
 }
 
 type SettlementOrder = Order & { branch: { name: string } };
@@ -127,9 +121,7 @@ export function bucketMetrics(
   for (const o of orders) {
     if (!o.deliveredAt) continue;
     const key = periodKey(o.deliveredAt, granularity);
-    const b =
-      buckets.get(key) ??
-      { period: key, orders: 0, gmvMinor: 0, platformRevenueMinor: 0 };
+    const b = buckets.get(key) ?? { period: key, orders: 0, gmvMinor: 0, platformRevenueMinor: 0 };
     b.orders += 1;
     b.gmvMinor += o.subtotalMinor + o.taxTotalMinor + o.deliveryFeeMinor;
     b.platformRevenueMinor += o.commissionMinor + o.platformFeeMinor;
@@ -164,13 +156,7 @@ function periodKey(d: Date, granularity: "day" | "week" | "month"): string {
 }
 
 export function adminMetricsCsv(buckets: MetricsBucket[]): string {
-  const headers = [
-    "period",
-    "orders",
-    "gmv",
-    "platform_revenue",
-    "take_rate_pct",
-  ];
+  const headers = ["period", "orders", "gmv", "platform_revenue", "take_rate_pct"];
   const rows = buckets.map((b) => [
     b.period,
     b.orders,
@@ -226,9 +212,7 @@ export function eimsInvoiceCsv(orders: InvoiceOrder[]): string {
     o.items.forEach((it, idx) => {
       cumulativeSubtotal += it.lineTotalMinor;
       const cumulativeTax =
-        lineSubtotal > 0
-          ? Math.round((o.taxTotalMinor * cumulativeSubtotal) / lineSubtotal)
-          : 0;
+        lineSubtotal > 0 ? Math.round((o.taxTotalMinor * cumulativeSubtotal) / lineSubtotal) : 0;
       const lineTax = cumulativeTax - taxAssigned;
       taxAssigned = cumulativeTax;
       rows.push([

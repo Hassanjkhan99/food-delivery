@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "urql";
 import { Wallet as WalletIcon } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
+import { parseGqlError, friendlyMessage } from "@/lib/graphql-error";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -65,7 +66,7 @@ export default function WalletPage() {
     }
     const result = await topUp({ amountMinor, paymentMethodId: selectedMethodId });
     if (result.error) {
-      setError(result.error.graphQLErrors[0]?.message ?? "Top-up failed");
+      setError(friendlyMessage(parseGqlError(result.error, "We couldn't complete the top-up.")));
       return;
     }
     refetch({ requestPolicy: "network-only" });
@@ -172,7 +173,10 @@ export default function WalletPage() {
         </div>
       </section>
 
-      <Link href="/account" className={buttonVariants({ variant: "outline", className: "mt-6 w-full" })}>
+      <Link
+        href="/account"
+        className={buttonVariants({ variant: "outline", className: "mt-6 w-full" })}
+      >
         Back to account
       </Link>
     </main>

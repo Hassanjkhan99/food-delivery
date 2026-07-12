@@ -176,7 +176,10 @@ builder.mutationFields((t) => ({
       const session = await prisma.session.findFirst({
         where: { id: args.sessionId, userId: ctx.userId! },
       });
-      if (!session) throw new GraphQLError("Session not found.");
+      if (!session)
+        throw new GraphQLError("That session is no longer active.", {
+          extensions: { code: "session_not_found" },
+        });
       await prisma.session.update({
         where: { id: session.id },
         data: { revokedAt: new Date() },

@@ -35,7 +35,9 @@ builder.subscriptionType({
           !branch ||
           (!ctx.restaurantIds.includes(branch.restaurantId) && !ctx.hasRole("admin"))
         ) {
-          throw new GraphQLError("Not a member of this restaurant");
+          throw new GraphQLError("You don't have access to this restaurant's orders.", {
+            extensions: { code: "forbidden" },
+          });
         }
         return pubsub.subscribe("branchOrders", args.branchId);
       },
@@ -51,12 +53,18 @@ builder.subscriptionType({
           where: { id: args.orderId },
           include: { branch: true },
         });
-        if (!order) throw new GraphQLError("Order not found");
+        if (!order)
+          throw new GraphQLError("We couldn't find that order.", {
+            extensions: { code: "not_found" },
+          });
         const allowed =
           order.customerId === ctx.userId ||
           ctx.hasRole("admin") ||
           ctx.restaurantIds.includes(order.branch.restaurantId);
-        if (!allowed) throw new GraphQLError("Not authorized");
+        if (!allowed)
+          throw new GraphQLError("You don't have permission to follow this order.", {
+            extensions: { code: "forbidden" },
+          });
         return pubsub.subscribe("orderStatus", args.orderId);
       },
       resolve: (payload: OrderChangedPayload) => payload,
@@ -66,7 +74,10 @@ builder.subscriptionType({
       type: OrderChangedType,
       authScopes: { rider: true },
       subscribe: (_root, _args, ctx) => {
-        if (!ctx.riderId) throw new GraphQLError("No rider profile");
+        if (!ctx.riderId)
+          throw new GraphQLError("You need a rider profile to receive job offers.", {
+            extensions: { code: "forbidden" },
+          });
         return pubsub.subscribe("riderJobs", ctx.riderId);
       },
       resolve: (payload: OrderChangedPayload) => payload,
@@ -77,7 +88,10 @@ builder.subscriptionType({
       type: NotificationEventType,
       authScopes: { loggedIn: true },
       subscribe: (_root, _args, ctx) => {
-        if (!ctx.userId) throw new GraphQLError("Not authenticated");
+        if (!ctx.userId)
+          throw new GraphQLError("Please sign in to receive notifications.", {
+            extensions: { code: "unauthenticated" },
+          });
         return pubsub.subscribe("userNotifications", ctx.userId);
       },
       resolve: (payload: NotificationPayload) => payload,

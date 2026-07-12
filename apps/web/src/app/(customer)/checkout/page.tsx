@@ -12,6 +12,7 @@ import {
   type VoucherRejectionCode,
 } from "@fd/shared";
 import { useCart, useCartExtras } from "@/lib/cart";
+import { parseGqlError, friendlyMessage, isStaleCartError } from "@/lib/graphql-error";
 import { useDeliveryLocation } from "@/lib/location";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,7 +194,7 @@ export default function CheckoutPage() {
     const result = await requestGuestOtp({ phone: guestPhone.trim() });
     guestRequesting.current = false;
     if (result.error) {
-      setGuestError(result.error.graphQLErrors[0]?.message ?? "Couldn't send the code.");
+      setGuestError(friendlyMessage(parseGqlError(result.error, "We couldn't send the code.")));
       return;
     }
     setGuestDevCode(result.data?.requestOtp?.devCode ?? null);
@@ -207,7 +208,7 @@ export default function CheckoutPage() {
     setGuestError(null);
     const result = await verifyGuestOtp({ phone: guestPhone.trim(), code: guestCode });
     if (result.error || !result.data?.verifyOtp?.user?.id) {
-      setGuestError(result.error?.graphQLErrors[0]?.message ?? "Verification failed.");
+      setGuestError(friendlyMessage(parseGqlError(result.error, "We couldn't verify that code.")));
       return;
     }
     // Session cookie is now set server-side; re-read the viewer so the order form unlocks.
@@ -283,11 +284,21 @@ export default function CheckoutPage() {
       if (res.data?.quoteCart) setQuotedMode(fulfillmentMode);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartLines, deliveryLat, deliveryLng, tipAmount, voucherCode, fulfillmentMode, redeemPoints]);
+  }, [
+    branchId,
+    cartLines,
+    deliveryLat,
+    deliveryLng,
+    tipAmount,
+    voucherCode,
+    fulfillmentMode,
+    redeemPoints,
+  ]);
 
   if (!branchId || lines.length === 0) {
     return (
       <main className="py-16 text-center">
+        <h1 className="mb-2 text-2xl font-bold">Checkout</h1>
         <p className="text-kd-fg-muted">Nothing to check out.</p>
         <Link href="/" className={buttonVariants({ className: "mt-4" })}>
           Browse restaurants
@@ -297,7 +308,8 @@ export default function CheckoutPage() {
   }
 
   const quote = quoteState.data?.quoteCart;
-  const quoteError = quoteState.error?.graphQLErrors[0]?.message;
+  const quoteParsed = quoteState.error ? parseGqlError(quoteState.error) : null;
+  const quoteError = quoteParsed ? friendlyMessage(quoteParsed) : undefined;
   // Wallet can't cover this order → block placement and nudge to top up.
   const walletShort =
     paymentMode === "wallet" && !!quote && walletBalanceMinor < quote.grandTotalMinor;
@@ -359,12 +371,23 @@ export default function CheckoutPage() {
     });
     const order = result.data?.placeOrder;
     if (result.error || !order) {
-      const msg = result.error?.graphQLErrors[0]?.message ?? "Could not place the order";
-      if (msg.toLowerCase().includes("not authenticated") || msg.includes("Not authorized")) {
+      const parsed = parseGqlError(result.error, "Could not place the order");
+      if (
+        parsed.code === "UNAUTHENTICATED" ||
+        /not authenticated|not authorized/i.test(parsed.message)
+      ) {
         router.push("/login?next=/checkout");
         return;
       }
-      setError(msg);
+      // The cart points at a restaurant that's gone/unorderable — reset it and send the
+      // customer back to browse rather than leaving them stuck on a dead checkout (#145).
+      if (isStaleCartError(parsed)) {
+        clear();
+        resetExtras();
+        router.push("/");
+        return;
+      }
+      setError(friendlyMessage(parsed));
       return;
     }
     clear();
@@ -708,7 +731,25 @@ export default function CheckoutPage() {
 
         <div className="rounded-xl border border-kd-border bg-kd-surface p-4 text-sm">
           {quoteState.fetching && <p className="text-kd-fg-subtle">Calculating…</p>}
-          {quoteError && <p className="text-kd-danger">{quoteError}</p>}
+          {quoteError && (
+            <div className="space-y-2">
+              <p className="text-kd-danger">{quoteError}</p>
+              {isStaleCartError(quoteParsed) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    clear();
+                    resetExtras();
+                    router.push("/");
+                  }}
+                >
+                  Choose a restaurant
+                </Button>
+              )}
+            </div>
+          )}
           {quote && (
             <>
               <div className="flex justify-between">

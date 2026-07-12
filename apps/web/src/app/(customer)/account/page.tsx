@@ -197,12 +197,7 @@ export default function AccountPage() {
               <Button type="submit" size="sm" disabled={updateState.fetching}>
                 {updateState.fetching ? "Saving…" : "Save"}
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setEditing(false)}
-              >
+              <Button type="button" size="sm" variant="outline" onClick={() => setEditing(false)}>
                 Cancel
               </Button>
             </div>

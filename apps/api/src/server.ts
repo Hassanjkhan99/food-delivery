@@ -5,6 +5,7 @@ import { useCookies } from "@whatwg-node/server-plugin-cookies";
 import { env } from "./env.js";
 import { buildContext } from "./context.js";
 import { schema } from "./schema/index.js";
+import { maskError } from "./errors.js";
 import { startExpirySweeper } from "./jobs/expirePendingOrders.js";
 import { startRiderTrustJob } from "./jobs/recomputeRiderTrust.js";
 
@@ -12,6 +13,7 @@ const yoga = createYoga({
   schema,
   context: buildContext,
   graphqlEndpoint: "/graphql",
+  maskedErrors: { maskError },
   plugins: [useCookies()],
   cors: {
     origin: [env.webOrigin],

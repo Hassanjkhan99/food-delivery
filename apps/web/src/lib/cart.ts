@@ -176,12 +176,7 @@ export type OrderItemSnapshot = {
 // Order statuses that reached a terminal state where offering a one-tap reorder
 // makes sense. Both the orders list and the order detail page gate on this so an
 // in-flight order can't be turned into a duplicate before it's fulfilled.
-export const REORDERABLE_STATUSES = new Set([
-  "delivered",
-  "cancelled",
-  "rejected",
-  "auto_expired",
-]);
+export const REORDERABLE_STATUSES = new Set(["delivered", "cancelled", "rejected", "auto_expired"]);
 
 /** A past order reduced to what reorder needs: the branch and its item snapshots. */
 export type ReorderSource = {

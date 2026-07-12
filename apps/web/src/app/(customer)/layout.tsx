@@ -95,7 +95,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           </nav>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-12">{children}</div>
+      <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-12">
+        {children}
+      </div>
     </div>
   );
 }

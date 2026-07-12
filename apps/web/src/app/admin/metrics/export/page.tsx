@@ -60,8 +60,8 @@ export default function AdminMetricsExportPage() {
     <main className="max-w-lg">
       <h1 className="mb-1 text-xl font-bold">Metrics export</h1>
       <p className="mb-4 text-sm text-kd-fg-muted">
-        Orders, GMV and take-rate per period over delivered orders. GMV = subtotal + tax +
-        delivery; take rate = platform revenue / GMV.
+        Orders, GMV and take-rate per period over delivered orders. GMV = subtotal + tax + delivery;
+        take rate = platform revenue / GMV.
       </p>
 
       <div className="space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4">

@@ -28,7 +28,6 @@ green; all four role UIs verified rendering with live seeded data.
   (`Get-Process postgres | Stop-Process -Force; rm .pgdata/postmaster.pid; pnpm db`). If the API
   logs `ECONNREFUSED` / a UI shows "no X for this account", the DB dropped — restart it.
 
-
 ## What this project is
 
 Restaurant-first delivery marketplace. Restaurants own menu/prices/acceptance/riders; the

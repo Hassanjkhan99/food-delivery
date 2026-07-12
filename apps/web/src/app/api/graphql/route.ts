@@ -8,15 +8,21 @@
 // invocations, so live push degrades — clients fall back to query refetching. See DEPLOY.md.
 import { createYoga } from "graphql-yoga";
 import { useCookies } from "@whatwg-node/server-plugin-cookies";
-import { schema, buildContext } from "@fd/api";
+import { schema, buildContext, maskError } from "@fd/api";
 
 const { handleRequest } = createYoga({
   schema,
   context: buildContext,
   // Must match the file route so Yoga's landing page / GraphiQL links resolve correctly.
   graphqlEndpoint: "/api/graphql",
+  // Map Zod/Prisma throws to clean, field-mappable GraphQLErrors instead of the generic
+  // "Unexpected error." mask (#145). Shared with the standalone server.ts Yoga instance.
+  maskedErrors: { maskError },
   // Same-origin now, so CORS is unnecessary; hand Yoga the Fetch Response Next expects.
   fetchAPI: { Response },
+  // useCookies is a Yoga/whatwg-node plugin factory, not a React hook — the `use` prefix
+  // just trips the react-hooks lint rule here.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   plugins: [useCookies()],
 });
 

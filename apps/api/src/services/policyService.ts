@@ -26,7 +26,11 @@ export function evaluateOrderCancellation(
   return toDecision(order, actor, timing);
 }
 
-function toDecision(order: Order, actor: CancellationActor, timing: PolicyTiming): CancellationDecision {
+function toDecision(
+  order: Order,
+  actor: CancellationActor,
+  timing: PolicyTiming,
+): CancellationDecision {
   return evaluateCancellation(
     {
       status: order.status,

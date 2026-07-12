@@ -117,6 +117,19 @@ const early = await rider(
 assert(Boolean(early.errors?.length), "deliver before pickup blocked");
 
 await rider(`mutation { riderArrivedAtPickup(taskId: "${job!.id}") { status } }`);
+
+// Pickup PIN handoff (#25): the restaurant shows the order-scoped PIN; the rider must
+// enter it (verifyPickupPin) before collecting — the wrong-rider guard. Read the PIN as
+// the owner (riders can never READ it), verify as the rider, then collect.
+const pinQ = await owner<{ order: { pickupPin: string | null } }>(
+  `query { order(id: "${orderId}") { pickupPin } }`,
+);
+const pin = pinQ.data!.order.pickupPin!;
+const verified = await rider<{ verifyPickupPin: boolean }>(
+  `mutation { verifyPickupPin(taskId: "${job!.id}", pin: "${pin}") }`,
+);
+assert(verified.data?.verifyPickupPin === true, "pickup PIN verified");
+
 const picked = await rider<{ riderPickedUp: { status: string } }>(
   `mutation { riderPickedUp(taskId: "${job!.id}") { status } }`,
 );

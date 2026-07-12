@@ -21,7 +21,10 @@ const STATUS_COPY: Partial<Record<OrderStatus, { title: string; body: string }>>
   },
   accepted: { title: "Order accepted", body: "The restaurant is getting started on your order." },
   preparing: { title: "Preparing your food", body: "Your order is being prepared." },
-  ready_for_pickup: { title: "Ready for pickup", body: "Your order is ready and waiting for a rider." },
+  ready_for_pickup: {
+    title: "Ready for pickup",
+    body: "Your order is ready and waiting for a rider.",
+  },
   rider_assigned: { title: "Rider assigned", body: "A rider is heading to the restaurant." },
   picked_up: { title: "On the way", body: "Your rider has picked up your order." },
   out_for_delivery: { title: "Out for delivery", body: "Your order is on its way to you." },

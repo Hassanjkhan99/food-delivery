@@ -55,13 +55,17 @@ function isSettled(sub: SettleableSub | null): boolean {
 // for a subscription (nothing to collect on delivery), so a card is required.
 async function chargePlan(userId: string, planPriceMinor: number, paymentMethodId: string) {
   const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
-  if (!method || method.userId !== userId) throw new GraphQLError("Card not found");
+  if (!method || method.userId !== userId)
+    throw new GraphQLError("We couldn't find that saved card.", {
+      extensions: { code: "not_found" },
+    });
   const result = await mockProvider.charge({
     token: method.providerToken,
     amountMinor: planPriceMinor,
     reference: `sub_${userId.slice(0, 8)}`,
   });
-  if (!result.ok) throw new GraphQLError(result.declineReason);
+  if (!result.ok)
+    throw new GraphQLError(result.declineReason, { extensions: { code: "payment_declined" } });
   return result.providerRef;
 }
 
@@ -75,7 +79,10 @@ async function chargePlan(userId: string, planPriceMinor: number, paymentMethodI
 // the claim is rolled back so the user isn't left with an unpaid "active" membership.
 export async function subscribe(userId: string, planId: string, paymentMethodId: string) {
   const plan = await prisma.membershipPlan.findFirst({ where: { id: planId, isActive: true } });
-  if (!plan) throw new GraphQLError("Membership plan not available");
+  if (!plan)
+    throw new GraphQLError("That membership plan isn't available right now.", {
+      extensions: { code: "not_found" },
+    });
 
   const existing = await currentMembership(userId);
   if (isSettled(existing)) return existing!;
@@ -96,7 +103,7 @@ export async function subscribe(userId: string, planId: string, paymentMethodId:
   };
 
   const pending = () =>
-    new GraphQLError("Membership is being set up — please retry in a moment", {
+    new GraphQLError("Your membership is being set up. Please try again in a moment.", {
       extensions: { code: "membership_pending" },
     });
 
@@ -184,7 +191,10 @@ export async function cancel(userId: string) {
     where: { userId, status: "active" },
     orderBy: { currentPeriodEnd: "desc" },
   });
-  if (!sub) throw new GraphQLError("No active membership to cancel");
+  if (!sub)
+    throw new GraphQLError("You don't have an active membership to cancel.", {
+      extensions: { code: "not_found" },
+    });
   return prisma.subscription.update({
     where: { id: sub.id },
     data: { autoRenew: false, cancelledAt: new Date() },

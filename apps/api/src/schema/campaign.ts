@@ -37,7 +37,9 @@ async function acceptanceSlaPct(restaurantId: string, days = 30): Promise<number
 
 async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
   if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("Not a member of this restaurant");
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
   }
 }
 
@@ -219,15 +221,22 @@ builder.mutationFields((t) => ({
     resolve: async (query, _root, args, ctx) => {
       await assertRestaurantMember(ctx, args.restaurantId);
       if (!["featured_slot", "deal_badge"].includes(args.type)) {
-        throw new GraphQLError("Invalid campaign type");
+        throw new GraphQLError("Please choose a valid campaign type.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const starts = args.startsAt ?? null;
       const ends = args.endsAt ?? null;
       if (starts && ends && ends <= starts) {
-        throw new GraphQLError("End date must be after the start date");
+        throw new GraphQLError("The end date must be after the start date.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const r = await prisma.restaurant.findUniqueOrThrow({ where: { id: args.restaurantId } });
-      const dailyRateMinor = await dailyRateFor(r.tier, args.type as "featured_slot" | "deal_badge");
+      const dailyRateMinor = await dailyRateFor(
+        r.tier,
+        args.type as "featured_slot" | "deal_badge",
+      );
       return prisma.campaign.create({
         ...query,
         data: {
@@ -252,10 +261,15 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       const c = await prisma.campaign.findUnique({ where: { id: args.id } });
-      if (!c) throw new GraphQLError("Campaign not found");
+      if (!c)
+        throw new GraphQLError("We couldn't find that campaign.", {
+          extensions: { code: "not_found" },
+        });
       await assertRestaurantMember(ctx, c.restaurantId);
       if (c.status !== "draft" && c.status !== "rejected") {
-        throw new GraphQLError("Only draft or rejected campaigns can be submitted");
+        throw new GraphQLError("Only draft or rejected campaigns can be submitted for approval.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       if (c.dailyRateMinor > 0) {
         const balance = await prisma.$transaction((tx) =>
@@ -263,7 +277,8 @@ builder.mutationFields((t) => ({
         );
         if (balance < c.dailyRateMinor) {
           throw new GraphQLError(
-            "Wallet balance is too low to cover one day of this campaign. Top up first.",
+            "Your wallet balance is too low to cover one day of this campaign. Please top up first.",
+            { extensions: { code: "invalid_state" } },
           );
         }
       }
@@ -282,7 +297,10 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       const c = await prisma.campaign.findUnique({ where: { id: args.id } });
-      if (!c) throw new GraphQLError("Campaign not found");
+      if (!c)
+        throw new GraphQLError("We couldn't find that campaign.", {
+          extensions: { code: "not_found" },
+        });
       await assertRestaurantMember(ctx, c.restaurantId);
       return prisma.campaign.update({
         ...query,
@@ -298,8 +316,14 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       const c = await prisma.campaign.findUnique({ where: { id: args.id } });
-      if (!c) throw new GraphQLError("Campaign not found");
-      if (c.status !== "pending_approval") throw new GraphQLError("Campaign is not pending");
+      if (!c)
+        throw new GraphQLError("We couldn't find that campaign.", {
+          extensions: { code: "not_found" },
+        });
+      if (c.status !== "pending_approval")
+        throw new GraphQLError("This campaign is not awaiting approval.", {
+          extensions: { code: "invalid_state" },
+        });
       const updated = await prisma.campaign.update({
         ...query,
         where: { id: args.id },
@@ -310,7 +334,13 @@ builder.mutationFields((t) => ({
           rejectedReason: null,
         },
       });
-      await audit(ctx.userId, "campaign.approve", args.id, { status: c.status }, { status: "active" });
+      await audit(
+        ctx.userId,
+        "campaign.approve",
+        args.id,
+        { status: c.status },
+        { status: "active" },
+      );
       return updated;
     },
   }),
@@ -320,10 +350,19 @@ builder.mutationFields((t) => ({
     authScopes: { admin: true },
     args: { id: t.arg.string({ required: true }), reason: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      if (!args.reason.trim()) throw new GraphQLError("A rejection reason is required");
+      if (!args.reason.trim())
+        throw new GraphQLError("Please provide a reason for rejecting this campaign.", {
+          extensions: { code: "validation_error" },
+        });
       const c = await prisma.campaign.findUnique({ where: { id: args.id } });
-      if (!c) throw new GraphQLError("Campaign not found");
-      if (c.status !== "pending_approval") throw new GraphQLError("Campaign is not pending");
+      if (!c)
+        throw new GraphQLError("We couldn't find that campaign.", {
+          extensions: { code: "not_found" },
+        });
+      if (c.status !== "pending_approval")
+        throw new GraphQLError("This campaign is not awaiting approval.", {
+          extensions: { code: "invalid_state" },
+        });
       const updated = await prisma.campaign.update({
         ...query,
         where: { id: args.id },
@@ -349,13 +388,10 @@ builder.mutationFields((t) => ({
     resolve: async (_root, _args, ctx) => {
       const results = await accrueCampaigns();
       for (const r of results.filter((x) => x.amountMinor > 0 || x.ended)) {
-        await audit(
-          ctx.userId,
-          r.ended ? "campaign.end" : "campaign.accrue",
-          r.campaignId,
-          null,
-          { amountMinor: r.amountMinor, ended: r.ended },
-        );
+        await audit(ctx.userId, r.ended ? "campaign.end" : "campaign.accrue", r.campaignId, null, {
+          amountMinor: r.amountMinor,
+          ended: r.ended,
+        });
       }
       return results;
     },

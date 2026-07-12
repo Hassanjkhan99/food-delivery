@@ -162,9 +162,7 @@ builder.queryFields((t) => ({
           ...(args.status
             ? { status: args.status as never }
             : { status: { in: ["open", "in_progress"] } }),
-          ...(args.category
-            ? { category: { in: ticketCategoryFilterValues(args.category) } }
-            : {}),
+          ...(args.category ? { category: { in: ticketCategoryFilterValues(args.category) } } : {}),
         },
         orderBy: { createdAt: "asc" },
         take: Math.min(args.take ?? 100, 200),
@@ -192,11 +190,11 @@ builder.mutationFields((t) => ({
     resolve: async (query, _root, args, ctx) => {
       const before = await prisma.supportTicket.findUniqueOrThrow({ where: { id: args.id } });
       if (before.status === "resolved" || before.status === "closed") {
-        throw new GraphQLError("Ticket already closed");
+        throw new GraphQLError("This ticket is already closed.", {
+          extensions: { code: "invalid_state" },
+        });
       }
-      const agent = ctx.userId
-        ? await prisma.user.findUnique({ where: { id: ctx.userId } })
-        : null;
+      const agent = ctx.userId ? await prisma.user.findUnique({ where: { id: ctx.userId } }) : null;
       const updated = await prisma.supportTicket.update({
         ...query,
         where: { id: args.id },
@@ -230,11 +228,15 @@ builder.mutationFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       if (!(TICKET_RESOLUTION_CODES as readonly string[]).includes(args.resolutionCode)) {
-        throw new GraphQLError("Invalid resolution code");
+        throw new GraphQLError("Please choose a valid resolution code.", {
+          extensions: { code: "validation_error" },
+        });
       }
       const before = await prisma.supportTicket.findUniqueOrThrow({ where: { id: args.id } });
       if (before.status === "resolved" || before.status === "closed") {
-        throw new GraphQLError("Ticket already closed");
+        throw new GraphQLError("This ticket is already closed.", {
+          extensions: { code: "invalid_state" },
+        });
       }
       const now = new Date();
       const updated = await prisma.supportTicket.update({

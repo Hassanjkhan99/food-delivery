@@ -26,6 +26,7 @@ export default function CartPage() {
   if (lines.length === 0 || !branchId) {
     return (
       <main className="py-16 text-center">
+        <h1 className="mb-2 text-2xl font-bold">Your cart</h1>
         <p className="text-lg text-kd-fg-muted">Your cart is empty.</p>
         <Link href="/" className={buttonVariants({ className: "mt-4" })}>
           Browse restaurants

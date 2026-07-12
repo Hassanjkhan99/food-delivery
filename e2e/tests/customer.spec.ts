@@ -54,7 +54,8 @@ test.describe("customer UI", () => {
     await loginAs(page, "customerCard");
     await page.goto("/orders");
     await expect(page.locator("body")).toBeVisible();
-    // No unhandled client error should leave the page blank.
-    await expect(page.locator("main, body")).not.toBeEmpty();
+    // No unhandled client error should leave the page blank. Scope to <main> — a
+    // "main, body" selector matches two elements and trips Playwright strict mode.
+    await expect(page.locator("main")).not.toBeEmpty();
   });
 });

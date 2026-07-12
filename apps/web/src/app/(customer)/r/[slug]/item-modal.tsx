@@ -115,8 +115,7 @@ export function ItemModal({
   // inline instead of relying on a disabled-button tooltip.
   const groupError = (g: MenuItemForModal["modifierGroups"][number]): string | null => {
     const n = (selected[g.id] ?? []).length;
-    if (n < g.minSelect)
-      return g.minSelect === 1 ? "Choose 1" : `Choose at least ${g.minSelect}`;
+    if (n < g.minSelect) return g.minSelect === 1 ? "Choose 1" : `Choose at least ${g.minSelect}`;
     if (n > g.maxSelect) return `Choose at most ${g.maxSelect}`;
     return null;
   };

@@ -51,18 +51,33 @@ function parseCsv(text: string): string[][] {
 
 export async function parseMenuCsvAsset(userId: string, assetId: string): Promise<CsvRow[]> {
   const asset = await prisma.mediaAsset.findUnique({ where: { id: assetId } });
-  if (!asset || asset.ownerId !== userId) throw new GraphQLError("CSV asset not found");
-  if (asset.status !== "finalized") throw new GraphQLError("Upload not finalized");
+  if (!asset || asset.ownerId !== userId)
+    throw new GraphQLError("We couldn't find that CSV file.", {
+      extensions: { code: "not_found" },
+    });
+  if (asset.status !== "finalized")
+    throw new GraphQLError(
+      "This file hasn't finished uploading yet. Please try again in a moment.",
+      {
+        extensions: { code: "invalid_state" },
+      },
+    );
 
   const path = resolve(join(resolve(env.storageDir), asset.objectKey));
   const text = await readFile(path, "utf8");
   const rows = parseCsv(text);
-  if (rows.length < 2) throw new GraphQLError("CSV needs a header row and at least one item");
+  if (rows.length < 2)
+    throw new GraphQLError("Your CSV needs a header row and at least one menu item.", {
+      extensions: { code: "validation_error" },
+    });
 
   const header = rows[0]!.map((h) => h.trim().toLowerCase());
   const col = (name: string) => header.indexOf(name);
   if (col("category") < 0 || col("name") < 0 || col("price") < 0) {
-    throw new GraphQLError("CSV header must contain: category, name, price (description optional)");
+    throw new GraphQLError(
+      "Your CSV header must include the columns category, name, and price (description is optional).",
+      { extensions: { code: "validation_error" } },
+    );
   }
 
   return rows.slice(1).map((r, i) => {
@@ -82,7 +97,10 @@ export async function parseMenuCsvAsset(userId: string, assetId: string): Promis
 /** Merge valid CSV rows into the draft: categories matched by name (case-insensitive). */
 export async function importMenuCsv(userId: string, branchId: string, assetId: string) {
   const rows = (await parseMenuCsvAsset(userId, assetId)).filter((r) => !r.error);
-  if (rows.length === 0) throw new GraphQLError("No valid rows to import");
+  if (rows.length === 0)
+    throw new GraphQLError("There are no valid rows to import in this file.", {
+      extensions: { code: "validation_error" },
+    });
 
   const draft = await ensureDraft(branchId);
   const categories = await prisma.menuCategory.findMany({ where: { menuId: draft.id } });

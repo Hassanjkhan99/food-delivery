@@ -46,9 +46,9 @@ export default function DesignKitPage() {
           KhaanaDo — Fast-food identity
         </h1>
         <p className="max-w-2xl text-kd-body text-kd-fg-muted">
-          Cream-dominant surfaces, warm charcoal text, red for primary actions, golden yellow
-          as the accent. All colors come from <code className="text-kd-primary">--kd-*</code>{" "}
-          tokens; primitives inherit them via the shadcn bridge. See{" "}
+          Cream-dominant surfaces, warm charcoal text, red for primary actions, golden yellow as the
+          accent. All colors come from <code className="text-kd-primary">--kd-*</code> tokens;
+          primitives inherit them via the shadcn bridge. See{" "}
           <code className="text-kd-primary">components/ui/THEME.md</code>.
         </p>
       </header>

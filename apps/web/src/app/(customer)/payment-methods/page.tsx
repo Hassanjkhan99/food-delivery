@@ -7,6 +7,7 @@ import { graphql } from "@/graphql/generated";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseGqlError, fieldError, type ParsedGqlError } from "@/lib/graphql-error";
 
 const MethodsQuery = graphql(`
   query MyPaymentMethods {
@@ -45,11 +46,18 @@ export default function PaymentMethodsPage() {
   const [number, setNumber] = useState("");
   const [exp, setExp] = useState("");
   const [cvc, setCvc] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<ParsedGqlError | null>(null);
+
+  // Expiry is one input mapped to expMonth/expYear on the backend, so surface either.
+  const numberErr = fieldError(err, "number");
+  const expErr = fieldError(err, "expMonth") ?? fieldError(err, "expYear");
+  const cvcErr = fieldError(err, "cvc");
+  // A message not tied to a specific field (e.g. declined card, unexpected).
+  const generalErr = err && !numberErr && !expErr && !cvcErr ? err.message : null;
 
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setErr(null);
     const [mm, yy] = exp.split("/").map((s) => s.trim());
     const result = await addMethod({
       card: {
@@ -60,7 +68,7 @@ export default function PaymentMethodsPage() {
       },
     });
     if (result.error) {
-      setError(result.error.graphQLErrors[0]?.message ?? "Could not save card");
+      setErr(parseGqlError(result.error, "Could not save card"));
       return;
     }
     setNumber("");
@@ -129,8 +137,10 @@ export default function PaymentMethodsPage() {
             value={number}
             onChange={(e) => setNumber(e.target.value)}
             className="mt-1"
+            aria-invalid={numberErr ? true : undefined}
             required
           />
+          {numberErr && <p className="mt-1 text-xs text-kd-danger">{numberErr}</p>}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -141,8 +151,10 @@ export default function PaymentMethodsPage() {
               value={exp}
               onChange={(e) => setExp(e.target.value)}
               className="mt-1"
+              aria-invalid={expErr ? true : undefined}
               required
             />
+            {expErr && <p className="mt-1 text-xs text-kd-danger">{expErr}</p>}
           </div>
           <div>
             <Label htmlFor="cvc">CVC</Label>
@@ -153,11 +165,13 @@ export default function PaymentMethodsPage() {
               value={cvc}
               onChange={(e) => setCvc(e.target.value)}
               className="mt-1"
+              aria-invalid={cvcErr ? true : undefined}
               required
             />
+            {cvcErr && <p className="mt-1 text-xs text-kd-danger">{cvcErr}</p>}
           </div>
         </div>
-        {error && <p className="text-sm text-kd-danger">{error}</p>}
+        {generalErr && <p className="text-sm text-kd-danger">{generalErr}</p>}
         <Button type="submit" disabled={addState.fetching} className="w-full">
           {addState.fetching ? "Saving…" : "Save card"}
         </Button>

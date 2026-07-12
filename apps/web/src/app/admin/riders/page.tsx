@@ -191,9 +191,7 @@ export default function AdminRidersPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{r.riderType}</Badge>
-                <Badge variant={statusVariant(r.verificationStatus)}>
-                  {r.verificationStatus}
-                </Badge>
+                <Badge variant={statusVariant(r.verificationStatus)}>{r.verificationStatus}</Badge>
                 {r.sharedModeEnabled && <Badge>shared</Badge>}
                 <span className="text-xs text-kd-fg-muted">trust {r.trustScore}</span>
                 <Button

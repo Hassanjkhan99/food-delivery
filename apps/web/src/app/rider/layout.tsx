@@ -22,9 +22,7 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
               <Link
                 key={t.href}
                 href={t.href}
-                className={
-                  pathname === t.href ? "font-semibold text-kd-fg" : "text-kd-fg-muted"
-                }
+                className={pathname === t.href ? "font-semibold text-kd-fg" : "text-kd-fg-muted"}
               >
                 {t.label}
               </Link>

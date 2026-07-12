@@ -349,7 +349,9 @@ builder.queryFields((t) => ({
       if (order.customerId === ctx.userId || ctx.hasRole("admin")) return order;
       const branch = await prisma.branch.findUnique({ where: { id: order.branchId } });
       if (branch && ctx.restaurantIds.includes(branch.restaurantId)) return order;
-      throw new GraphQLError("Not authorized to view this order");
+      throw new GraphQLError("You don't have permission to view this order.", {
+        extensions: { code: "forbidden" },
+      });
     },
   }),
 }));
@@ -411,7 +413,9 @@ builder.mutationFields((t) => ({
     resolve: async (_query, _root, args, ctx) => {
       const order = await prisma.order.findUnique({ where: { id: args.id } });
       if (!order || order.customerId !== ctx.userId) {
-        throw new GraphQLError("Order not found");
+        throw new GraphQLError("We couldn't find that order.", {
+          extensions: { code: "not_found" },
+        });
       }
       // #30: evaluate the cancellation policy against the *current* order state
       // (before the transition) so timing/grace-window is assessed correctly, then
@@ -483,7 +487,10 @@ builder.mutationFields((t) => ({
     resolve: async (query, _root, args, ctx) => {
       const userId = ctx.userId!;
       const existing = await prisma.address.findFirst({ where: { id: args.id, userId } });
-      if (!existing) throw new GraphQLError("Address not found");
+      if (!existing)
+        throw new GraphQLError("We couldn't find that saved address.", {
+          extensions: { code: "not_found" },
+        });
       const { input } = args;
       return prisma.$transaction(async (tx) => {
         if (input.isDefault === true) {
@@ -515,7 +522,10 @@ builder.mutationFields((t) => ({
       const existing = await prisma.address.findFirst({
         where: { id: args.id, userId: ctx.userId! },
       });
-      if (!existing) throw new GraphQLError("Address not found");
+      if (!existing)
+        throw new GraphQLError("We couldn't find that saved address.", {
+          extensions: { code: "not_found" },
+        });
       await prisma.address.delete({ where: { id: args.id } });
       return true;
     },

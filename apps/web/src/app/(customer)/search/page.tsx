@@ -23,7 +23,15 @@ import { didYouMean, suggestTerms } from "./suggestions";
 // Terms must match real data: cuisine tags are matched exactly (e.g. the seed uses the
 // "BBQ/Karahi" tag), and dish names match via `contains`, so a bare "BBQ" chip would
 // land on a zero-result state.
-const POPULAR_SEARCHES = ["Biryani", "Pizza", "Burger", "Karahi", "BBQ/Karahi", "Desserts", "Chinese"];
+const POPULAR_SEARCHES = [
+  "Biryani",
+  "Pizza",
+  "Burger",
+  "Karahi",
+  "BBQ/Karahi",
+  "Desserts",
+  "Chinese",
+];
 
 const SearchQuery = graphql(`
   query SearchMarketplace($query: String!, $lat: Float!, $lng: Float!) {
@@ -156,14 +164,17 @@ function SearchScreen() {
     if (sortKey === "relevance") return restaurants;
     const arr = [...restaurants];
     if (sortKey === "rating")
-      arr.sort((a, b) => (b.branch.restaurant.avgRating ?? 0) - (a.branch.restaurant.avgRating ?? 0));
+      arr.sort(
+        (a, b) => (b.branch.restaurant.avgRating ?? 0) - (a.branch.restaurant.avgRating ?? 0),
+      );
     else if (sortKey === "eta") arr.sort((a, b) => a.etaMinutes - b.etaMinutes);
     else if (sortKey === "price")
       arr.sort((a, b) => a.branch.deliveryFeeMinor - b.branch.deliveryFeeMinor);
     return arr;
   }, [restaurants, sortKey]);
   const sortedDishes = useMemo(() => {
-    if (sortKey === "price") return [...dishes].sort((a, b) => a.item.priceMinor - b.item.priceMinor);
+    if (sortKey === "price")
+      return [...dishes].sort((a, b) => a.item.priceMinor - b.item.priceMinor);
     return dishes;
   }, [dishes, sortKey]);
 
@@ -400,7 +411,10 @@ function RestaurantRow({
 type DishHit = {
   distanceM: number;
   item: { id: string; name: string; priceMinor: number; imageUrl?: string | null };
-  branch: { id: string; restaurant: { name: string; slug: string; theme?: { primaryColor: string } | null } };
+  branch: {
+    id: string;
+    restaurant: { name: string; slug: string; theme?: { primaryColor: string } | null };
+  };
 };
 
 function DishRow({ hit }: { hit: DishHit }) {

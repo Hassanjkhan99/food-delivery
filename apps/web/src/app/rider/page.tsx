@@ -119,16 +119,12 @@ export default function RiderHomePage() {
   // "assigned" directly, so those stay in the active list untouched.
   const offered = jobs.filter((j) => j.status === "offered");
   const active = jobs.filter((j) => ACTIVE.includes(j.status));
-  const past = jobs
-    .filter((j) => j.status !== "offered" && !ACTIVE.includes(j.status))
-    .slice(0, 5);
+  const past = jobs.filter((j) => j.status !== "offered" && !ACTIVE.includes(j.status)).slice(0, 5);
 
   // The alert surfaces the FIRST actionable job: an offer (accept/decline) if any,
   // otherwise a freshly-assigned job the rider hasn't acknowledged yet.
   const alertOffer = offered[0];
-  const freshAssigned = active.find(
-    (j) => j.status === "assigned" && !ackedThisSession.has(j.id),
-  );
+  const freshAssigned = active.find((j) => j.status === "assigned" && !ackedThisSession.has(j.id));
   const alertJobRaw = alertOffer ?? freshAssigned;
   const alertMode: "offer" | "acknowledge" = alertOffer ? "offer" : "acknowledge";
 
@@ -137,8 +133,7 @@ export default function RiderHomePage() {
         id: alertJobRaw.id,
         code: alertJobRaw.order.code,
         pickupName: alertJobRaw.order.branch.restaurant.name,
-        dropText:
-          (alertJobRaw.order.addressSnapshotJson as { text?: string })?.text ?? "",
+        dropText: (alertJobRaw.order.addressSnapshotJson as { text?: string })?.text ?? "",
         codAmountMinor: alertJobRaw.codAmountMinor,
       }
     : null;
@@ -235,10 +230,7 @@ export default function RiderHomePage() {
               const addr = j.order.addressSnapshotJson as { text?: string };
               const busy = pendingId === j.id;
               return (
-                <div
-                  key={j.id}
-                  className="rounded-2xl border border-kd-border bg-kd-surface p-4"
-                >
+                <div key={j.id} className="rounded-2xl border border-kd-border bg-kd-surface p-4">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{j.order.code}</span>
                     <Badge variant="secondary">Offer</Badge>
@@ -253,18 +245,10 @@ export default function RiderHomePage() {
                     </p>
                   )}
                   <div className="mt-3 flex gap-2">
-                    <Button
-                      className="flex-1"
-                      disabled={busy}
-                      onClick={() => onAccept(j.id)}
-                    >
+                    <Button className="flex-1" disabled={busy} onClick={() => onAccept(j.id)}>
                       {busy ? "Accepting…" : "Accept"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => onDecline(j.id)}
-                    >
+                    <Button variant="outline" disabled={busy} onClick={() => onDecline(j.id)}>
                       Decline
                     </Button>
                   </div>

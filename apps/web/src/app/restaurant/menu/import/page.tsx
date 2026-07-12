@@ -171,7 +171,9 @@ export default function MenuImportPage() {
       </div>
 
       {message && (
-        <p className="mb-4 rounded-lg bg-kd-danger-soft px-3 py-2 text-sm text-kd-danger">{message}</p>
+        <p className="mb-4 rounded-lg bg-kd-danger-soft px-3 py-2 text-sm text-kd-danger">
+          {message}
+        </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">

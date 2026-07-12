@@ -142,7 +142,9 @@ const TICKET_CATEGORY_ALIASES: Record<string, TicketPlaybook["category"]> = {
 };
 
 /** Resolve the playbook for a ticket category (never throws). */
-export const ticketPlaybook = (category: string): TicketPlaybook | typeof DEFAULT_TICKET_PLAYBOOK => {
+export const ticketPlaybook = (
+  category: string,
+): TicketPlaybook | typeof DEFAULT_TICKET_PLAYBOOK => {
   const canonical = TICKET_CATEGORY_ALIASES[category] ?? category;
   return TICKET_PLAYBOOKS.find((p) => p.category === canonical) ?? DEFAULT_TICKET_PLAYBOOK;
 };
@@ -252,12 +254,10 @@ export const HELP_CATEGORIES = [
 export type HelpCategoryValue = (typeof HELP_CATEGORIES)[number]["value"];
 
 /** Look up a help category descriptor by its stored value. */
-export const helpCategory = (value: string) =>
-  HELP_CATEGORIES.find((c) => c.value === value);
+export const helpCategory = (value: string) => HELP_CATEGORIES.find((c) => c.value === value);
 
 /** Map a stored help category value to its display label (falls back to the raw value). */
-export const helpCategoryLabel = (value: string): string =>
-  helpCategory(value)?.label ?? value;
+export const helpCategoryLabel = (value: string): string => helpCategory(value)?.label ?? value;
 
 /**
  * Generic FAQ tree shown behind the order-contextual help. Plain data so both the

@@ -70,11 +70,7 @@ export default function TodayPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label="Orders" value={String(s.orders)} />
             <Stat label="Revenue" value={formatRs(s.revenueMinor)} hint="Accepted orders" />
-            <Stat
-              label="Acceptance"
-              value={`${s.acceptanceSlaPct}%`}
-              hint="Accepted vs. decided"
-            />
+            <Stat label="Acceptance" value={`${s.acceptanceSlaPct}%`} hint="Accepted vs. decided" />
           </div>
 
           <h2 className="mt-6 mb-2 text-sm font-bold uppercase text-kd-fg-muted">Top items</h2>

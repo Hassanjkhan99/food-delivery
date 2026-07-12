@@ -25,6 +25,6 @@ test.describe("admin UI", () => {
   test("refunds page is reachable", async ({ page }) => {
     await loginAs(page, "admin");
     await page.goto("/admin/refunds");
-    await expect(page.locator("main, body")).not.toBeEmpty();
+    await expect(page.locator("main")).not.toBeEmpty();
   });
 });
