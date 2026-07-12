@@ -40,7 +40,18 @@ export function median(values: number[]): number {
   return sorted[mid] ?? 0;
 }
 
-/** Price-band indicator using the single rupee-sign glyph (1-3), e.g. "₨₨". */
+/**
+ * Price-tier dots (1–3): `filled` for the band, `empty` for the remainder. Avoids
+ * repeating a currency glyph — the old "₨".repeat() rendered as "RsRsRs" in most fonts.
+ * e.g. band 2 → { filled: "●●", empty: "○" }. Render filled in fg, empty in a subtle tone.
+ */
+export function priceBandDots(band: number): { filled: string; empty: string } {
+  const n = Math.min(Math.max(Math.round(band), 1), 3);
+  return { filled: "●".repeat(n), empty: "○".repeat(3 - n) };
+}
+
+/** Compact price-tier label with a currency cue, e.g. "Rs ●●○". */
 export function priceBandLabel(band: number): string {
-  return "₨".repeat(Math.min(Math.max(Math.round(band), 1), 3));
+  const { filled, empty } = priceBandDots(band);
+  return `Rs ${filled}${empty}`;
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Clock, Heart, Star, Tag } from "lucide-react";
-import { formatRs, priceBandLabel } from "@fd/shared";
+import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { cn } from "@/lib/utils";
 import type { FeedHit } from "./types";
@@ -66,7 +66,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             // on top of it (ToS-required credit must not be hidden) — #36 review.
             overlay={
               avail.closed && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/45 text-center">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-kd-overlay text-center">
                   <span className="rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-kd-fg">
                     {avail.label}
                   </span>
@@ -129,11 +129,12 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             {hit.priceBand > 0 && (
               <>
                 <span className="text-kd-fg-subtle">·</span>
-                <span aria-label={`Price band ${hit.priceBand} of 3`}>
-                  <span className="font-semibold text-kd-fg">{priceBandLabel(hit.priceBand)}</span>
-                  <span className="text-kd-fg-subtle">
-                    {priceBandLabel(3).slice(hit.priceBand)}
+                <span aria-label={`Price band ${hit.priceBand} of 3`} className="tracking-tight">
+                  <span className="text-kd-fg-subtle">Rs </span>
+                  <span className="font-semibold text-kd-fg">
+                    {priceBandDots(hit.priceBand).filled}
                   </span>
+                  <span className="text-kd-fg-subtle">{priceBandDots(hit.priceBand).empty}</span>
                 </span>
               </>
             )}
@@ -163,7 +164,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           // review round 2.
           overlay={
             avail.closed && (
-              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/45 px-2 text-center text-xs font-bold text-white">
+              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-kd-overlay px-2 text-center text-xs font-bold text-white">
                 {avail.label ?? "Closed"}
               </span>
             )
