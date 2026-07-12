@@ -62,16 +62,16 @@ export function ComboCard({
             )}
           </div>
           {combo.description && (
-            <p className="mt-1 line-clamp-2 text-sm opacity-60">{combo.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{combo.description}</p>
           )}
-          {contents && <p className="mt-1 line-clamp-2 text-xs opacity-50">{contents}</p>}
+          {contents && <p className="mt-1 line-clamp-2 text-xs text-kd-fg-subtle">{contents}</p>}
           {!combo.isAvailable && (
             <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>
           )}
         </div>
         <span className="flex shrink-0 flex-col items-end">
           {off != null && (
-            <span className="text-xs line-through opacity-50">
+            <span className="text-xs text-kd-fg-subtle line-through">
               {formatRs(combo.originalPriceMinor)}
             </span>
           )}
@@ -86,10 +86,10 @@ export function ComboCard({
           aria-label={`Add ${combo.name}`}
           onClick={() => onAdd(combo)}
           whileTap={reduced ? undefined : { scale: 0.95 }}
-          className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white shadow-md transition hover:brightness-110"
+          className="absolute bottom-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-md ring-2 ring-kd-surface transition hover:brightness-110"
           style={{ backgroundColor: "var(--brand-primary)" }}
         >
-          <Plus className="h-4 w-4" strokeWidth={3} />
+          <Plus className="h-5 w-5" strokeWidth={3} />
         </motion.button>
       )}
     </div>

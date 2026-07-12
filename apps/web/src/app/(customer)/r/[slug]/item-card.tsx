@@ -85,13 +85,13 @@ export function ItemCard({
           ))}
         </div>
         {!compact && item.description && (
-          <p className="mt-1 line-clamp-2 text-sm opacity-60">{item.description}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{item.description}</p>
         )}
         {!item.isAvailable && <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>}
       </div>
       <span className="flex shrink-0 flex-col items-end">
         {off != null && (
-          <span className="text-xs line-through opacity-50">
+          <span className="text-xs text-kd-fg-subtle line-through">
             {formatRs(item.compareAtPriceMinor!)}
           </span>
         )}
@@ -134,12 +134,12 @@ export function ItemCard({
           type="button"
           aria-label={`Quick add ${item.name}`}
           onClick={() => onQuickAdd(item)}
-          className={`absolute z-10 flex h-8 w-8 items-center justify-center rounded-full text-white shadow-md transition hover:brightness-110 active:scale-95 ${
+          className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full text-white shadow-md ring-2 ring-kd-surface transition hover:brightness-110 active:scale-95 ${
             compact ? "right-3 top-1/2 -translate-y-1/2" : "bottom-2 right-2"
           }`}
           style={{ backgroundColor: "var(--brand-primary)" }}
         >
-          <Plus className="h-4 w-4" strokeWidth={3} />
+          <Plus className="h-5 w-5" strokeWidth={3} />
         </button>
       )}
     </div>
