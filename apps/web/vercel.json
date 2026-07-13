@@ -4,6 +4,7 @@
   "buildCommand": "cd ../.. && pnpm turbo build --filter=@fd/web...",
   "crons": [
     { "path": "/api/cron/expire-orders", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/expire-offers", "schedule": "0 0 * * *" },
     { "path": "/api/cron/rider-trust", "schedule": "0 0 * * *" }
   ]
 }
