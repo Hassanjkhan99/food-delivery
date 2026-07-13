@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HoursEditor } from "../HoursEditor";
+import { RiderSharingPanel } from "../RiderSharingPanel";
 
 const SetAcceptingMutation = graphql(`
   mutation SetAccepting($branchId: String!, $accepting: Boolean!) {
@@ -218,6 +219,8 @@ export default function SettingsPage() {
           branch={branch}
           refetch={refetch}
         />
+
+        <RiderSharingPanel restaurantId={restaurant.id} />
       </div>
     </main>
   );
