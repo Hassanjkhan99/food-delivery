@@ -53,6 +53,14 @@ const inAppPath = z
   .max(512)
   .regex(/^\/(?!\/)[^\\]*$/, "linkHref must be a relative in-app path (e.g. /offers)");
 
+// A Web Push subscription: an https endpoint plus the two base64url key material
+// strings the browser hands us. Bounded to keep obviously-bogus input out of the DB.
+const pushSubSchema = z.object({
+  endpoint: z.string().trim().url().max(1024),
+  p256dh: z.string().trim().min(1).max(256),
+  auth: z.string().trim().min(1).max(256),
+});
+
 const promoBlastSchema = z.object({
   segment: z.enum(["all", "new", "lapsed"]),
   title: z.string().trim().min(1).max(120),
@@ -87,6 +95,52 @@ builder.mutationFields((t) => ({
       });
       if (res.count > 0) await publishUnread(ctx.userId!);
       return res.count;
+    },
+  }),
+
+  // Register (or refresh) a Web Push subscription for the signed-in user (#13). The
+  // browser mints endpoint + p256dh/auth keys; we upsert by endpoint so re-subscribing
+  // is idempotent. Delivery only happens once NOTIFY_WEBPUSH + VAPID keys are set —
+  // storing the subscription early is safe and lets launch be a pure env flip.
+  savePushSubscription: t.boolean({
+    authScopes: { loggedIn: true },
+    args: {
+      endpoint: t.arg.string({ required: true }),
+      p256dh: t.arg.string({ required: true }),
+      auth: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      const parsed = pushSubSchema.safeParse(args);
+      if (!parsed.success)
+        throw new GraphQLError("That push subscription looks invalid.", {
+          extensions: { code: "validation_error" },
+        });
+      await prisma.pushSubscription.upsert({
+        where: { endpoint: parsed.data.endpoint },
+        create: {
+          userId: ctx.userId!,
+          endpoint: parsed.data.endpoint,
+          keysJson: { p256dh: parsed.data.p256dh, auth: parsed.data.auth },
+        },
+        update: {
+          userId: ctx.userId!,
+          keysJson: { p256dh: parsed.data.p256dh, auth: parsed.data.auth },
+        },
+      });
+      return true;
+    },
+  }),
+
+  // Unregister a push subscription (e.g. the user disabled notifications). Scoped to
+  // the owner so a foreign/stale endpoint is a no-op.
+  deletePushSubscription: t.boolean({
+    authScopes: { loggedIn: true },
+    args: { endpoint: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      await prisma.pushSubscription.deleteMany({
+        where: { endpoint: args.endpoint, userId: ctx.userId! },
+      });
+      return true;
     },
   }),
 

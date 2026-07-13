@@ -439,6 +439,7 @@ type Mutation {
   deleteMenuItem(itemId: String!): Boolean!
   deleteModifierGroup(id: String!): Boolean!
   deleteModifierOption(id: String!): Boolean!
+  deletePushSubscription(endpoint: String!): Boolean!
   finalizeUpload(assetId: String!): MediaAsset!
   generateSharedOffers(limit: Int, orderId: String!): [ScoredRiderCandidate!]!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
@@ -488,6 +489,7 @@ type Mutation {
   runCampaignAccrual: [CampaignAccrualResult!]!
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
+  savePushSubscription(auth: String!, endpoint: String!, p256dh: String!): Boolean!
   sendPromoBlast(body: String!, linkHref: String, restaurantId: String, segment: String!, title: String!): Int!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
