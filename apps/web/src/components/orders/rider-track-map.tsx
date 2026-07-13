@@ -59,7 +59,9 @@ export function RiderTrackMap({
       )}
       <p className="border-t border-kd-border px-3 py-2 text-xs text-kd-fg-muted">
         {!hasCoords || isStale ? (
-          <span className="text-kd-warning">Locating your rider… ({relativeAge(lastLocationAt ?? null)})</span>
+          <span className="text-kd-warning">
+            Locating your rider… ({relativeAge(lastLocationAt ?? null)})
+          </span>
         ) : (
           <span>Live · {relativeAge(lastLocationAt ?? null)}</span>
         )}
