@@ -479,6 +479,40 @@ builder.queryFields((t) => ({
       return { todayNetMinor, weekNetMinor, todayJobs, weekJobs };
     },
   }),
+
+  // On-time delivery streak (#165) — the count of the most recent consecutive delivered
+  // jobs completed WITHOUT an incident. "On-time" is defined here as incident-free (no
+  // `incident` DeliveryEvent), the cheapest reliable signal — there's no stored
+  // promised-delivery time to compare against yet. The home screen shows a positive
+  // "N in a row" nudge once the streak clears a small threshold.
+  myRiderStreak: t.field({
+    type: "Int",
+    authScopes: { rider: true },
+    resolve: async (_root, _args, ctx) => {
+      if (!ctx.riderId) return 0;
+      const tasks = await prisma.deliveryTask.findMany({
+        where: { riderId: ctx.riderId, status: "delivered" },
+        include: {
+          order: { select: { deliveredAt: true } },
+          events: { where: { type: "incident" }, select: { id: true } },
+        },
+        take: 50,
+      });
+      // Most-recent-first by actual delivery time (deliveredAt lives on the order, so we
+      // sort in JS rather than via a relation orderBy).
+      tasks.sort((a, b) => {
+        const at = (a.order.deliveredAt ?? a.createdAt).getTime();
+        const bt = (b.order.deliveredAt ?? b.createdAt).getTime();
+        return bt - at;
+      });
+      let streak = 0;
+      for (const task of tasks) {
+        if (task.events.length > 0) break;
+        streak += 1;
+      }
+      return streak;
+    },
+  }),
 }));
 
 builder.mutationFields((t) => ({
@@ -517,10 +551,19 @@ builder.mutationFields((t) => ({
       // isOnline: true here would silently bring an offline rider "online" (both
       // myRiderProfile and the restaurant roster read this flag) just from a ping;
       // going online must stay an explicit rider action (setAvailability).
+      // Stamp lastLocationAt too (#165) so the idle-online freshness line (#163) and the
+      // stale-location detection reflect riderPing fixes, not just patchRiderLocation ones.
+      const now = new Date();
       await prisma.riderAvailability.upsert({
         where: { riderId: ctx.riderId! },
-        update: { lat: args.lat, lng: args.lng },
-        create: { riderId: ctx.riderId!, isOnline: false, lat: args.lat, lng: args.lng },
+        update: { lat: args.lat, lng: args.lng, lastLocationAt: now },
+        create: {
+          riderId: ctx.riderId!,
+          isOnline: false,
+          lat: args.lat,
+          lng: args.lng,
+          lastLocationAt: now,
+        },
       });
       return true;
     },

@@ -698,6 +698,7 @@ type Query {
   myRestaurants: [Restaurant!]!
   myRiderPayouts: [RiderPayoutRow!]!
   myRiderProfile: RiderProfile
+  myRiderStreak: Int!
   mySessions: [Session!]!
   mySharedOffers: [DeliveryOffer!]!
   myWallet: Wallet!

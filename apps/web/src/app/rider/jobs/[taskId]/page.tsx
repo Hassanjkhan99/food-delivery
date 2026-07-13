@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { NavButton } from "@/components/rider/nav-buttons";
 import { SlideToConfirm } from "@/components/rider/slide-to-confirm";
 import { useLocationPing } from "@/components/rider/use-location-ping";
+import { NudgeCard } from "@/components/rider/nudge";
 
 const JobQuery = graphql(`
   query RiderJob {
@@ -219,16 +220,28 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         )}
       </div>
 
-      {/* Location-ping status: battery note + permission-denied fallback. */}
-      {ACTIVE.includes(job.status) && (
-        <p className="text-xs text-kd-fg-subtle">
-          {pingStatus === "denied"
-            ? "Location permission denied — the customer can’t see you move. Enable location for this site to share your position."
-            : pingStatus === "unavailable"
-              ? "Live location unavailable on this device."
-              : "Sharing your location with the customer every 20s while active (uses a little battery)."}
-        </p>
-      )}
+      {/* Location status (#165): a yellow nudge when the fix is blocked/stale so the rider
+          knows customers can't see them move; a quiet battery note when it's healthy. */}
+      {ACTIVE.includes(job.status) &&
+        (pingStatus === "denied" ? (
+          <NudgeCard
+            tone="warning"
+            icon="📍"
+            title="Location blocked — customers can’t see you move"
+            detail="Enable location for this site in your browser settings to share your position."
+          />
+        ) : pingStatus === "unavailable" ? (
+          <NudgeCard
+            tone="warning"
+            icon="📍"
+            title="Your location looks stale"
+            detail="We can’t get a fresh GPS fix on this device — the customer’s live map may not update."
+          />
+        ) : (
+          <p className="text-xs text-kd-fg-subtle">
+            Sharing your location with the customer every 20s while active (uses a little battery).
+          </p>
+        ))}
 
       {error && <p className="text-sm text-kd-danger">{error}</p>}
 
