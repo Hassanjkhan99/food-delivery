@@ -305,7 +305,12 @@ builder.queryFields((t) => ({
         return when >= startOfDay;
       });
       return {
-        todayCodCollectedMinor: todays.reduce((s, t2) => s + t2.codAmountMinor, 0),
+        // Declared collected cash (falls back to expected for legacy rows) so the
+        // cash-in-hand panel reflects what the rider actually took, not the order total (#113).
+        todayCodCollectedMinor: todays.reduce(
+          (s, t2) => s + (t2.codCollectedMinor ?? t2.codAmountMinor),
+          0,
+        ),
         cashLimitMinor: rider?.cashLimitMinor ?? 0,
         deliveriesToday: todays.length,
       };
@@ -340,7 +345,10 @@ builder.queryFields((t) => ({
       });
       return {
         deliveredCount: delivered.length,
-        codCollectedMinor: delivered.reduce((s, t2) => s + t2.codAmountMinor, 0),
+        codCollectedMinor: delivered.reduce(
+          (s, t2) => s + (t2.codCollectedMinor ?? t2.codAmountMinor),
+          0,
+        ),
       };
     },
   }),
@@ -386,7 +394,7 @@ builder.queryFields((t) => ({
           deliveredAt: task.order.deliveredAt,
           deliveryFeeMinor,
           tipMinor,
-          codCollectedMinor: task.codAmountMinor,
+          codCollectedMinor: task.codCollectedMinor ?? task.codAmountMinor,
           netMinor: deliveryFeeMinor + tipMinor,
         };
       });
@@ -781,7 +789,14 @@ builder.mutationFields((t) => ({
       });
       return prisma.deliveryTask.update({
         where: { id: task.id },
-        data: { status: "delivered", ...(args.podMediaId ? { podMediaId: args.podMediaId } : {}) },
+        data: {
+          status: "delivered",
+          // Persist what the rider actually declared collecting so cash-in-hand and
+          // earnings reflect reality, not the expected order COD (#113). For non-COD
+          // orders codCollectedMinor arrives as 0, which is the correct stored value.
+          codCollectedMinor: args.codCollectedMinor,
+          ...(args.podMediaId ? { podMediaId: args.podMediaId } : {}),
+        },
       });
     },
   }),

@@ -305,6 +305,7 @@ model User {
   giftCardsBought  GiftCard[]          @relation("GiftCardPurchaser")
   giftCardsRedeemed GiftCard[]         @relation("GiftCardRedeemer")
   walletTxns       WalletTransaction[]
+  walletTopUps     WalletTopUp[]
 
   @@map("users")
 }
@@ -908,6 +909,12 @@ model DeliveryTask {
   riderId        String?
   status         DeliveryTaskStatus @default(unassigned)
   codAmountMinor Int                @default(0)
+  // Cash the rider actually declared collecting at drop-off (COD). Set in riderDelivered;
+  // may differ from the expected codAmountMinor on partial/over-collection (which also
+  // opens a cash_mismatch ticket). Cash-in-hand / earnings summaries read this, falling
+  // back to codAmountMinor for legacy rows where it's null (Codex #113).
+  codCollectedMinor Int?
+
   // Offer→accept flow (swipe-to-accept). offeredAt is set when a task is dispatched
   // to a rider for acceptance; acceptedAt when they accept; declineReason captures the
   // last decline. All null on the legacy auto-assign path. Additive.
@@ -1675,4 +1682,23 @@ model WalletTransaction {
 
   @@index([userId, createdAt])
   @@map("wallet_transactions")
+}
+
+// Idempotency record for wallet top-ups (Codex #116). The client sends a stable
+// idempotencyKey per attempt; the UNIQUE constraint is the race arbiter so a retry /
+// double-submit can't charge the card twice and credit the wallet twice. Mirrors the
+// Order.idempotencyKey pattern. status tracks the charge lifecycle for observability.
+model WalletTopUp {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  userId         String
+  amountMinor    Int
+  status         String   @default("pending") // pending | completed | failed
+  providerRef    String?
+  createdAt      DateTime @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("wallet_topups")
 }

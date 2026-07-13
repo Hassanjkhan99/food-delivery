@@ -13,6 +13,7 @@ import {
 import { GraphQLError } from "graphql";
 import { prisma } from "@fd/db";
 import { postLedgerTx } from "./ledgerService.js";
+import { customerOrderLockKey } from "./fraudService.js";
 
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
@@ -74,24 +75,39 @@ export async function applyReferralCode(userId: string, rawCode: string) {
       extensions: { code: "conflict" },
     });
 
-  // First-order-only qualification: a code can't be applied once you've ordered.
-  const priorOrders = await prisma.order.count({ where: { customerId: userId } });
-  if (priorOrders > 0) {
-    throw new GraphQLError("Referral codes can only be applied before your first order.", {
-      extensions: { code: "invalid_state" },
+  // First-order-only qualification, made atomic against order placement (Codex #122):
+  // the count and the referral insert run in one tx under the SAME per-customer advisory
+  // lock that placeOrder acquires, so a first checkout committing in another tab can't
+  // slip between the count and the insert and leave a code attached to an already-ordered
+  // account. refereeId is @unique, so a concurrent duplicate apply still loses at insert.
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${customerOrderLockKey(userId)})::bigint)`;
+      const priorOrders = await tx.order.count({ where: { customerId: userId } });
+      if (priorOrders > 0) {
+        throw new GraphQLError("Referral codes can only be applied before your first order.", {
+          extensions: { code: "invalid_state" },
+        });
+      }
+      return tx.referral.create({
+        data: {
+          referrerId: owner.userId,
+          refereeId: userId,
+          code,
+          status: "pending",
+          refereeRewardMinor: REFERRAL_REFEREE_REWARD_MINOR,
+          referrerRewardMinor: REFERRAL_REFERRER_REWARD_MINOR,
+        },
+      });
     });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") {
+      throw new GraphQLError("A referral code has already been applied to your account.", {
+        extensions: { code: "conflict" },
+      });
+    }
+    throw e;
   }
-
-  return prisma.referral.create({
-    data: {
-      referrerId: owner.userId,
-      refereeId: userId,
-      code,
-      status: "pending",
-      refereeRewardMinor: REFERRAL_REFEREE_REWARD_MINOR,
-      referrerRewardMinor: REFERRAL_REFERRER_REWARD_MINOR,
-    },
-  });
 }
 
 /**
