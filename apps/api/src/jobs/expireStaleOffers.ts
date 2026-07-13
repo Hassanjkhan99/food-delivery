@@ -80,3 +80,17 @@ export async function sweepExpiredOffers(): Promise<{
   }
   return { offersExpired, tasksReleased };
 }
+
+// In-process interval for the standalone/persistent API, mirroring startExpirySweeper.
+// The collapsed Vercel deploy drives sweepExpiredOffers() via the /api/cron/expire-offers
+// route instead; running both is harmless (each pass is idempotent + race-guarded). 15s is
+// ample given the 90s release grace.
+const OFFER_SWEEP_INTERVAL_MS = 15_000;
+
+export function startOfferSweeper(): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    sweepExpiredOffers().catch((e) => logger.error({ err: e }, "offer sweeper tick failed"));
+  }, OFFER_SWEEP_INTERVAL_MS);
+  timer.unref();
+  return timer;
+}

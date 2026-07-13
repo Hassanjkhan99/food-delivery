@@ -1,0 +1,90 @@
+# Render Blueprint for the persistent API + background worker (#11/#26/#13/#142/#168).
+#
+# Why this exists: the collapsed Vercel deploy can't hold SSE connections, run the
+# 120s expiry sweepers, or keep uploaded files — all serverless limitations. Running
+# apps/api as a single long-lived process here fixes realtime (with REDIS_URL), gives
+# the sweepers a home, and lets the notification channels fan out.
+#
+# The web app stays on Vercel. This ONLY works on a shared parent domain: put the web app
+# on app.<domain> and this API on api.<domain> (both custom domains). Then, on Vercel:
+#   NEXT_PUBLIC_API_URL = https://api.<domain>/graphql
+#   NEXT_PUBLIC_VAPID_PUBLIC_KEY = <your VAPID public key>   (only when enabling push)
+# and set WEB_ORIGIN + SESSION_COOKIE_DOMAIN below so the ONE session cookie is shared.
+#
+# Do NOT point Vercel at the raw *.onrender.com hostname: it's a different registrable
+# domain, so the API's cookie can't be read by the web edge proxy (proxy.ts) and every
+# role-gated route bounces to /login. See DEPLOY.md "Production unlock" for the full cutover.
+services:
+  - type: web
+    name: herald-api
+    runtime: node
+    plan: free # free instance sleeps after 15m idle; upgrade to Starter at launch to keep SSE + sweepers alive
+    rootDir: .
+    # --prod=false forces devDependencies to install even though NODE_ENV=production is
+    # set below (Render exposes it at build time): the build needs @fd/db's `prisma` and
+    # the start command needs @fd/api's `tsx`, both devDependencies.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @fd/db build
+    startCommand: pnpm --filter @fd/api start
+    healthCheckPath: /graphql?query=%7B__typename%7D
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects PORT; env.apiPort reads it. Do not hard-code a port.
+      - key: DATABASE_URL
+        sync: false # set to the Neon pooled string (same DB as Vercel)
+      - key: SESSION_SECRET
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false # https://app.<your-domain> (exact web origin — used for CORS)
+      - key: PUBLIC_WEB_URL
+        sync: false # https://app.<your-domain> (deep links in messages)
+      # Shared-parent cookie scope so the web edge proxy + this API read one session
+      # cookie. Requires api. + app. to be subdomains of the SAME registrable domain.
+      - key: SESSION_COOKIE_DOMAIN
+        sync: false # bare parent domain, no leading dot — e.g. heraldeats.com
+      # Leave SESSION_COOKIE_SAMESITE unset (defaults to lax — correct for subdomains).
+      # --- Realtime (recommended: attach an Upstash Redis and paste its rediss:// URL) ---
+      - key: REDIS_URL
+        sync: false
+      # --- Object storage (Cloudflare R2) ---
+      - key: STORAGE_DRIVER
+        value: r2
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BASE_URL
+        sync: false
+      # --- Notification channels (all off until launch; set the keys, then flip the flag) ---
+      - key: NOTIFY_WEBPUSH
+        value: "off"
+      - key: NOTIFY_EMAIL
+        value: "off"
+      - key: NOTIFY_WHATSAPP
+        value: "off"
+      - key: NOTIFY_SMS
+        value: "off"
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:ops@heraldeats.app
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_ID
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
