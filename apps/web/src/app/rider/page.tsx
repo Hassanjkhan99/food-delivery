@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CashPanel } from "@/components/rider/cash-panel";
+import { NudgeCard } from "@/components/rider/nudge";
 import {
   AssignmentAlert,
   formatPickupDistance,
@@ -58,6 +59,7 @@ const RiderHomeQuery = graphql(`
       todayJobs
       weekJobs
     }
+    myRiderStreak
     myJobs {
       id
       status
@@ -222,6 +224,7 @@ export default function RiderHomePage() {
 
   const cash = data?.myCashSummary;
   const earnings = data?.myEarningsSummary;
+  const streak = data?.myRiderStreak ?? 0;
 
   return (
     <main className="space-y-4">
@@ -234,6 +237,17 @@ export default function RiderHomePage() {
           onAccept={() => onAccept(alertJob.id)}
           onDecline={() => onDecline(alertJob.id)}
           onAcknowledge={() => acknowledge(alertJob.id)}
+        />
+      )}
+
+      {/* On-time streak nudge (#165): positive reinforcement once the rider strings
+          together incident-free deliveries. Hidden below the threshold. */}
+      {streak >= 3 && (
+        <NudgeCard
+          tone="success"
+          icon="🔥"
+          title={`On-time streak · ${streak} in a row`}
+          detail="Nice work — keep those clean deliveries coming."
         />
       )}
 
