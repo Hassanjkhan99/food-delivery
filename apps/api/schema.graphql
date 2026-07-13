@@ -449,6 +449,7 @@ type Mutation {
   markAllNotificationsRead: Int!
   markCollected(id: String!): Order!
   markNotificationRead(id: String!): Boolean!
+  markPayoutPaid(payoutId: String!): Payout!
   markReady(id: String!): Order!
   offerTask(orderId: String!, riderId: String!): DeliveryTask!
   overrideOrderStatus(id: String!, reason: String!, toStatus: String!): Order!
@@ -472,6 +473,7 @@ type Mutation {
   reopenTicket(id: String!): SupportTicket!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
+  requestPayout(restaurantId: String!): Payout!
   resolveTicket(id: String!, note: String, resolutionCode: String!): SupportTicket!
   respondToRating(body: String!, ratingId: String!): RatingResponse!
   revokeSession(sessionId: String!): Boolean!

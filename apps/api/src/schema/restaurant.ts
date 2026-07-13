@@ -6,7 +6,8 @@ import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { publishOrderChanged } from "../pubsub.js";
-import { accountBalance } from "../services/ledgerService.js";
+import { formatRs } from "@fd/shared";
+import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
 import { builder } from "./builder.js";
@@ -1048,6 +1049,75 @@ builder.mutationFields((t) => ({
           .slice(0, 10);
       }
       return prisma.restaurant.update({ where: { id: args.restaurantId }, data });
+    },
+  }),
+
+  // On-demand payout request (#157). Moves the restaurant's whole payable balance into a
+  // per-restaurant payout-clearing account and records a pending Payout — so the balance
+  // can't be double-requested. An admin settles it (markPayoutPaid) to move clearing →
+  // platform:cash. Double-entry throughout; balanced per tx.
+  requestPayout: t.prismaField({
+    type: "Payout",
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertRestaurantMember(ctx, args.restaurantId);
+      const MIN_PAYOUT_MINOR = 100_000; // Rs 1,000 floor
+      return prisma.$transaction(async (tx) => {
+        const inFlight = await tx.payout.findFirst({
+          where: { restaurantId: args.restaurantId, status: "pending" },
+        });
+        if (inFlight)
+          throw new GraphQLError("You already have a payout in progress.", {
+            extensions: { code: "payout_in_progress" },
+          });
+        const balance = await accountBalance(
+          tx as never,
+          `restaurant:${args.restaurantId}:payable`,
+        );
+        if (balance < MIN_PAYOUT_MINOR)
+          throw new GraphQLError(
+            `You need at least ${formatRs(MIN_PAYOUT_MINOR)} available to request a payout.`,
+            { extensions: { code: "below_payout_minimum" } },
+          );
+        const restaurant = await tx.restaurant.findUniqueOrThrow({
+          where: { id: args.restaurantId },
+        });
+        const created = await tx.payout.create({
+          data: {
+            restaurantId: args.restaurantId,
+            periodStart: new Date(Date.now() - 7 * 24 * 60 * 60_000),
+            periodEnd: new Date(),
+            amountMinor: balance,
+            status: "pending",
+            reference: `PO-${Date.now().toString(36).toUpperCase()}-${restaurant.slug.slice(0, 8)}`,
+          },
+        });
+        const txId = await postLedgerTx(
+          tx,
+          `Payout requested ${created.reference}`,
+          [
+            {
+              code: `restaurant:${args.restaurantId}:payable`,
+              ownerType: "restaurant",
+              ownerId: args.restaurantId,
+              debit: balance,
+            },
+            {
+              code: `restaurant:${args.restaurantId}:payout_clearing`,
+              ownerType: "restaurant",
+              ownerId: args.restaurantId,
+              credit: balance,
+            },
+          ],
+          { payoutId: created.id },
+        );
+        return tx.payout.update({
+          ...query,
+          where: { id: created.id },
+          data: { ledgerTxId: txId },
+        });
+      });
     },
   }),
 

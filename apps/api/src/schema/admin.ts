@@ -764,6 +764,50 @@ builder.mutationFields((t) => ({
     },
   }),
 
+  // Settle a restaurant-requested payout (#157): move it out of the per-restaurant
+  // payout-clearing account into platform:cash and mark it paid. Pairs with requestPayout.
+  markPayoutPaid: t.prismaField({
+    type: "Payout",
+    authScopes: { admin: true },
+    args: { payoutId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const paid = await prisma.$transaction(async (tx) => {
+        const p = await tx.payout.findUnique({ where: { id: args.payoutId } });
+        if (!p)
+          throw new GraphQLError("We couldn't find that payout.", {
+            extensions: { code: "not_found" },
+          });
+        if (p.status !== "pending")
+          throw new GraphQLError("That payout isn't pending.", {
+            extensions: { code: "invalid_state" },
+          });
+        const txId = await postLedgerTx(
+          tx,
+          `Payout paid ${p.reference}`,
+          [
+            {
+              code: `restaurant:${p.restaurantId}:payout_clearing`,
+              ownerType: "restaurant",
+              ownerId: p.restaurantId,
+              debit: p.amountMinor,
+            },
+            { code: "platform:cash", ownerType: "platform", credit: p.amountMinor },
+          ],
+          { payoutId: p.id },
+        );
+        return tx.payout.update({
+          ...query,
+          where: { id: p.id },
+          data: { status: "paid", paidAt: new Date(), ledgerTxId: txId },
+        });
+      });
+      await audit(ctx.userId, "payout.paid", "Payout", paid.id, null, {
+        amountMinor: paid.amountMinor,
+      });
+      return paid;
+    },
+  }),
+
   // Bounded, audited goodwill credit to a customer's wallet (platform:revenue funds it).
   // Returns the customer's new prepaid balance in minor units.
   issueGoodwillCredit: t.field({
