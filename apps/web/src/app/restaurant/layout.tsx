@@ -12,6 +12,7 @@ import {
   Palette,
   Settings,
   Sun,
+  Ticket,
   Users,
   Wallet,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/restaurant/reviews", label: "Reviews", icon: MessageSquare },
   { href: "/restaurant/branding", label: "Branding", icon: Palette },
   { href: "/restaurant/campaigns", label: "Promotions", icon: Megaphone },
+  { href: "/restaurant/promo-codes", label: "Promo codes", icon: Ticket },
   { href: "/restaurant/riders", label: "Riders", icon: Users },
   { href: "/restaurant/wallet", label: "Wallet", icon: Wallet },
   { href: "/restaurant/settlements", label: "Settlements", icon: FileSpreadsheet },

@@ -4,7 +4,17 @@
 import { prisma } from "@fd/db";
 import { normalizeVoucherCode } from "@fd/shared";
 import { GraphQLError } from "graphql";
+import type { AppContext } from "../context.js";
 import { builder } from "./builder.js";
+
+// Owner guard for restaurant-scoped voucher management (#159).
+function assertOwnsRestaurant(ctx: AppContext, restaurantId: string) {
+  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
+  }
+}
 
 const VOUCHER_TYPES = ["percentage", "fixed", "free_delivery"] as const;
 const VOUCHER_SCOPES = ["platform", "restaurant"] as const;
@@ -170,6 +180,21 @@ builder.queryFields((t) => ({
       });
     },
   }),
+
+  // Owner: this restaurant's own promo codes (management list + redemption counts). (#159)
+  restaurantVouchers: t.prismaField({
+    type: ["Voucher"],
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: (query, _root, args, ctx) => {
+      assertOwnsRestaurant(ctx, args.restaurantId);
+      return prisma.voucher.findMany({
+        ...query,
+        where: { scope: "restaurant", restaurantId: args.restaurantId },
+        orderBy: { createdAt: "desc" },
+      });
+    },
+  }),
 }));
 
 builder.mutationFields((t) => ({
@@ -215,6 +240,99 @@ builder.mutationFields((t) => ({
       });
       await auditVoucher(ctx.userId, "voucher.create", created.id, null, { code });
       return created;
+    },
+  }),
+
+  // Owner: create a promo code scoped + funded by their own restaurant (#159). Scope/funder
+  // are forced to "restaurant" so an owner can never mint a platform-funded discount.
+  createRestaurantVoucher: t.prismaField({
+    type: "Voucher",
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      code: t.arg.string({ required: true }),
+      description: t.arg.string({ required: false }),
+      type: t.arg.string({ required: true }),
+      valueBps: t.arg.int({ required: false }),
+      valueMinor: t.arg.int({ required: false }),
+      maxDiscountMinor: t.arg.int({ required: false }),
+      minOrderMinor: t.arg.int({ required: false }),
+      perUserLimit: t.arg.int({ required: false }),
+      totalBudgetMinor: t.arg.int({ required: false }),
+      startsAt: t.arg({ type: "DateTime", required: false }),
+      endsAt: t.arg({ type: "DateTime", required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      assertOwnsRestaurant(ctx, args.restaurantId);
+      if (!(VOUCHER_TYPES as readonly string[]).includes(args.type))
+        throw new GraphQLError("Please choose a valid discount type.", {
+          extensions: { code: "validation_error" },
+        });
+      if (args.type === "percentage" && !(args.valueBps && args.valueBps > 0))
+        throw new GraphQLError("Percentage codes need a discount value greater than zero.", {
+          extensions: { code: "validation_error" },
+        });
+      if (args.type === "fixed" && !(args.valueMinor && args.valueMinor > 0))
+        throw new GraphQLError("Fixed codes need a discount amount greater than zero.", {
+          extensions: { code: "validation_error" },
+        });
+      const code = normalizeVoucherCode(args.code);
+      if (!code)
+        throw new GraphQLError("Please enter a voucher code.", {
+          extensions: { code: "validation_error" },
+        });
+      const existing = await prisma.voucher.findUnique({ where: { code } });
+      if (existing)
+        throw new GraphQLError("A voucher with that code already exists.", {
+          extensions: { code: "already_exists" },
+        });
+      const created = await prisma.voucher.create({
+        ...query,
+        data: {
+          code,
+          description: args.description ?? null,
+          type: args.type as never,
+          scope: "restaurant" as never,
+          funder: "restaurant" as never,
+          valueBps: args.valueBps ?? 0,
+          valueMinor: args.valueMinor ?? 0,
+          maxDiscountMinor: args.maxDiscountMinor ?? null,
+          minOrderMinor: args.minOrderMinor ?? 0,
+          firstOrderOnly: false,
+          perUserLimit: args.perUserLimit ?? null,
+          totalBudgetMinor: args.totalBudgetMinor ?? null,
+          restaurantId: args.restaurantId,
+          startsAt: args.startsAt ?? null,
+          endsAt: args.endsAt ?? null,
+          active: true,
+          createdByUserId: ctx.userId,
+        },
+      });
+      await auditVoucher(ctx.userId, "voucher.create", created.id, null, {
+        code,
+        restaurantId: args.restaurantId,
+      });
+      return created;
+    },
+  }),
+
+  // Owner: enable/disable one of their own restaurant-scoped codes. (#159)
+  setRestaurantVoucherActive: t.prismaField({
+    type: "Voucher",
+    authScopes: { restaurantMember: true },
+    args: { id: t.arg.string({ required: true }), active: t.arg.boolean({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const v = await prisma.voucher.findUnique({ where: { id: args.id } });
+      if (!v || v.scope !== "restaurant" || !v.restaurantId)
+        throw new GraphQLError("We couldn't find that voucher.", {
+          extensions: { code: "not_found" },
+        });
+      assertOwnsRestaurant(ctx, v.restaurantId);
+      return prisma.voucher.update({
+        ...query,
+        where: { id: args.id },
+        data: { active: args.active },
+      });
     },
   }),
 
