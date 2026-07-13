@@ -14,13 +14,15 @@ import {
   Settings,
   Sun,
   Ticket,
+  UserCog,
   Users,
   Wallet,
 } from "lucide-react";
 
+// `staff: true` items are visible to restaurant_staff; everything else is owner-only (#156).
 const NAV = [
-  { href: "/restaurant/orders", label: "Orders", icon: ClipboardList },
-  { href: "/restaurant/today", label: "Today", icon: Sun },
+  { href: "/restaurant/orders", label: "Orders", icon: ClipboardList, staff: true },
+  { href: "/restaurant/today", label: "Today", icon: Sun, staff: true },
   { href: "/restaurant/menu", label: "Menu", icon: CookingPot },
   { href: "/restaurant/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/restaurant/reviews", label: "Reviews", icon: MessageSquare },
@@ -30,6 +32,7 @@ const NAV = [
   { href: "/restaurant/riders", label: "Riders", icon: Users },
   { href: "/restaurant/wallet", label: "Wallet", icon: Wallet },
   { href: "/restaurant/settlements", label: "Settlements", icon: FileSpreadsheet },
+  { href: "/restaurant/staff", label: "Staff", icon: UserCog },
   { href: "/restaurant/settings", label: "Settings", icon: Settings },
 ];
 
@@ -68,6 +71,9 @@ export default function RestaurantLayout({ children }: { children: React.ReactNo
 
 function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isOwner } = useConsole();
+  // Staff see only the operational lanes; owners see the full console (#156).
+  const nav = isOwner ? NAV : NAV.filter((n) => n.staff);
   return (
     <div className="flex min-h-screen bg-kd-surface-muted">
       <aside className="hidden w-52 shrink-0 border-r border-kd-border bg-kd-surface p-4 sm:block">
@@ -76,7 +82,7 @@ function ConsoleShell({ children }: { children: React.ReactNode }) {
         </Link>
         <BranchSwitcher />
         <nav className="space-y-1">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const Icon = n.icon;
             const active = pathname.startsWith(n.href);
             return (

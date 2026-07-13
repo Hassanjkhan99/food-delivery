@@ -29,9 +29,24 @@ const MyRestaurantsQuery = graphql(`
   }
 `);
 
+const ViewerRolesQuery = graphql(`
+  query ViewerRoles {
+    viewer {
+      roles {
+        role
+        restaurantId
+      }
+    }
+  }
+`);
+
 function useConsoleValue() {
   const [{ data, fetching }, refetch] = useQuery({
     query: MyRestaurantsQuery,
+    requestPolicy: "cache-and-network",
+  });
+  const [{ data: viewerData }] = useQuery({
+    query: ViewerRolesQuery,
     requestPolicy: "cache-and-network",
   });
   // Selected branch id; null until the user picks one, in which case we derive the first
@@ -40,12 +55,20 @@ function useConsoleValue() {
   const restaurant = data?.myRestaurants?.[0] ?? null;
   const branches = restaurant?.branches ?? [];
   const branch = branches.find((b) => b.id === branchId) ?? branches[0] ?? null;
+  // Owner vs staff for the current restaurant (#156) — gates owner-only console areas.
+  const isOwner = !!(
+    restaurant &&
+    viewerData?.viewer?.roles.some(
+      (r) => r.role === "restaurant_owner" && r.restaurantId === restaurant.id,
+    )
+  );
   return {
     restaurant,
     branches,
     branch,
     branchId: branch?.id ?? null,
     setBranchId,
+    isOwner,
     fetching,
     refetch,
   };

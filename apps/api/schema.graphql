@@ -457,6 +457,7 @@ type Mutation {
   generateSharedOffers(limit: Int, orderId: String!): [ScoredRiderCandidate!]!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
+  inviteStaff(name: String, phone: String!, restaurantId: String!): StaffMember!
   issueGoodwillCredit(amountMinor: Int!, customerId: String!, reason: String!): Int!
   joinWaitlist(areaLabel: String, email: String!, lat: Float, lng: Float): Waitlist!
   logout: Boolean!
@@ -484,6 +485,7 @@ type Mutation {
   rejectRider(id: String!, reason: String!): Rider!
   removeComboItem(comboItemId: String!): Combo!
   removePaymentMethod(id: String!): Boolean!
+  removeStaff(restaurantId: String!, userId: String!): Boolean!
   reopenTicket(id: String!): SupportTicket!
   reportIncident(note: String!, taskId: String!): Boolean!
   requestOtp(phone: String!): OtpRequestResult!
@@ -805,6 +807,7 @@ type Query {
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
   restaurantReviews(limit: Int, offset: Int, restaurantId: String!): [Rating!]!
+  restaurantStaff(restaurantId: String!): [StaffMember!]!
   restaurantVouchers(restaurantId: String!): [Voucher!]!
   riderMissingRequirements(riderId: String!): [String!]!
   riderVerificationQueue: [Rider!]!
@@ -1075,6 +1078,13 @@ type SharedRiderPolicy {
   restaurantId: String!
   sharingEnabled: Boolean!
   vetoActive: Boolean!
+}
+
+type StaffMember {
+  name: String
+  phone: String!
+  roleId: String!
+  userId: String!
 }
 
 type Subscription {
