@@ -427,6 +427,58 @@ builder.queryFields((t) => ({
       return [...byWeek.values()].sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime());
     },
   }),
+
+  // Compact earnings roll-up for the rider home (#167): net owed for jobs delivered today
+  // (PKT day) and this ISO week. Same net = base delivery fee + tip per delivered job as
+  // myEarningsBreakdown / myRiderPayouts, reusing the PKT-day and ISO-week helpers so the
+  // home figures match the earnings/payouts pages with no timezone drift near midnight.
+  // Read-only — no settlement here (see myRiderPayouts.isComputed).
+  myEarningsSummary: t.field({
+    type: builder
+      .objectRef<{
+        todayNetMinor: number;
+        weekNetMinor: number;
+        todayJobs: number;
+        weekJobs: number;
+      }>("RiderEarningsSummary")
+      .implement({
+        fields: (f) => ({
+          todayNetMinor: f.exposeInt("todayNetMinor"),
+          weekNetMinor: f.exposeInt("weekNetMinor"),
+          todayJobs: f.exposeInt("todayJobs"),
+          weekJobs: f.exposeInt("weekJobs"),
+        }),
+      }),
+    nullable: true,
+    authScopes: { rider: true },
+    resolve: async (_root, _args, ctx) => {
+      if (!ctx.riderId) return null;
+      const tasks = await prisma.deliveryTask.findMany({
+        where: { riderId: ctx.riderId, status: "delivered" },
+        include: { order: true },
+      });
+      const startDay = startOfPktDay(new Date());
+      const week = isoWeekWindow(new Date());
+      let todayNetMinor = 0;
+      let weekNetMinor = 0;
+      let todayJobs = 0;
+      let weekJobs = 0;
+      for (const task of tasks) {
+        const when = task.order.deliveredAt ?? task.createdAt;
+        const net =
+          (task.order.baseDeliveryFeeMinor ?? task.order.deliveryFeeMinor) + task.order.tipAmount;
+        if (when >= startDay) {
+          todayNetMinor += net;
+          todayJobs += 1;
+        }
+        if (when >= week.start && when < week.end) {
+          weekNetMinor += net;
+          weekJobs += 1;
+        }
+      }
+      return { todayNetMinor, weekNetMinor, todayJobs, weekJobs };
+    },
+  }),
 }));
 
 builder.mutationFields((t) => ({

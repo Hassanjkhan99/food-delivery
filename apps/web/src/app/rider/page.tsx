@@ -52,6 +52,12 @@ const RiderHomeQuery = graphql(`
       cashLimitMinor
       deliveriesToday
     }
+    myEarningsSummary {
+      todayNetMinor
+      weekNetMinor
+      todayJobs
+      weekJobs
+    }
     myJobs {
       id
       status
@@ -215,6 +221,7 @@ export default function RiderHomePage() {
   }
 
   const cash = data?.myCashSummary;
+  const earnings = data?.myEarningsSummary;
 
   return (
     <main className="space-y-4">
@@ -317,6 +324,34 @@ export default function RiderHomePage() {
         limitMinor={cash?.cashLimitMinor ?? profile.cashLimitMinor}
         deliveriesToday={cash?.deliveriesToday ?? 0}
       />
+
+      {/* Earnings roll-up (#167): today + this week net, linking to the detail pages.
+          Cash (above) is money handled for the restaurant; this is what the rider earns. */}
+      {earnings && (
+        <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase text-kd-fg-muted">Earnings</h2>
+            <div className="flex gap-3 text-xs">
+              <Link href="/rider/earnings" className="text-kd-primary underline">
+                Details
+              </Link>
+              <Link href="/rider/payouts" className="text-kd-primary underline">
+                Payouts
+              </Link>
+            </div>
+          </div>
+          <div className="mt-2 flex gap-8">
+            <div>
+              <p className="text-2xl font-bold">{formatRs(earnings.todayNetMinor)}</p>
+              <p className="text-xs text-kd-fg-muted">Today · {earnings.todayJobs} jobs</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{formatRs(earnings.weekNetMinor)}</p>
+              <p className="text-xs text-kd-fg-muted">This week · {earnings.weekJobs} jobs</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {offered.length > 0 && (
         <section>
