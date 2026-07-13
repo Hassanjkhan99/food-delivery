@@ -14,6 +14,15 @@ import { CashPanel } from "@/components/rider/cash-panel";
 import { AssignmentAlert, type AlertJob } from "@/components/rider/assignment-alert";
 import { useLocationPing, IDLE_PING_INTERVAL_MS } from "@/components/rider/use-location-ping";
 
+// Map the 0–100 trust score to a rider-facing standing label (#164). Bands are a
+// first cut — trustScore itself is computed by riderTrustService (#28/#25); this only
+// surfaces it. Higher = better standing / more shared-offer eligibility.
+function trustLabel(score: number): { label: string; tone: "success" | "muted" | "warning" } {
+  if (score >= 85) return { label: "Trusted", tone: "success" };
+  if (score >= 60) return { label: "Good standing", tone: "muted" };
+  return { label: "At risk", tone: "warning" };
+}
+
 // "updated Xs ago" for the online location-freshness line.
 function relativeAge(iso: string | null | undefined): string {
   if (!iso) return "not shared yet";
@@ -31,6 +40,8 @@ const RiderHomeQuery = graphql(`
       riderType
       cashLimitMinor
       lastLocationAt
+      trustScore
+      codDisabled
     }
     myCashSummary {
       todayCodCollectedMinor
@@ -206,17 +217,48 @@ export default function RiderHomePage() {
           job={alertJob}
           mode={alertMode}
           busy={pendingId === alertJob.id}
+          codBlocked={profile.codDisabled && alertJob.codAmountMinor > 0}
           onAccept={() => onAccept(alertJob.id)}
           onDecline={() => onDecline(alertJob.id)}
           onAcknowledge={() => acknowledge(alertJob.id)}
         />
       )}
 
+      {/* COD-disabled banner (#164): a rider auto-blocked from cash orders (#25) sees this
+          up front, not only when an accept fails. */}
+      {profile.codDisabled && (
+        <div className="rounded-2xl border border-kd-danger bg-kd-danger-soft p-4">
+          <p className="text-sm font-semibold text-kd-danger">
+            Cash-on-delivery is disabled on your account
+          </p>
+          <p className="mt-1 text-xs text-kd-danger">
+            You can still take prepaid orders. Contact support to restore COD.
+          </p>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="font-semibold">{profile.isOnline ? "You're online" : "You're offline"}</p>
-            <p className="text-xs text-kd-fg-muted">{profile.riderType} rider</p>
+            <p className="flex items-center gap-1.5 text-xs text-kd-fg-muted">
+              <span>{profile.riderType} rider</span>
+              <span aria-hidden>·</span>
+              {(() => {
+                const trust = trustLabel(profile.trustScore);
+                const toneClass =
+                  trust.tone === "success"
+                    ? "text-kd-success"
+                    : trust.tone === "warning"
+                      ? "text-kd-warning"
+                      : "text-kd-fg-muted";
+                return (
+                  <span className={`font-medium ${toneClass}`}>
+                    {trust.label} · {profile.trustScore}
+                  </span>
+                );
+              })()}
+            </p>
           </div>
           <Button
             variant={profile.isOnline ? "destructive" : "default"}
@@ -282,6 +324,9 @@ export default function RiderHomePage() {
             {offered.map((j) => {
               const addr = j.order.addressSnapshotJson as { text?: string };
               const busy = pendingId === j.id;
+              // A COD-disabled rider can't take a cash offer — the server would reject
+              // acceptTask anyway (#25), so block it here with a reason instead. (#164)
+              const codBlocked = profile.codDisabled && j.codAmountMinor > 0;
               return (
                 <div key={j.id} className="rounded-2xl border border-kd-border bg-kd-surface p-4">
                   <div className="flex items-center justify-between">
@@ -297,8 +342,17 @@ export default function RiderHomePage() {
                       Collect {formatRs(j.codAmountMinor)} (COD)
                     </p>
                   )}
+                  {codBlocked && (
+                    <p className="mt-1 text-xs text-kd-danger">
+                      You can&apos;t take this — cash-on-delivery is disabled on your account.
+                    </p>
+                  )}
                   <div className="mt-3 flex gap-2">
-                    <Button className="flex-1" disabled={busy} onClick={() => onAccept(j.id)}>
+                    <Button
+                      className="flex-1"
+                      disabled={busy || codBlocked}
+                      onClick={() => onAccept(j.id)}
+                    >
                       {busy ? "Accepting…" : "Accept"}
                     </Button>
                     <Button variant="outline" disabled={busy} onClick={() => onDecline(j.id)}>

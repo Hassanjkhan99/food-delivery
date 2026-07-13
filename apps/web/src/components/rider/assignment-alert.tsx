@@ -62,6 +62,7 @@ export function AssignmentAlert({
   job,
   mode,
   busy = false,
+  codBlocked = false,
   timeoutSeconds = 60,
   onAcknowledge,
   onAccept,
@@ -70,6 +71,9 @@ export function AssignmentAlert({
   job: AlertJob;
   mode: "acknowledge" | "offer";
   busy?: boolean;
+  // COD offer handed to a rider blocked from cash orders (#164/#25): accept is disabled
+  // with a reason; declining still works so the offer can move on.
+  codBlocked?: boolean;
   timeoutSeconds?: number;
   onAcknowledge: () => void;
   onAccept: () => void;
@@ -163,19 +167,30 @@ export function AssignmentAlert({
 
       <div className="space-y-2">
         {mode === "offer" ? (
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="h-14 flex-1 text-base"
-              disabled={busy}
-              onClick={onDecline}
-            >
-              Decline
-            </Button>
-            <Button className="h-14 flex-1 text-base" disabled={busy} onClick={onAccept}>
-              {busy ? "Accepting…" : "Accept"}
-            </Button>
-          </div>
+          <>
+            {codBlocked && (
+              <p className="mb-1 text-center text-sm font-medium text-kd-danger">
+                Cash-on-delivery is disabled on your account — you can&apos;t take this order.
+              </p>
+            )}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="h-14 flex-1 text-base"
+                disabled={busy}
+                onClick={onDecline}
+              >
+                Decline
+              </Button>
+              <Button
+                className="h-14 flex-1 text-base"
+                disabled={busy || codBlocked}
+                onClick={onAccept}
+              >
+                {busy ? "Accepting…" : "Accept"}
+              </Button>
+            </div>
+          </>
         ) : (
           <Button className="h-14 w-full text-base" disabled={busy} onClick={onAcknowledge}>
             {busy ? "…" : "Got it — start job"}
