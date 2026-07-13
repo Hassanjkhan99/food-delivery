@@ -430,6 +430,20 @@ type Mutation {
     note: String
     orderId: String!
   ): SupportTicket!
+  createRestaurantVoucher(
+    code: String!
+    description: String
+    endsAt: DateTime
+    maxDiscountMinor: Int
+    minOrderMinor: Int
+    perUserLimit: Int
+    restaurantId: String!
+    startsAt: DateTime
+    totalBudgetMinor: Int
+    type: String!
+    valueBps: Int
+    valueMinor: Int
+  ): Voucher!
   createVoucher(input: VoucherInput!): Voucher!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineSharedOffer(offerId: String!, reason: String): Boolean!
@@ -498,6 +512,7 @@ type Mutation {
   setMarketingOptOut(optOut: Boolean!): User!
   setMenuItemPhoto(mediaId: String, menuItemId: String!): MenuItem!
   setRestaurantTier(id: String!, tier: String!): Restaurant!
+  setRestaurantVoucherActive(active: Boolean!, id: String!): Voucher!
   setRiderSharedOptIn(optIn: Boolean!): Boolean!
   setSharedRiderPolicy(
     codTrustThreshold: Int
@@ -788,6 +803,7 @@ type Query {
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
   restaurantReviews(limit: Int, offset: Int, restaurantId: String!): [Rating!]!
+  restaurantVouchers(restaurantId: String!): [Voucher!]!
   riderMissingRequirements(riderId: String!): [String!]!
   riderVerificationQueue: [Rider!]!
   searchMarketplace(lat: Float!, lng: Float!, query: String!): SearchMarketplaceResult!
