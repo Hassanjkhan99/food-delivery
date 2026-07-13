@@ -687,6 +687,7 @@ type Query {
   myCashSummary: RiderCashSummary
   myEarnings: RiderEarnings!
   myEarningsBreakdown: RiderEarningsBreakdown!
+  myEarningsSummary: RiderEarningsSummary
   myGiftCards: [GiftCard!]!
   myJobs: [DeliveryTask!]!
   myMembership: Membership
@@ -915,6 +916,13 @@ type RiderEarningsRow {
   orderId: String!
   taskId: String!
   tipMinor: Int!
+}
+
+type RiderEarningsSummary {
+  todayJobs: Int!
+  todayNetMinor: Int!
+  weekJobs: Int!
+  weekNetMinor: Int!
 }
 
 type RiderPayoutRow {
