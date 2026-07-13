@@ -7,6 +7,38 @@ import { requestOtp, verifyOtp } from "../auth/otp.js";
 import { env } from "../env.js";
 import { builder } from "./builder.js";
 
+// Mirrors @whatwg-node/cookie-store's CookieStoreDeleteOptions (a transitive dep — kept
+// local so we don't couple to its package path).
+type CookieStoreDeleteOptions = { name: string; domain?: string; path?: string };
+
+// Shared session-cookie attributes. Domain + SameSite are env-driven so the API can be
+// split onto its own origin: on a shared parent domain (api. + app.<domain>) set
+// SESSION_COOKIE_DOMAIN=.<domain> so BOTH the web edge proxy and the API read the same
+// cookie. delete() must reuse the same domain/path or a domained cookie won't clear.
+function sessionCookieAttrs() {
+  const sameSite = env.sessionCookieSameSite;
+  return {
+    path: "/",
+    sameSite,
+    httpOnly: true,
+    // SameSite=None is only honoured on Secure cookies, so force Secure regardless of env.
+    secure: sameSite === "none" ? true : env.isProduction,
+    domain: env.sessionCookieDomain,
+  } as const;
+}
+
+async function clearSessionCookie(ctx: {
+  request: { cookieStore?: { delete: (init: string | CookieStoreDeleteOptions) => Promise<void> } };
+}) {
+  const domain = env.sessionCookieDomain;
+  // Omit domain entirely when host-only (preserves the original delete-by-name behavior);
+  // a domained cookie only clears when the same Domain + Path are supplied.
+  const init: CookieStoreDeleteOptions = domain
+    ? { name: SESSION_COOKIE_NAME, domain, path: "/" }
+    : { name: SESSION_COOKIE_NAME };
+  await ctx.request.cookieStore?.delete(init);
+}
+
 export const UserType = builder.prismaObject("User", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -127,16 +159,14 @@ builder.mutationFields((t) => ({
       }));
       const token = await signSessionToken({ sid: session.id, uid: userId, roles: roleClaims });
 
-      // Host-only cookie (no Domain) so it flows to both :3000 and :4000 on localhost.
+      // Cookie scope is env-driven (see sessionCookieAttrs): host-only by default (works
+      // for :3000/:4000 on localhost and the same-origin deploy), or shared-parent-domain
+      // when the API is split onto its own subdomain.
       await ctx.request.cookieStore?.set({
         name: SESSION_COOKIE_NAME,
         value: token,
-        path: "/",
-        sameSite: "lax",
-        httpOnly: true,
-        secure: env.isProduction,
         expires: session.expiresAt.getTime(),
-        domain: null,
+        ...sessionCookieAttrs(),
       });
 
       return toViewer(userId, roleClaims);
@@ -186,7 +216,7 @@ builder.mutationFields((t) => ({
       });
       // If they revoked their own current session, clear the cookie too.
       if (session.id === ctx.sessionId) {
-        await ctx.request.cookieStore?.delete(SESSION_COOKIE_NAME);
+        await clearSessionCookie(ctx);
       }
       return true;
     },
@@ -202,7 +232,7 @@ builder.mutationFields((t) => ({
           data: { revokedAt: new Date() },
         });
       }
-      await ctx.request.cookieStore?.delete(SESSION_COOKIE_NAME);
+      await clearSessionCookie(ctx);
       return true;
     },
   }),

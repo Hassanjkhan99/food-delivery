@@ -7,7 +7,9 @@ config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 
 export const env = {
   get apiPort(): number {
-    return Number(process.env.API_PORT ?? 4000);
+    // PORT is what most persistent hosts (Render/Railway/Fly) inject; honour it so the
+    // standalone API binds correctly there, falling back to API_PORT then the dev default.
+    return Number(process.env.API_PORT ?? process.env.PORT ?? 4000);
   },
   get webOrigin(): string {
     return process.env.WEB_ORIGIN ?? "http://localhost:3000";
@@ -16,6 +18,25 @@ export const env = {
     const s = process.env.SESSION_SECRET;
     if (!s) throw new Error("SESSION_SECRET is not set");
     return s;
+  },
+  // ── Session cookie scope (needed to split the API onto its own origin) ────
+  // When the API and web app live on sibling subdomains of a shared parent
+  // (e.g. api. + app.heraldeats.com), set this to the bare parent "heraldeats.com"
+  // so the ONE session cookie is readable by both the API and the web edge proxy.
+  // Unset = host-only cookie (collapsed same-origin deploy + localhost).
+  get sessionCookieDomain(): string | null {
+    const d = process.env.SESSION_COOKIE_DOMAIN;
+    if (!d) return null;
+    // A bare Domain (RFC 6265) already covers all subdomains; the cookie library rejects a
+    // leading dot, so strip it defensively — "heraldeats.com" and ".heraldeats.com" both work.
+    return d.replace(/^\./, "");
+  },
+  // "lax" (default, correct for same-origin and shared-parent-subdomain setups),
+  // or "none" for a genuinely cross-site split (forces Secure; note browsers block
+  // such third-party cookies, so a shared parent domain is strongly preferred).
+  get sessionCookieSameSite(): "lax" | "none" | "strict" {
+    const v = process.env.SESSION_COOKIE_SAMESITE;
+    return v === "none" || v === "strict" ? v : "lax";
   },
   get storageDir(): string {
     return process.env.STORAGE_DIR ?? "./.storage";
