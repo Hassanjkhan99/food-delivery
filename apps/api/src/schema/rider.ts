@@ -155,6 +155,7 @@ builder.queryFields((t) => ({
         rejectionReason: string | null;
         missingRequirements: string[];
         cashLimitMinor: number;
+        codDisabled: boolean;
         lastLocationAt: Date | null;
       }>("RiderProfile")
       .implement({
@@ -176,6 +177,10 @@ builder.queryFields((t) => ({
           // approaches this; enforcement (blocking new assignments) is the fraud
           // issue #25's job — this only surfaces the number.
           cashLimitMinor: f.exposeInt("cashLimitMinor"),
+          // Whether the rider is currently blocked from COD orders (#25 cash-variance
+          // auto-disable). Surfaced (#164) so the home screen can warn up front instead
+          // of the rider only discovering it when acceptTask throws.
+          codDisabled: f.exposeBoolean("codDisabled"),
           // Wall-clock of the rider's last GPS ping (#163). The home screen shows an
           // "updated Xs ago" freshness line so the rider knows their position is
           // actually being shared with customers.
@@ -208,6 +213,7 @@ builder.queryFields((t) => ({
         rejectionReason: rider.rejectionReason,
         missingRequirements: missingRequirements(rider),
         cashLimitMinor: rider.cashLimitMinor,
+        codDisabled: rider.codDisabled,
       };
     },
   }),

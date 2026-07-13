@@ -928,6 +928,7 @@ type RiderPayoutRow {
 type RiderProfile {
   agreementAccepted: Boolean!
   cashLimitMinor: Int!
+  codDisabled: Boolean!
   isOnline: Boolean!
   lastLocationAt: DateTime
   missingRequirements: [String!]!
