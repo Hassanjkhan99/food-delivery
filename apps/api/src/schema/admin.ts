@@ -773,8 +773,16 @@ builder.mutationFields((t) => ({
     authScopes: { admin: true },
     args: { restaurantId: t.arg.string({ required: false }) },
     resolve: async (_q, _root, args, ctx) => {
+      // KYC gate (#203): mirror requestPayout — never pay a restaurant whose KYC isn't
+      // approved, even via the admin batch or a targeted runPayoutBatch(restaurantId).
+      // (approveRestaurant can go live with only-submitted KYC, and rejecting KYC later
+      // doesn't suspend the restaurant, so the status check alone isn't enough.)
       const restaurants = await prisma.restaurant.findMany({
-        where: { status: "approved", ...(args.restaurantId ? { id: args.restaurantId } : {}) },
+        where: {
+          status: "approved",
+          kyc: { status: "approved" },
+          ...(args.restaurantId ? { id: args.restaurantId } : {}),
+        },
       });
       const payouts = [];
       for (const r of restaurants) {

@@ -59,6 +59,15 @@ function assertRestaurantOwner(ctx: AppContext, restaurantId: string) {
   }
 }
 
+// Owner-level guard for branch-scoped surfaces (#204). `restaurant_staff` run the order
+// board (accept/prepare/ready/86) but must not reach menu editing — nav-hiding alone left
+// those resolvers open to a direct call, so gate them here as well.
+async function assertBranchOwner(ctx: AppContext, branchId: string) {
+  const branch = await assertBranchMember(ctx, branchId);
+  assertRestaurantOwner(ctx, branch.restaurantId);
+  return branch;
+}
+
 async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -471,9 +480,31 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { branchId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       return prisma.menu.findUniqueOrThrow({ ...query, where: { id: draft.id } });
+    },
+  }),
+
+  // Live (published) menu items that are currently 86'd. Member-scoped (#204): the menu
+  // editor is owner-only, but staff run the board — they must be able to see and restock
+  // items they took offline via the board's 86 flow (setItemAvailability stays member-level).
+  branchUnavailableItems: t.prismaField({
+    type: ["MenuItem"],
+    authScopes: { restaurantMember: true },
+    args: { branchId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const live = await prisma.menu.findFirst({
+        where: { branchId: args.branchId, status: "published" },
+        orderBy: { version: "desc" },
+      });
+      if (!live) return [];
+      return prisma.menuItem.findMany({
+        ...query,
+        where: { category: { menuId: live.id }, isAvailable: false },
+        orderBy: { name: "asc" },
+      });
     },
   }),
 
@@ -1046,7 +1077,7 @@ builder.mutationFields((t) => ({
       hours: t.arg({ type: [BranchHoursInput], required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       for (const h of args.hours) {
         if (h.dayOfWeek < 0 || h.dayOfWeek > 6)
           throw new GraphQLError("Please choose a valid day of the week.", {
@@ -1161,6 +1192,17 @@ builder.mutationFields((t) => ({
       await assertRestaurantMember(ctx, args.restaurantId);
       assertRestaurantOwner(ctx, args.restaurantId);
       const MIN_PAYOUT_MINOR = 100_000; // Rs 1,000 floor
+      // KYC gate (#203): a restaurant can't be paid out until identity/bank details are
+      // verified. requestPayout previously only checked ownership, in-flight, and the floor,
+      // which contradicted the verification page's "can't be paid out until KYC approved".
+      const kyc = await prisma.restaurantKyc.findUnique({
+        where: { restaurantId: args.restaurantId },
+      });
+      if (kyc?.status !== "approved")
+        throw new GraphQLError(
+          "Your restaurant's KYC must be approved before you can request a payout.",
+          { extensions: { code: "kyc_not_approved" } },
+        );
       return prisma.$transaction(async (tx) => {
         const inFlight = await tx.payout.findFirst({
           where: { restaurantId: args.restaurantId, status: "pending" },
@@ -1325,7 +1367,7 @@ builder.mutationFields((t) => ({
       name: t.arg.string({ required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      const branch = await assertBranchMember(ctx, args.branchId);
+      const branch = await assertBranchOwner(ctx, args.branchId);
       if (!/^\+92\d{10}$/.test(args.phone))
         throw new GraphQLError("Please enter a valid phone number, for example +923001234567.", {
           extensions: { code: "validation_error" },
@@ -1370,7 +1412,7 @@ builder.mutationFields((t) => ({
       sortOrder: t.arg.int({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       if (args.id) {
         const cat = await prisma.menuCategory.findUnique({ where: { id: args.id } });
@@ -1415,7 +1457,7 @@ builder.mutationFields((t) => ({
       badges: t.arg.stringList({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       const category = await prisma.menuCategory.findUnique({ where: { id: args.categoryId } });
       if (!category || category.menuId !== draft.id)
@@ -1512,7 +1554,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only items in your draft menu can be deleted.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, item.category.menu.branchId);
+      await assertBranchOwner(ctx, item.category.menu.branchId);
       await prisma.$transaction(async (tx) => {
         // Remove the item's join rows first, including any combo (#53) it belongs to —
         // ComboItem.menuItem is a required FK, so Postgres rejects the delete otherwise.
@@ -1543,7 +1585,7 @@ builder.mutationFields((t) => ({
       itemId: t.arg.string({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       if (!args.name.trim())
         throw new GraphQLError("Please enter a name for this option group.", {
@@ -1616,7 +1658,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only option groups in your draft menu can be deleted.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, group.menu.branchId);
+      await assertBranchOwner(ctx, group.menu.branchId);
       await prisma.$transaction(async (tx) => {
         await tx.menuItemModifierGroup.deleteMany({ where: { groupId: args.id } });
         await tx.modifierOption.deleteMany({ where: { groupId: args.id } });
@@ -1649,7 +1691,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only options in your draft menu can be edited.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, group.menu.branchId);
+      await assertBranchOwner(ctx, group.menu.branchId);
       if (!args.name.trim())
         throw new GraphQLError("Please enter a name for this option.", {
           extensions: { code: "validation_error" },
@@ -1705,7 +1747,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only options in your draft menu can be deleted.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, option.group.menu.branchId);
+      await assertBranchOwner(ctx, option.group.menu.branchId);
       await prisma.modifierOption.delete({ where: { id: args.id } });
       return true;
     },
@@ -1735,7 +1777,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only items in your draft menu can be edited.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, item.category.menu.branchId);
+      await assertBranchOwner(ctx, item.category.menu.branchId);
       if (args.mediaId) {
         const asset = await prisma.mediaAsset.findUnique({ where: { id: args.mediaId } });
         if (!asset || asset.status !== "finalized")
@@ -1766,7 +1808,7 @@ builder.mutationFields((t) => ({
       priceMinor: t.arg.int({ required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       if (!args.name.trim())
         throw new GraphQLError("Please enter a name for this deal.", {
@@ -1810,7 +1852,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("We couldn't find that deal.", {
           extensions: { code: "not_found" },
         });
-      await assertBranchMember(ctx, combo.menu.branchId);
+      await assertBranchOwner(ctx, combo.menu.branchId);
       return prisma.combo.update({
         where: { id: args.comboId },
         data: { isAvailable: args.available },
@@ -1835,7 +1877,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only deals in your draft menu can be deleted.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, combo.menu.branchId);
+      await assertBranchOwner(ctx, combo.menu.branchId);
       await prisma.$transaction(async (tx) => {
         await tx.comboItem.deleteMany({ where: { comboId: args.comboId } });
         await tx.combo.delete({ where: { id: args.comboId } });
@@ -1866,7 +1908,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only deals in your draft menu can be edited.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, combo.menu.branchId);
+      await assertBranchOwner(ctx, combo.menu.branchId);
       const item = await prisma.menuItem.findUnique({
         where: { id: args.menuItemId },
         include: { category: true },
@@ -1911,7 +1953,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Only deals in your draft menu can be edited.", {
           extensions: { code: "not_allowed" },
         });
-      await assertBranchMember(ctx, ci.combo.menu.branchId);
+      await assertBranchOwner(ctx, ci.combo.menu.branchId);
       await prisma.comboItem.delete({ where: { id: args.comboItemId } });
       return prisma.combo.findUniqueOrThrow({ ...query, where: { id: ci.comboId } });
     },
@@ -1922,7 +1964,7 @@ builder.mutationFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { branchId: t.arg.string({ required: true }) },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       return publishDraft(args.branchId);
     },
   }),

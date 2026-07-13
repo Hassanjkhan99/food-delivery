@@ -213,12 +213,12 @@ type ModifierGroupShape = {
 };
 
 export default function MenuManagerPage() {
-  const { branch, restaurant } = useConsole();
+  const { branch, restaurant, isOwner } = useConsole();
   const client = useClient();
   const [{ data, fetching }, refetch] = useQuery({
     query: DraftQuery,
     variables: { branchId: branch?.id ?? "" },
-    pause: !branch,
+    pause: !branch || !isOwner,
     requestPolicy: "cache-and-network",
   });
   const [, upsertCategory] = useMutation(UpsertCategoryMutation);
@@ -246,6 +246,10 @@ export default function MenuManagerPage() {
       <p className="text-kd-fg-muted">Complete onboarding first.</p>
     );
   }
+  // Owner-only surface (#204): staff run the order board, not the menu. Block direct URL
+  // access, not just the sidebar link.
+  if (!isOwner)
+    return <p className="text-kd-fg-muted">Only the restaurant owner can manage the menu.</p>;
 
   const menu = data?.draftMenu;
   const refresh = () => refetch({ requestPolicy: "network-only" });

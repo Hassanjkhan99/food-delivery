@@ -37,6 +37,8 @@ const OrderHelpQuery = graphql(`
       status
       body
       resolutionNote
+      restaurantResponse
+      restaurantRespondedAt
       createdAt
       refund {
         id
@@ -211,6 +213,14 @@ export default function OrderHelpPage({ params }: { params: Promise<{ orderId: s
                 </Badge>
               </div>
               <p className="mt-1 whitespace-pre-line text-xs text-kd-fg-muted">{tk.body}</p>
+              {tk.restaurantResponse ? (
+                <div className="mt-3 rounded-lg border border-kd-border bg-kd-surface-muted p-3">
+                  <p className="text-xs font-medium text-kd-fg">Reply from the restaurant</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-kd-fg-muted">
+                    {tk.restaurantResponse}
+                  </p>
+                </div>
+              ) : null}
               {tk.resolutionNote ? (
                 <div className="mt-3 rounded-lg bg-kd-success-soft p-3 text-sm text-kd-success">
                   {tk.resolutionNote}

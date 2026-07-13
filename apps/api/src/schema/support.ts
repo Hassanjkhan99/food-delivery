@@ -221,8 +221,14 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("We couldn't find that ticket.", {
           extensions: { code: "not_found" },
         });
-      if (!ctx.restaurantIds.includes(ticket.order.branch.restaurantId) && !ctx.hasRole("admin"))
-        throw new GraphQLError("You don't have access to this ticket.", {
+      // Owner-only (#204/#205): the reply is now shown to the customer, so a non-owner staff
+      // account must not be able to publish customer-facing responses via the API.
+      const restaurantId = ticket.order.branch.restaurantId;
+      const isOwner = ctx.roles.some(
+        (r) => r.role === "restaurant_owner" && r.restaurantId === restaurantId,
+      );
+      if (!isOwner && !ctx.hasRole("admin"))
+        throw new GraphQLError("Only the restaurant owner can reply to support tickets.", {
           extensions: { code: "forbidden" },
         });
       const body = args.body.trim();

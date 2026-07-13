@@ -427,9 +427,33 @@ type Mutation {
   cancelCampaign(id: String!): Campaign!
   cancelMembership: Membership!
   cancelOrder(id: String!, reason: String): Order!
-  createCampaign(endsAt: DateTime, label: String, restaurantId: String!, startsAt: DateTime, type: String!): Campaign!
-  createHelpTicket(category: String!, items: [HelpItemSelectionInput!], note: String, orderId: String!): SupportTicket!
-  createRestaurantVoucher(code: String!, description: String, endsAt: DateTime, maxDiscountMinor: Int, minOrderMinor: Int, perUserLimit: Int, restaurantId: String!, startsAt: DateTime, totalBudgetMinor: Int, type: String!, valueBps: Int, valueMinor: Int): Voucher!
+  createCampaign(
+    endsAt: DateTime
+    label: String
+    restaurantId: String!
+    startsAt: DateTime
+    type: String!
+  ): Campaign!
+  createHelpTicket(
+    category: String!
+    items: [HelpItemSelectionInput!]
+    note: String
+    orderId: String!
+  ): SupportTicket!
+  createRestaurantVoucher(
+    code: String!
+    description: String
+    endsAt: DateTime
+    maxDiscountMinor: Int
+    minOrderMinor: Int
+    perUserLimit: Int
+    restaurantId: String!
+    startsAt: DateTime
+    totalBudgetMinor: Int
+    type: String!
+    valueBps: Int
+    valueMinor: Int
+  ): Voucher!
   createVoucher(input: VoucherInput!): Voucher!
   decideRefund(approve: Boolean!, id: String!, reason: String): Refund!
   declineSharedOffer(offerId: String!, reason: String): Boolean!
@@ -490,7 +514,13 @@ type Mutation {
   runPayoutBatch(restaurantId: String): [Payout!]!
   saveAddress(input: SaveAddressInput!): Address!
   savePushSubscription(auth: String!, endpoint: String!, p256dh: String!): Boolean!
-  sendPromoBlast(body: String!, linkHref: String, restaurantId: String, segment: String!, title: String!): Int!
+  sendPromoBlast(
+    body: String!
+    linkHref: String
+    restaurantId: String
+    segment: String!
+    title: String!
+  ): Int!
   setAcceptingOrders(accepting: Boolean!, branchId: String!): Branch!
   setAvailability(online: Boolean!): Boolean!
   setBranchHours(branchId: String!, hours: [BranchHoursInput!]!): Branch!
@@ -502,31 +532,116 @@ type Mutation {
   setRestaurantTier(id: String!, tier: String!): Restaurant!
   setRestaurantVoucherActive(active: Boolean!, id: String!): Voucher!
   setRiderSharedOptIn(optIn: Boolean!): Boolean!
-  setSharedRiderPolicy(codTrustThreshold: Int, maxActiveJobs: Int, maxIncrementalDelaySec: Int, maxPickupMeters: Int, restaurantId: String!, sharingEnabled: Boolean, vetoActive: Boolean): SharedRiderPolicy!
+  setSharedRiderPolicy(
+    codTrustThreshold: Int
+    maxActiveJobs: Int
+    maxIncrementalDelaySec: Int
+    maxPickupMeters: Int
+    restaurantId: String!
+    sharingEnabled: Boolean
+    vetoActive: Boolean
+  ): SharedRiderPolicy!
   setVoucherActive(active: Boolean!, id: String!): Voucher!
   startPreparing(id: String!): Order!
   submitCampaign(id: String!): Campaign!
-  submitKyc(bankAccountName: String, bankIban: String, cnicAssetId: String, ownerCnic: String!, ownerName: String!, restaurantId: String!): RestaurantKyc!
-  submitOnboarding(addressText: String!, deliveryFeeMinor: Int!, deliveryRadiusM: Int!, lat: Float!, lng: Float!, minOrderMinor: Int!, name: String!): Restaurant!
+  submitKyc(
+    bankAccountName: String
+    bankIban: String
+    cnicAssetId: String
+    ownerCnic: String!
+    ownerName: String!
+    restaurantId: String!
+  ): RestaurantKyc!
+  submitOnboarding(
+    addressText: String!
+    deliveryFeeMinor: Int!
+    deliveryRadiusM: Int!
+    lat: Float!
+    lng: Float!
+    minOrderMinor: Int!
+    name: String!
+  ): Restaurant!
   submitRiderDoc(assetId: String!, kind: String!): RiderVerificationDoc!
   subscribeMembership(paymentMethodId: String!, planId: String!): Membership!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
   topUpWallet(amountMinor: Int!, paymentMethodId: String!): Wallet!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
-  updateBranchCommercials(branchId: String!, deliveryFeeMinor: Int, deliveryRadiusM: Int, minOrderMinor: Int): Branch!
-  updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, featuredSlotDailyRateChainMinor: Int, featuredSlotDailyRateSmallMinor: Int, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
+  updateBranchCommercials(
+    branchId: String!
+    deliveryFeeMinor: Int
+    deliveryRadiusM: Int
+    minOrderMinor: Int
+  ): Branch!
+  updateFeeConfig(
+    chainCommissionBps: Int!
+    chainPlatformFeeMinor: Int!
+    featuredSlotDailyRateChainMinor: Int
+    featuredSlotDailyRateSmallMinor: Int
+    smallBusinessCommissionBps: Int!
+    smallBusinessPlatformFeeMinor: Int!
+  ): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
   updateProfile(email: String, name: String): User!
   updateRestaurantProfile(cuisineTags: [String!], name: String, restaurantId: String!): Restaurant!
-  updateRiderOnboarding(agreementAccepted: Boolean, trainingCompleted: Boolean, vehiclePlate: String, vehicleType: String): Rider!
-  updateTheme(accentColor: String, backgroundColor: String, cardStyle: String, fontKey: String, heroAssetId: String, heroEffect: String, logoAssetId: String, primaryColor: String, restaurantId: String!, textColor: String): RestaurantTheme!
+  updateRiderOnboarding(
+    agreementAccepted: Boolean
+    trainingCompleted: Boolean
+    vehiclePlate: String
+    vehicleType: String
+  ): Rider!
+  updateTheme(
+    accentColor: String
+    backgroundColor: String
+    cardStyle: String
+    fontKey: String
+    heroAssetId: String
+    heroEffect: String
+    logoAssetId: String
+    primaryColor: String
+    restaurantId: String!
+    textColor: String
+  ): RestaurantTheme!
   updateVoucher(id: String!, input: VoucherInput!): Voucher!
-  upsertCategory(branchId: String!, description: String, id: String, name: String!, sortOrder: Int): MenuCategory!
-  upsertCombo(branchId: String!, description: String, id: String, name: String!, priceMinor: Int!): Combo!
-  upsertMenuItem(badges: [String!], branchId: String!, categoryId: String!, compareAtPriceMinor: Int, description: String, id: String, name: String!, priceMinor: Int!): MenuItem!
-  upsertModifierGroup(branchId: String!, id: String, itemId: String, maxSelect: Int!, minSelect: Int!, name: String!): ModifierGroup!
-  upsertModifierOption(groupId: String!, id: String, isAvailable: Boolean, name: String!, priceDeltaMinor: Int!): ModifierOption!
+  upsertCategory(
+    branchId: String!
+    description: String
+    id: String
+    name: String!
+    sortOrder: Int
+  ): MenuCategory!
+  upsertCombo(
+    branchId: String!
+    description: String
+    id: String
+    name: String!
+    priceMinor: Int!
+  ): Combo!
+  upsertMenuItem(
+    badges: [String!]
+    branchId: String!
+    categoryId: String!
+    compareAtPriceMinor: Int
+    description: String
+    id: String
+    name: String!
+    priceMinor: Int!
+  ): MenuItem!
+  upsertModifierGroup(
+    branchId: String!
+    id: String
+    itemId: String
+    maxSelect: Int!
+    minSelect: Int!
+    name: String!
+  ): ModifierGroup!
+  upsertModifierOption(
+    groupId: String!
+    id: String
+    isAvailable: Boolean
+    name: String!
+    priceDeltaMinor: Int!
+  ): ModifierOption!
   verifyOtp(code: String!, phone: String!): Viewer!
   verifyPickupPin(pin: String!, taskId: String!): Boolean!
 }
@@ -668,7 +783,13 @@ type Query {
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
   branchBySlug(slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
-  browseBranches(filter: BrowseFilter, lat: Float!, lng: Float!, sort: BrowseSort): [BranchSearchResult!]!
+  branchUnavailableItems(branchId: String!): [MenuItem!]!
+  browseBranches(
+    filter: BrowseFilter
+    lat: Float!
+    lng: Float!
+    sort: BrowseSort
+  ): [BranchSearchResult!]!
   campaignApprovalQueue: [Campaign!]!
   cancellationPolicyMatrix: CancellationPolicy!
   currentFeeConfig: FeeConfig

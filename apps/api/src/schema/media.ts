@@ -22,6 +22,21 @@ async function assertBranchMember(ctx: AppContext, branchId: string) {
   return branch;
 }
 
+// Menu digitization/import/layout are owner-only (#204): restaurant_staff run the order
+// board, not the menu. Gate at the resolver so nav-hiding isn't the only barrier.
+async function assertBranchOwner(ctx: AppContext, branchId: string) {
+  const branch = await assertBranchMember(ctx, branchId);
+  const isOwner = ctx.roles.some(
+    (r) => r.role === "restaurant_owner" && r.restaurantId === branch.restaurantId,
+  );
+  if (!isOwner && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Only the restaurant owner can do this.", {
+      extensions: { code: "forbidden" },
+    });
+  }
+  return branch;
+}
+
 const MediaAssetType = builder.prismaObject("MediaAsset", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -82,7 +97,7 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { branchId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       return prisma.menuSourceDoc.findMany({
         ...query,
         where: { branchId: args.branchId },
@@ -120,7 +135,7 @@ builder.mutationFields((t) => ({
       kind: t.arg.string({ required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       if (!["photo", "pdf", "csv"].includes(args.kind))
         throw new GraphQLError("Please choose a valid document type: photo, PDF, or CSV.", {
           extensions: { code: "validation_error" },
@@ -151,7 +166,7 @@ builder.mutationFields((t) => ({
       assetId: t.arg.string({ required: true }),
     },
     resolve: async (_root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       return importMenuCsv(ctx.userId!, args.branchId, args.assetId);
     },
   }),
@@ -164,7 +179,7 @@ builder.mutationFields((t) => ({
       layoutJson: t.arg({ type: "JSON", required: true }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      await assertBranchOwner(ctx, args.branchId);
       const draft = await ensureDraft(args.branchId);
       return prisma.menu.update({
         where: { id: draft.id },
