@@ -53,6 +53,12 @@ server, no cross-site cookies. Two free-forever services carry it:
   https://<your-app>.vercel.app/api/cron/expire-orders?secret=<CRON_SECRET>
   ```
   every 1 minute. The daily Vercel cron stays as a backstop.
+- **Offer-expiry cron (#168).** Same treatment: point the pinger at
+  ```
+  https://<your-app>.vercel.app/api/cron/expire-offers?secret=<CRON_SECRET>
+  ```
+  every 1 minute. Reclaims delivery offers/tasks stuck in `offered` when a rider never
+  responds (app closed), so the restaurant board isn't blocked on a dead offer.
 
 ## Local development
 
