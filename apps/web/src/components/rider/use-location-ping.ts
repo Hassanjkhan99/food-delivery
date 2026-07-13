@@ -15,11 +15,18 @@ const RiderPingMutation = graphql(`
   }
 `);
 
+// Active-job cadence: tight, so the customer's live map tracks smoothly.
 const PING_INTERVAL_MS = 20_000;
+// Online-but-idle cadence (#163): much slower to protect battery — an idle rider only
+// needs a fresh-enough fix for dispatch proximity + a head-start dot, not live tracking.
+export const IDLE_PING_INTERVAL_MS = 45_000;
 
 export type PingStatus = "idle" | "pinging" | "denied" | "unavailable";
 
-export function useLocationPing(active: boolean): PingStatus {
+export function useLocationPing(
+  active: boolean,
+  intervalMs: number = PING_INTERVAL_MS,
+): PingStatus {
   const [, ping] = useMutation(RiderPingMutation);
   const [status, setStatus] = useState<PingStatus>("idle");
   // Keep the latest mutation fn in a ref so the interval effect doesn't re-run on every
@@ -54,13 +61,13 @@ export function useLocationPing(active: boolean): PingStatus {
     };
 
     send();
-    const t = setInterval(send, PING_INTERVAL_MS);
+    const t = setInterval(send, intervalMs);
     return () => {
       cancelled = true;
       clearInterval(t);
       setStatus("idle");
     };
-  }, [active]);
+  }, [active, intervalMs]);
 
   return status;
 }
