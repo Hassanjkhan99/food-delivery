@@ -284,6 +284,24 @@ StaffMemberRef.implement({
   }),
 });
 
+// Restaurant KYC / verification record (#152).
+builder.prismaObject("RestaurantKyc", {
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    restaurantId: t.exposeString("restaurantId"),
+    ownerName: t.exposeString("ownerName"),
+    ownerCnic: t.exposeString("ownerCnic"),
+    bankAccountName: t.exposeString("bankAccountName", { nullable: true }),
+    bankIban: t.exposeString("bankIban", { nullable: true }),
+    cnicAssetId: t.exposeString("cnicAssetId", { nullable: true }),
+    status: t.exposeString("status"),
+    rejectionReason: t.exposeString("rejectionReason", { nullable: true }),
+    submittedAt: t.field({ type: "DateTime", resolve: (k) => k.submittedAt }),
+    reviewedAt: t.field({ type: "DateTime", nullable: true, resolve: (k) => k.reviewedAt }),
+    restaurant: t.relation("restaurant"),
+  }),
+});
+
 // ── queries ─────────────────────────────────────────────────────────────────
 
 builder.queryFields((t) => ({
@@ -313,6 +331,33 @@ builder.queryFields((t) => ({
         phone: r.user.phone,
       }));
     },
+  }),
+
+  // Owner: this restaurant's KYC record + status (null until submitted). (#152)
+  restaurantKyc: t.prismaField({
+    type: "RestaurantKyc",
+    nullable: true,
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertRestaurantMember(ctx, args.restaurantId);
+      return prisma.restaurantKyc.findUnique({
+        ...query,
+        where: { restaurantId: args.restaurantId },
+      });
+    },
+  }),
+
+  // Admin: KYC records awaiting review, oldest first. (#152)
+  kycQueue: t.prismaField({
+    type: ["RestaurantKyc"],
+    authScopes: { admin: true },
+    resolve: (query) =>
+      prisma.restaurantKyc.findMany({
+        ...query,
+        where: { status: "submitted" },
+        orderBy: { submittedAt: "asc" },
+      }),
   }),
 
   boardOrders: t.prismaField({
@@ -1222,6 +1267,52 @@ builder.mutationFields((t) => ({
         where: { userId: args.userId, role: "restaurant_staff", restaurantId: args.restaurantId },
       });
       return true;
+    },
+  }),
+
+  // Owner: submit/resubmit KYC for review (#152). Upserts and resets to "submitted",
+  // clearing any prior rejection. An admin then approves/rejects via reviewKyc.
+  submitKyc: t.prismaField({
+    type: "RestaurantKyc",
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      ownerName: t.arg.string({ required: true }),
+      ownerCnic: t.arg.string({ required: true }),
+      bankAccountName: t.arg.string({ required: false }),
+      bankIban: t.arg.string({ required: false }),
+      cnicAssetId: t.arg.string({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      assertRestaurantOwner(ctx, args.restaurantId);
+      const ownerName = args.ownerName.trim();
+      const ownerCnic = args.ownerCnic.trim();
+      if (ownerName.length < 2)
+        throw new GraphQLError("Please enter the owner's full name.", {
+          extensions: { code: "validation_error" },
+        });
+      if (!/^\d{5}-?\d{7}-?\d$/.test(ownerCnic))
+        throw new GraphQLError("Please enter a valid CNIC, e.g. 42101-1234567-1.", {
+          extensions: { code: "validation_error" },
+        });
+      const data = {
+        ownerName,
+        ownerCnic,
+        bankAccountName: args.bankAccountName?.trim() || null,
+        bankIban: args.bankIban?.trim() || null,
+        cnicAssetId: args.cnicAssetId ?? null,
+        status: "submitted",
+        rejectionReason: null,
+        submittedAt: new Date(),
+        reviewedAt: null,
+        reviewedByUserId: null,
+      };
+      return prisma.restaurantKyc.upsert({
+        ...query,
+        where: { restaurantId: args.restaurantId },
+        update: data,
+        create: { restaurantId: args.restaurantId, ...data },
+      });
     },
   }),
 

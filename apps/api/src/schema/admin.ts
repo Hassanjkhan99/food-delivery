@@ -358,6 +358,12 @@ builder.mutationFields((t) => ({
     args: { id: t.arg.string({ required: true }) },
     resolve: async (_q, _root, args, ctx) => {
       const before = await prisma.restaurant.findUniqueOrThrow({ where: { id: args.id } });
+      // KYC gate (#152): can't approve a restaurant for trading without submitted KYC.
+      const kyc = await prisma.restaurantKyc.findUnique({ where: { restaurantId: args.id } });
+      if (!kyc || kyc.status === "rejected")
+        throw new GraphQLError("This restaurant hasn't submitted KYC for review yet.", {
+          extensions: { code: "kyc_required" },
+        });
       const updated = await prisma.restaurant.update({
         where: { id: args.id },
         data: { status: "approved" },
@@ -369,6 +375,56 @@ builder.mutationFields((t) => ({
         args.id,
         { status: before.status },
         { status: "approved" },
+      );
+      return updated;
+    },
+  }),
+
+  // Approve/reject a restaurant's KYC (#152). Approve flips the restaurant to approved;
+  // reject requires a reason and leaves it pending for resubmission.
+  reviewKyc: t.prismaField({
+    type: "RestaurantKyc",
+    authScopes: { admin: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      approve: t.arg.boolean({ required: true }),
+      rejectionReason: t.arg.string({ required: false }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      const kyc = await prisma.restaurantKyc.findUnique({
+        where: { restaurantId: args.restaurantId },
+      });
+      if (!kyc)
+        throw new GraphQLError("No KYC has been submitted for this restaurant.", {
+          extensions: { code: "not_found" },
+        });
+      if (!args.approve && !args.rejectionReason?.trim())
+        throw new GraphQLError("Please provide a rejection reason.", {
+          extensions: { code: "validation_error" },
+        });
+      const updated = await prisma.restaurantKyc.update({
+        ...query,
+        where: { restaurantId: args.restaurantId },
+        data: {
+          status: args.approve ? "approved" : "rejected",
+          rejectionReason: args.approve ? null : args.rejectionReason!.trim(),
+          reviewedAt: new Date(),
+          reviewedByUserId: ctx.userId,
+        },
+      });
+      if (args.approve) {
+        await prisma.restaurant.update({
+          where: { id: args.restaurantId },
+          data: { status: "approved" },
+        });
+      }
+      await audit(
+        ctx.userId,
+        args.approve ? "kyc.approve" : "kyc.reject",
+        "RestaurantKyc",
+        updated.id,
+        { status: kyc.status },
+        { status: updated.status },
       );
       return updated;
     },

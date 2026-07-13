@@ -493,6 +493,7 @@ type Mutation {
   resolveTicket(id: String!, note: String, resolutionCode: String!): SupportTicket!
   respondToRating(body: String!, ratingId: String!): RatingResponse!
   respondToTicket(body: String!, ticketId: String!): SupportTicket!
+  reviewKyc(approve: Boolean!, rejectionReason: String, restaurantId: String!): RestaurantKyc!
   revokeSession(sessionId: String!): Boolean!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
@@ -531,6 +532,14 @@ type Mutation {
   setVoucherActive(active: Boolean!, id: String!): Voucher!
   startPreparing(id: String!): Order!
   submitCampaign(id: String!): Campaign!
+  submitKyc(
+    bankAccountName: String
+    bankIban: String
+    cnicAssetId: String
+    ownerCnic: String!
+    ownerName: String!
+    restaurantId: String!
+  ): RestaurantKyc!
   submitOnboarding(
     addressText: String!
     deliveryFeeMinor: Int!
@@ -777,6 +786,7 @@ type Query {
   featuredSlotRate(restaurantId: String!): Int!
   giftCardByCode(code: String!): GiftCard
   homeBanners: [HomeBanner!]!
+  kycQueue: [RestaurantKyc!]!
   loyaltyAccount: LoyaltyAccount
   loyaltyLedger: [LoyaltyLedger!]!
   membershipPlans: [MembershipPlan!]!
@@ -807,6 +817,7 @@ type Query {
   refundQueue: [Refund!]!
   restaurantAnalytics(branchId: String!, days: Int): RestaurantAnalytics!
   restaurantApprovalQueue: [Restaurant!]!
+  restaurantKyc(restaurantId: String!): RestaurantKyc
   restaurantReviews(limit: Int, offset: Int, restaurantId: String!): [Rating!]!
   restaurantStaff(restaurantId: String!): [StaffMember!]!
   restaurantTickets(restaurantId: String!): [SupportTicket!]!
@@ -937,6 +948,21 @@ type RestaurantAnalytics {
   topItems: [AnalyticsTopItem!]!
   totalOrders: Int!
   totalRevenueMinor: Int!
+}
+
+type RestaurantKyc {
+  bankAccountName: String
+  bankIban: String
+  cnicAssetId: String
+  id: ID!
+  ownerCnic: String!
+  ownerName: String!
+  rejectionReason: String
+  restaurant: Restaurant!
+  restaurantId: String!
+  reviewedAt: DateTime
+  status: String!
+  submittedAt: DateTime!
 }
 
 type RestaurantTheme {
