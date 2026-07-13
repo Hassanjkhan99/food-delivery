@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ConsoleProvider, useConsole } from "./useConsole";
 import {
   BarChart3,
   ClipboardList,
@@ -32,7 +33,40 @@ const NAV = [
   { href: "/restaurant/settings", label: "Settings", icon: Settings },
 ];
 
+// Branch switcher — only shown when the restaurant has more than one branch (#155).
+function BranchSwitcher() {
+  const { branches, branch, setBranchId } = useConsole();
+  if (branches.length <= 1) return null;
+  return (
+    <div className="mb-4">
+      <label htmlFor="branch-switch" className="mb-1 block text-xs text-kd-fg-subtle">
+        Branch
+      </label>
+      <select
+        id="branch-switch"
+        value={branch?.id ?? ""}
+        onChange={(e) => setBranchId(e.target.value)}
+        className="w-full rounded-md border border-kd-border bg-kd-surface px-2 py-1.5 text-sm"
+      >
+        {branches.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function RestaurantLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ConsoleProvider>
+      <ConsoleShell>{children}</ConsoleShell>
+    </ConsoleProvider>
+  );
+}
+
+function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="flex min-h-screen bg-kd-surface-muted">
@@ -40,6 +74,7 @@ export default function RestaurantLayout({ children }: { children: React.ReactNo
         <Link href="/restaurant/orders" className="mb-6 block text-lg font-bold">
           🍜 Console
         </Link>
+        <BranchSwitcher />
         <nav className="space-y-1">
           {NAV.map((n) => {
             const Icon = n.icon;
