@@ -77,8 +77,12 @@ mindmap
 | `restaurant_staff` | **Orders + Today only** (menu, money, staff, settings hidden)          |
 | `admin`            | Approval queues (restaurant, KYC, campaign, rider) — see admin console |
 
-Nav is gated in `layout.tsx` (`isOwner ? NAV : NAV.filter(staff)`); each page also re-checks
-membership/ownership server-side. Unbuilt-restaurant users are redirected to onboarding.
+Nav is gated in `layout.tsx` (`isOwner ? NAV : NAV.filter(staff)`) and resolvers assert
+`restaurantMember` / `assertBranchMember`. ⚠️ **This is mostly nav-level hiding, not hard page-level
+owner enforcement.** Several owner-looking surfaces (e.g. `draftMenu`, `upsertMenuItem`, `publishMenu`)
+only require branch membership, so a `restaurant_staff` user reaching the URL directly can still hit
+parts of the menu flow. Treat "owner-only" here as "hidden from staff in the sidebar" unless the
+resolver specifically asserts ownership. Unbuilt-restaurant users are redirected to onboarding.
 
 ---
 
@@ -92,35 +96,37 @@ Legend: **Q** query, **M** mutation, **S** subscription.
 
 **Layout:** 6 lanes — **Scheduled → New → Preparing → Ready → Out → Recent**.
 
-| Element / action                      | Operation                                                    | Backend effect                                                                                                                                        |
-| ------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Load board                            | **Q** `boardOrders(branchId, statuses)`                      | Orders grouped into lanes                                                                                                                             |
-| Live new-order push                   | **S** `branchOrderFeed(branchId)`                            | Refetch on any change; 30s fallback poll                                                                                                              |
-| New-order alarm                       | `useOrderAlarm` (client)                                     | Sound + tab flash + banner when pending count rises                                                                                                   |
-| **Accept** (AcceptSheet → prep chips) | **M** `acceptOrder(id, prepEtaMinutes)`                      | `pending_acceptance → accepted`; ETA set; 🔗 customer sees "Accepted"                                                                                 |
-| **Reject** (RejectSheet → reason)     | **M** `rejectOrder(id, reason)`                              | `→ rejected`; refund path                                                                                                                             |
-| Start preparing                       | **M** `startPreparing(id)`                                   | `accepted → preparing`                                                                                                                                |
-| **Mark ready**                        | **M** `markReady(id)`                                        | `preparing/accepted → ready_for_pickup`; **creates DeliveryTask → 🔗 [rider offer](rider.md#job-lifecycle)** (delivery) or shows pickup code (pickup) |
-| Assign rider (dropdown, delivery)     | **M** `assignRider(orderId, riderId)`                        | Directly assigns a roster rider → `rider_assigned`                                                                                                    |
-| Mark collected (pickup)               | **M** `markCollected(id)`                                    | Pickup terminal                                                                                                                                       |
-| 86 an item (EightySixSheet)           | **M** `setItemAvailability(itemId, available:false, until?)` | Item hidden from customer menu + cart validation; optional auto-restore                                                                               |
-| Busy mode +10/20/30/clear             | **M** `setBusyMode(branchId, bufferMinutes)`                 | Buffer added to all prep ETAs customer sees                                                                                                           |
-| Print ticket                          | client `printKitchenTicket`                                  | —                                                                                                                                                     |
+| Element / action                      | Operation                                                    | Backend effect                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Load board                            | **Q** `boardOrders(branchId, statuses)`                      | Orders grouped into lanes                                                                                                                                                                      |
+| Live new-order push                   | **S** `branchOrderFeed(branchId)`                            | Refetch on any change; 30s fallback poll                                                                                                                                                       |
+| New-order alarm                       | `useOrderAlarm` (client)                                     | Sound + tab flash + banner when pending count rises                                                                                                                                            |
+| **Accept** (AcceptSheet → prep chips) | **M** `acceptOrder(id, prepEtaMinutes)`                      | `pending_acceptance → accepted`; ETA set; 🔗 customer sees "Accepted"                                                                                                                          |
+| **Reject** (RejectSheet → reason)     | **M** `rejectOrder(id, reason)`                              | `→ rejected`; refund path                                                                                                                                                                      |
+| Start preparing                       | **M** `startPreparing(id)`                                   | `accepted → preparing`                                                                                                                                                                         |
+| **Mark ready**                        | **M** `markReady(id)`                                        | `preparing → ready_for_pickup` **only** (not valid directly from `accepted`). Does **not** create a DeliveryTask — dispatch is a separate step below. For pickup orders, shows the pickup code |
+| Assign rider (dropdown, delivery)     | **M** `assignRider(orderId, riderId)`                        | Creates/assigns the `DeliveryTask` to a roster rider → `rider_assigned`; 🔗 [rider job](rider.md#job-lifecycle). (Offer-based dispatch uses `offerTask` / `generateSharedOffers`.)             |
+| Mark collected (pickup)               | **M** `markCollected(id)`                                    | Pickup terminal                                                                                                                                                                                |
+| 86 an item (EightySixSheet)           | **M** `setItemAvailability(itemId, available:false, until?)` | Item hidden from customer menu + cart validation; optional auto-restore                                                                                                                        |
+| Busy mode +10/20/30/clear             | **M** `setBusyMode(branchId, bufferMinutes)`                 | Buffer added to all prep ETAs customer sees                                                                                                                                                    |
+| Print ticket                          | client `printKitchenTicket`                                  | —                                                                                                                                                                                              |
 
 **Card shows:** code, payment badge (COD/PAID), total, customer name, fulfillment + scheduled badge,
 items, per-line unavailability preference, customer phone (if "contact me"), note, "no cutlery" flag.
 
-**Guards/states:** no restaurant → skeleton + onboarding link; not approved → "Complete onboarding";
-paused → red "Not accepting orders" badge; empty lanes show "(0)".
+**Guards/states:** **only** the no-restaurant case shows the onboarding link — `myRestaurants` returns
+the caller's restaurants regardless of approval status, so a `pending_approval` owner still sees the
+live board shell (⚠️ no distinct "Complete onboarding / awaiting approval" board state today); paused →
+red "Not accepting orders" badge; empty lanes show "(0)".
 
 ```mermaid
 stateDiagram-v2
     [*] --> New : branchOrderFeed (customer placeOrder)
     New --> Preparing : acceptOrder + startPreparing
     New --> Recent : rejectOrder / auto_expired
-    Preparing --> Ready : markReady (+ create DeliveryTask)
+    Preparing --> Ready : markReady
     Ready --> Recent : markCollected (pickup)
-    Ready --> Out : rider accepts / assignRider
+    Ready --> Out : assignRider / offerTask → task → rider accepts
     Out --> Recent : rider delivered
 ```
 
@@ -173,8 +179,10 @@ deliveryRadiusM)` → creates restaurant + branch (`pending_approval`). Location
 ### 6. Verification (KYC) — `/restaurant/verification` (owner-only)
 
 **Q** `restaurantKyc(restaurantId)`; **M** `submitKyc(...ownerName, ownerCnic, bankAccountName,
-bankIban, cnicAssetId)`. Status: submitted → approved/rejected (admin). **Restaurant can't be paid out
-until KYC approved.**
+bankIban, cnicAssetId)`. Status: submitted → approved/rejected (admin). ⚠️ **KYC is _not_ currently
+enforced as a payout gate** — `requestPayout` only checks owner access, a single pending payout, and
+the Rs 1,000 minimum; it does not read `RestaurantKyc`. Blocking payout on KYC is a should-be, not a
+current behaviour ([#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)).
 
 ### 7. Settings — `/restaurant/settings`
 
@@ -241,7 +249,11 @@ Orders + Today access only.
 ### 17. Support — `/restaurant/support` (owner-only)
 
 **Q** `restaurantTickets(restaurantId)`; **M** `respondToTicket(ticketId, body)`. 🔗 Tickets come from
-[Customer › order help](customer.md#10-order-help--helporderid); replies are visible to the customer.
+[Customer › order help](customer.md#10-order-help--helporderid). ⚠️ **The reply is stored
+(`restaurantResponse`) but is _not_ surfaced to the customer today** — the customer `OrderHelp` query
+only reads `body`, `resolutionNote`, and refund fields and does not render restaurant replies. QA
+should not expect a customer-facing reply thread yet (gap: wire `restaurantResponse` into
+`/help/[orderId]`).
 
 ---
 
@@ -255,11 +267,11 @@ flowchart TD
     DEC -->|Reject + reason| REJ[rejectOrder → refund] --> RECENT([Recent])
     DEC -->|Accept + prep ETA| ACC[acceptOrder]
     ACC --> PREP[startPreparing]
-    PREP --> RDY[markReady → create DeliveryTask]
+    PREP --> RDY[markReady → ready_for_pickup]
     RDY --> MODE{Fulfillment}
     MODE -->|Pickup| COL[Show pickup code → markCollected] --> RECENT
-    MODE -->|Delivery| DISP{Dispatch}
-    DISP -->|auto offer| RIDER[🔗 rider acceptTask]
+    MODE -->|Delivery| DISP{Dispatch creates DeliveryTask}
+    DISP -->|offerTask| RIDER[🔗 rider acceptTask]
     DISP -->|manual| ASSIGN[assignRider from roster]
     RIDER --> OUT([Out lane])
     ASSIGN --> OUT
@@ -283,14 +295,15 @@ flowchart LR
 
 ## Cross-role hand-offs
 
-| Restaurant action                     | Triggers                              | Where                                                                                                                  |
-| ------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `acceptOrder` / `rejectOrder`         | `orderStatus`                         | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                         |
-| `markReady` (delivery)                | creates DeliveryTask → `riderJobFeed` | 🔗 [Rider offer/home](rider.md#job-lifecycle)                                                                          |
-| `assignRider`                         | task assigned                         | 🔗 [Rider job detail](rider.md#2-job-detail--active-delivery--riderjobstaskid)                                         |
-| `setItemAvailability` (86)            | menu updated                          | 🔗 [Customer menu / cart validation](customer.md#3-restaurant-detail--rslug)                                           |
-| `respondToRating` / `respondToTicket` | reply published                       | 🔗 [Customer reviews](customer.md#4-restaurant-reviews--rslugreviews) / [help](customer.md#10-order-help--helporderid) |
-| `inviteRider`                         | rider account created                 | 🔗 [Rider app](rider.md)                                                                                               |
+| Restaurant action                      | Triggers                                    | Where                                                                                                                 |
+| -------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `acceptOrder` / `rejectOrder`          | `orderStatus`                               | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
+| `markReady` (delivery)                 | order `→ ready_for_pickup` (no task yet)    | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
+| `assignRider` / `offerTask` (dispatch) | creates DeliveryTask → `riderJobFeed`       | 🔗 [Rider offer/home](rider.md#job-lifecycle) & [job detail](rider.md#2-job-detail--active-delivery--riderjobstaskid) |
+| `setItemAvailability` (86)             | menu updated                                | 🔗 [Customer menu / cart validation](customer.md#3-restaurant-detail--rslug)                                          |
+| `respondToRating`                      | public reply published                      | 🔗 [Customer reviews](customer.md#4-restaurant-reviews--rslugreviews) (shown to customers)                            |
+| `respondToTicket`                      | reply stored (⚠️ not shown to customer yet) | 🔗 [Customer order help](customer.md#10-order-help--helporderid)                                                      |
+| `inviteRider`                          | rider account created                       | 🔗 [Rider app](rider.md)                                                                                              |
 
 ---
 
@@ -301,7 +314,8 @@ flowchart LR
 - [ ] New order fires sound + banner and lands in "New" with an accept countdown.
 - [ ] Accept applies busy-mode buffer to the ETA the customer sees.
 - [ ] Reject with a reason refunds the customer and moves to "Recent".
-- [ ] `markReady` creates a delivery task and it appears as a rider offer within seconds.
+- [ ] `markReady` moves the order to `ready_for_pickup`; **dispatch is a separate step** — `assignRider`
+      (or `offerTask`) creates the delivery task and it appears as a rider offer within seconds.
 - [ ] Pickup order shows a pickup code and `markCollected` closes it (no rider involved).
 - [ ] Manual `assignRider` works when no auto-offer is accepted.
 - [ ] 86-ing an item removes it from the live customer menu immediately and (if `until`) restores it.
@@ -317,7 +331,8 @@ flowchart LR
 **Onboarding / KYC / money**
 
 - [ ] Menu editable while `pending_approval`; ordering blocked until approved.
-- [ ] Payout blocked until KYC approved and balance ≥ Rs 1,000; only one pending payout.
+- [ ] Payout requires balance ≥ Rs 1,000 and only one pending payout. ⚠️ Confirm whether KYC should
+      block payout — it currently does **not** ([#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)).
 - [ ] Settlement + eIMS CSVs download for a date range (empty range = valid empty CSV).
 
 ---

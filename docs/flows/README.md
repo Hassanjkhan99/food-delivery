@@ -66,7 +66,9 @@ Exact values: `pending_acceptance`, `accepted`, `rejected`, `auto_expired`, `pre
 
 ### Delivery offer status (`DeliveryOfferStatus`)
 
-`pending` → `accepted` / `declined` / `expired` / `withdrawn`. (Offer TTL = 300s.)
+`pending` → `accepted` / `declined` / `expired` / `withdrawn`. (Shared-offer TTL =
+`OFFER_TTL_SECONDS = 20` in `apps/api/src/services/dispatchService.ts`; single-rider `offerTask`
+offers are reclaimed by a background sweeper.)
 
 ### Canonical cross-role state machine
 
@@ -78,15 +80,14 @@ stateDiagram-v2
     pending_acceptance --> auto_expired : accept deadline passes (cron expire-orders)
     accepted --> preparing : Restaurant startPreparing
     preparing --> ready_for_pickup : Restaurant markReady
-    accepted --> ready_for_pickup : Restaurant markReady (skips preparing)
 
     ready_for_pickup --> collected : Restaurant markCollected  (PICKUP orders)
-    ready_for_pickup --> rider_assigned : Rider acceptTask / acceptSharedOffer  (DELIVERY)
+    ready_for_pickup --> rider_assigned : Restaurant assignRider / Rider acceptTask  (DELIVERY)
     rider_assigned --> picked_up : Rider riderPickedUp (PIN-gated)
     picked_up --> out_for_delivery : (auto on pickup)
     out_for_delivery --> delivered : Rider riderDelivered(cod, pod)
     out_for_delivery --> failed_delivery_attempt : Rider incident / failed drop
-    rider_assigned --> reassigning : Rider declines / dispatch re-offers
+    rider_assigned --> reassigning : Restaurant/admin re-dispatch
 
     pending_acceptance --> cancelled : Customer/admin cancelOrder
     accepted --> cancelled : Customer/admin cancelOrder
@@ -102,16 +103,17 @@ it "Collected". `markCollected` is the pickup hand-off; delivery orders never hi
 
 ### Who drives each transition
 
-| Transition                         | Driven by        | Mutation                           | Realtime signal to others               |
-| ---------------------------------- | ---------------- | ---------------------------------- | --------------------------------------- |
-| create → `pending_acceptance`      | Customer         | `placeOrder`                       | `branchOrderFeed` → restaurant board    |
-| → `accepted` / `rejected`          | Restaurant       | `acceptOrder` / `rejectOrder`      | `orderStatus` → customer tracking       |
-| → `preparing`                      | Restaurant       | `startPreparing`                   | `orderStatus` → customer                |
-| → `ready_for_pickup`               | Restaurant       | `markReady`                        | creates `DeliveryTask` → `riderJobFeed` |
-| → `rider_assigned`                 | Rider            | `acceptTask` / `acceptSharedOffer` | `orderStatus` + `branchOrderFeed`       |
-| → `picked_up` / `out_for_delivery` | Rider            | `riderPickedUp`                    | `orderStatus` (live map unlocks)        |
-| → `delivered`                      | Rider            | `riderDelivered`                   | `orderStatus` → rating unlocked         |
-| → `cancelled`                      | Customer / Admin | `cancelOrder`                      | `orderStatus` + `branchOrderFeed`       |
+| Transition                         | Driven by        | Mutation                                             | Realtime signal to others            |
+| ---------------------------------- | ---------------- | ---------------------------------------------------- | ------------------------------------ |
+| create → `pending_acceptance`      | Customer         | `placeOrder`                                         | `branchOrderFeed` → restaurant board |
+| → `accepted` / `rejected`          | Restaurant       | `acceptOrder` / `rejectOrder`                        | `orderStatus` → customer tracking    |
+| → `preparing`                      | Restaurant       | `startPreparing`                                     | `orderStatus` → customer             |
+| → `ready_for_pickup`               | Restaurant       | `markReady` (does **not** create a task)             | `orderStatus` → customer             |
+| create `DeliveryTask` (dispatch)   | Restaurant/Admin | `assignRider` / `offerTask` / `generateSharedOffers` | `riderJobFeed` → rider               |
+| → `rider_assigned`                 | Restaurant/Rider | `assignRider` / `acceptTask`                         | `orderStatus` + `branchOrderFeed`    |
+| → `picked_up` / `out_for_delivery` | Rider            | `riderPickedUp`                                      | `orderStatus` (live map unlocks)     |
+| → `delivered`                      | Rider            | `riderDelivered`                                     | `orderStatus` → rating unlocked      |
+| → `cancelled`                      | Customer / Admin | `cancelOrder`                                        | `orderStatus` + `branchOrderFeed`    |
 
 ### Realtime channels (GraphQL Subscriptions)
 
@@ -137,7 +139,8 @@ sequenceDiagram
     R->>API: acceptOrder(prepEta) → accepted
     API-->>C: orderStatus (accepted)
     R->>API: startPreparing → preparing
-    R->>API: markReady → ready_for_pickup + create DeliveryTask
+    R->>API: markReady → ready_for_pickup
+    R->>API: assignRider / offerTask → create DeliveryTask
     API-->>D: riderJobFeed (offer)
     D->>API: acceptTask → rider_assigned
     API-->>C: orderStatus (rider assigned)

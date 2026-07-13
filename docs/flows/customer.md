@@ -99,13 +99,13 @@ with cached data. Carousel refetches on focus + 5-min timer to keep open/closed 
 
 **Purpose:** Global restaurant + dish search with typeahead, recents, popular suggestions.
 
-| Element / action                 | Operation                                       | Effect                                                             |
-| -------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| Query (≥2 chars, 250ms debounce) | **Q** `SearchMarketplace` (`searchMarketplace`) | Restaurants + items within delivery radius; excludes closed/paused |
-| Restaurant result                | → navigate                                      | `/r/<slug>`                                                        |
-| Dish result                      | → navigate                                      | `/r/<slug>?item=<dishId>` (auto-opens item sheet)                  |
-| Recent / popular chip            | client                                          | Sets query, refetches                                              |
-| Sort dropdown                    | client                                          | Relevance / rating / ETA / price (client-side sort)                |
+| Element / action                 | Operation                                       | Effect                                                                                                                                                                                               |
+| -------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Query (≥2 chars, 250ms debounce) | **Q** `SearchMarketplace` (`searchMarketplace`) | Approved restaurants with active menus within radius. ⚠️ Closed/paused branches are **not** excluded — they still appear and the UI labels them closed when `isOpenNow`/`isAcceptingOrders` is false |
+| Restaurant result                | → navigate                                      | `/r/<slug>`                                                                                                                                                                                          |
+| Dish result                      | → navigate                                      | `/r/<slug>?item=<dishId>` (auto-opens item sheet)                                                                                                                                                    |
+| Recent / popular chip            | client                                          | Sets query, refetches                                                                                                                                                                                |
+| Sort dropdown                    | client                                          | Relevance / rating / ETA / price (client-side sort)                                                                                                                                                  |
 
 **States:** idle → recents + popular; loading skeleton; zero-result → "Did you mean" + browse home.
 
@@ -169,7 +169,9 @@ order. This is the **order-creation choke point**.
 
 **States/guards:** empty cart → "Nothing to check out"; quote stale → submit disabled; stale cart
 (branch gone / item unavailable) → clears + redirect `/`; insufficient wallet → warning + top-up link;
-unauthenticated place → `/login?next=/checkout`.
+**unauthenticated users are not bounced to `/login`** — the page renders the inline guest OTP flow and
+keeps the Place order button disabled until phone verification succeeds (see the guest-checkout journey
+below).
 
 🔗 On success → `/orders/<id>`; the order now appears on
 [Restaurant › Orders board](restaurant.md#1-orders-board--restaurantorders) via `branchOrderFeed`.

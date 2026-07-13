@@ -129,16 +129,19 @@ page only reads it.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> offered : restaurant markReady → DeliveryTask (offer) [riderJobFeed]
-    offered --> assigned : acceptTask / acceptSharedOffer
-    offered --> unassigned : declineTask / offer expired (TTL 300s)
+    [*] --> offered : restaurant dispatch (assignRider / offerTask) → DeliveryTask [riderJobFeed]
+    offered --> assigned : acceptTask
+    offered --> unassigned : declineTask / offer expired (TTL 20s)
     unassigned --> offered : dispatch re-offers
     assigned --> arrived_pickup : riderArrivedAtPickup
     arrived_pickup --> picked_up : riderPickedUp (PIN-gated)
     picked_up --> delivered : riderDelivered(cod, pod)
-    picked_up --> failed : reportIncident / failed drop
     delivered --> [*]
 ```
+
+> ⚠️ **`reportIncident` is _not_ a status transition.** The resolver only writes a `DeliveryEvent` +
+> `SupportTicket` and returns `true`; the task/order stay in their current status. A failed drop is not
+> auto-modelled on the task today — don't expect "Report problem" to move a job to a `failed` state.
 
 Mapping to the customer-visible [order status](README.md#order-status-orderstatus-enum--packagesdbprismaschemaprisma):
 
@@ -193,33 +196,39 @@ Denied/unavailable location never blocks delivery — it shows a nudge and the
 
 ## Shared-rider dispatch
 
-Riders can opt into a shared pool (`setRiderSharedOptIn`) and receive offers from other restaurants
-that enabled sharing. Offers are generated restaurant-side (`generateSharedOffers`) and gated by the
-restaurant's [shared-rider policy](restaurant.md#7-settings--restaurantsettings) (capacity, pickup
-distance, incremental delay, COD trust threshold, veto).
+> ⚠️ **These are API/backend operations only — they are _not_ wired into the web rider app today.** The
+> `/rider` UI handles `DeliveryTask` offers via `acceptTask` / `declineTask` only; it never calls
+> `setRiderSharedOptIn`, `mySharedOffers`, `acceptSharedOffer`, or `declineSharedOffer`, and renders no
+> shared-pool opt-in or offer cards. QA should not look for shared-offer controls in the rider UI yet.
 
-| Action                         | Operation                                                                          |
-| ------------------------------ | ---------------------------------------------------------------------------------- |
-| Opt in/out                     | **M** `setRiderSharedOptIn(optIn)`                                                 |
-| See offers                     | **Q** `mySharedOffers`                                                             |
-| Accept (race-safe, first wins) | **M** `acceptSharedOffer(offerId)` → task `offered → assigned`; siblings withdrawn |
-| Decline                        | **M** `declineSharedOffer(offerId, reason)`                                        |
+The schema exposes a shared-rider model: riders can (per schema) opt into a shared pool
+(`setRiderSharedOptIn`) and receive offers from other restaurants that enabled sharing. Offers are
+generated restaurant-side (`generateSharedOffers`) and gated by the restaurant's
+[shared-rider policy](restaurant.md#7-settings--restaurantsettings) (capacity, pickup distance,
+incremental delay, COD trust threshold, veto).
 
-⚠️ The full shared-rider dispatch engine (scoring, constraints, ledger splits) is epic
-[#21](https://github.com/Hassanjkhan99/food-delivery/issues/21).
+| Action (backend/API — no rider UI yet) | Operation                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------- |
+| Opt in/out                             | **M** `setRiderSharedOptIn(optIn)`                                                 |
+| See offers                             | **Q** `mySharedOffers`                                                             |
+| Accept (race-safe, first wins)         | **M** `acceptSharedOffer(offerId)` → task `offered → assigned`; siblings withdrawn |
+| Decline                                | **M** `declineSharedOffer(offerId, reason)`                                        |
+
+⚠️ The full shared-rider dispatch engine (scoring, constraints, ledger splits) **and its rider-app
+surface** are epic [#21](https://github.com/Hassanjkhan99/food-delivery/issues/21).
 
 ---
 
 ## Cross-role hand-offs
 
-| Rider action                       | Triggers                   | Where                                                                                                                                    |
-| ---------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `acceptTask` / `acceptSharedOffer` | order `→ rider_assigned`   | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid) + [Restaurant "Out" lane](restaurant.md#1-orders-board--restaurantorders) |
-| `riderPickedUp`                    | order `→ out_for_delivery` | 🔗 Customer live map unlocks                                                                                                             |
-| `patchRiderLocation`               | rider coords               | 🔗 Customer live rider map                                                                                                               |
-| `riderDelivered`                   | order `→ delivered`        | 🔗 Customer rating unlocked; restaurant "Recent"                                                                                         |
-| `reportIncident` / wrong PIN       | DeliveryEvent + ticket     | 🔗 Admin support queue; affects trust/streak                                                                                             |
-| COD variance                       | `recordCashVariance`       | May auto-disable COD; admin review                                                                                                       |
+| Rider action                 | Triggers                   | Where                                                                                                                                    |
+| ---------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `acceptTask`                 | order `→ rider_assigned`   | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid) + [Restaurant "Out" lane](restaurant.md#1-orders-board--restaurantorders) |
+| `riderPickedUp`              | order `→ out_for_delivery` | 🔗 Customer live map unlocks                                                                                                             |
+| `patchRiderLocation`         | rider coords               | 🔗 Customer live rider map                                                                                                               |
+| `riderDelivered`             | order `→ delivered`        | 🔗 Customer rating unlocked; restaurant "Recent"                                                                                         |
+| `reportIncident` / wrong PIN | DeliveryEvent + ticket     | 🔗 Admin support queue; affects trust/streak                                                                                             |
+| COD variance                 | `recordCashVariance`       | May auto-disable COD; admin review                                                                                                       |
 
 Restaurant `markReady` / `assignRider` are what put jobs in front of the rider — see
 [Restaurant › Orders board](restaurant.md#1-orders-board--restaurantorders).
