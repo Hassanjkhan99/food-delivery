@@ -492,6 +492,7 @@ type Mutation {
   requestPayout(restaurantId: String!): Payout!
   resolveTicket(id: String!, note: String, resolutionCode: String!): SupportTicket!
   respondToRating(body: String!, ratingId: String!): RatingResponse!
+  respondToTicket(body: String!, ticketId: String!): SupportTicket!
   revokeSession(sessionId: String!): Boolean!
   riderArrivedAtPickup(taskId: String!): DeliveryTask!
   riderDelivered(codCollectedMinor: Int!, podMediaId: String, taskId: String!): DeliveryTask!
@@ -808,6 +809,7 @@ type Query {
   restaurantApprovalQueue: [Restaurant!]!
   restaurantReviews(limit: Int, offset: Int, restaurantId: String!): [Rating!]!
   restaurantStaff(restaurantId: String!): [StaffMember!]!
+  restaurantTickets(restaurantId: String!): [SupportTicket!]!
   restaurantVouchers(restaurantId: String!): [Voucher!]!
   riderMissingRequirements(riderId: String!): [String!]!
   riderVerificationQueue: [Rider!]!
@@ -1110,6 +1112,8 @@ type SupportTicket {
   resolutionCode: String
   resolutionNote: String
   resolvedAt: DateTime
+  restaurantRespondedAt: DateTime
+  restaurantResponse: String
   status: String!
   subject: String!
   updatedAt: DateTime!

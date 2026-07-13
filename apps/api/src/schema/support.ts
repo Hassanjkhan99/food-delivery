@@ -58,6 +58,13 @@ builder.prismaObject("SupportTicket", {
     status: t.exposeString("status"),
     resolutionCode: t.exposeString("resolutionCode", { nullable: true }),
     resolutionNote: t.exposeString("resolutionNote", { nullable: true }),
+    // Restaurant's own reply to the customer (#160).
+    restaurantResponse: t.exposeString("restaurantResponse", { nullable: true }),
+    restaurantRespondedAt: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (r) => r.restaurantRespondedAt,
+    }),
     assignedToUserId: t.exposeString("assignedToUserId", { nullable: true }),
     assignedToName: t.exposeString("assignedToName", { nullable: true }),
     firstRespondedAt: t.field({
@@ -177,10 +184,60 @@ builder.queryFields((t) => ({
     resolve: (query, _root, args) =>
       prisma.supportTicket.findUnique({ ...query, where: { id: args.id } }),
   }),
+
+  // Restaurant-scoped inbox (#160): tickets tied to this restaurant's orders.
+  restaurantTickets: t.prismaField({
+    type: ["SupportTicket"],
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: (query, _root, args, ctx) => {
+      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin"))
+        throw new GraphQLError("You don't have access to this restaurant.", {
+          extensions: { code: "forbidden" },
+        });
+      return prisma.supportTicket.findMany({
+        ...query,
+        where: { order: { branch: { restaurantId: args.restaurantId } } },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+    },
+  }),
 }));
 
 // ── mutations ─────────────────────────────────────────────────────────────────
 builder.mutationFields((t) => ({
+  // Restaurant posts a reply to the customer on one of its orders' tickets (#160).
+  respondToTicket: t.prismaField({
+    type: "SupportTicket",
+    authScopes: { restaurantMember: true },
+    args: { ticketId: t.arg.string({ required: true }), body: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      const ticket = await prisma.supportTicket.findUnique({
+        where: { id: args.ticketId },
+        include: { order: { include: { branch: true } } },
+      });
+      if (!ticket?.order)
+        throw new GraphQLError("We couldn't find that ticket.", {
+          extensions: { code: "not_found" },
+        });
+      if (!ctx.restaurantIds.includes(ticket.order.branch.restaurantId) && !ctx.hasRole("admin"))
+        throw new GraphQLError("You don't have access to this ticket.", {
+          extensions: { code: "forbidden" },
+        });
+      const body = args.body.trim();
+      if (!body)
+        throw new GraphQLError("Please enter a response.", {
+          extensions: { code: "validation_error" },
+        });
+      return prisma.supportTicket.update({
+        ...query,
+        where: { id: args.ticketId },
+        data: { restaurantResponse: body, restaurantRespondedAt: new Date() },
+      });
+    },
+  }),
+
   // Take ownership. Records the agent id + a name snapshot and, if this is the
   // first touch, stamps firstRespondedAt so the first-response SLA stops.
   assignTicket: t.prismaField({

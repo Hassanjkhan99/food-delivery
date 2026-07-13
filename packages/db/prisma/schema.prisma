@@ -1238,6 +1238,10 @@ model SupportTicket {
   // Refund opened by this ticket (missing/wrong items), if any. Lets the customer
   // see the resolution and the workbench trace it back. (#45) Additive.
   refundId         String?
+  // The restaurant's own reply to the customer on this ticket (#160). Distinct from the
+  // admin-written resolutionNote. Additive, nullable.
+  restaurantResponse    String?
+  restaurantRespondedAt DateTime? @db.Timestamptz()
   createdAt      DateTime     @default(now()) @db.Timestamptz()
   updatedAt      DateTime     @updatedAt @db.Timestamptz()
 
