@@ -110,8 +110,8 @@ async function loadOrderForDispatch(orderId: string) {
   return order;
 }
 
-function dropoffOf(order: NonNullable<OrderForDispatch>): { lat: number; lng: number } | null {
-  const snap = order.addressSnapshotJson as { lat?: unknown; lng?: unknown } | null;
+function dropoffFromSnapshot(snapshot: unknown): { lat: number; lng: number } | null {
+  const snap = snapshot as { lat?: unknown; lng?: unknown } | null;
   if (snap && typeof snap.lat === "number" && typeof snap.lng === "number") {
     return { lat: snap.lat, lng: snap.lng };
   }
@@ -129,7 +129,6 @@ async function buildScoredShortlist(
 ): Promise<ScoredCandidate[]> {
   const sourceRestaurantId = order.branch.restaurantId;
   const pickup = { lat: Number(order.branch.lat), lng: Number(order.branch.lng) };
-  const dropoff = dropoffOf(order);
   const isCod = order.paymentMode === "cod";
 
   // Own riders + shared-opted-in riders from other restaurants that are online.
@@ -142,18 +141,27 @@ async function buildScoredShortlist(
     include: { availability: true },
   });
 
-  // Active pre-pickup job counts, in one query.
-  const activeByRider = new Map<string, number>();
-  const active = await prisma.deliveryTask.groupBy({
-    by: ["riderId"],
+  // Active pre-pickup tasks per rider, WITH the committed order's dropoff. Used both for the
+  // active-job ceiling AND as the diversion reference point: the new pickup's detour is
+  // measured against where the rider is already headed, not the new order's dropoff (#126 P2).
+  const activeTasks = await prisma.deliveryTask.findMany({
     where: {
       riderId: { in: riders.map((r) => r.id) },
       status: { in: ["offered", "assigned", "arrived_pickup"] },
     },
-    _count: { _all: true },
+    select: { riderId: true, order: { select: { addressSnapshotJson: true } } },
+    orderBy: { createdAt: "desc" },
   });
-  for (const row of active) {
-    if (row.riderId) activeByRider.set(row.riderId, row._count._all);
+  const activeByRider = new Map<string, number>();
+  const committedDropoffByRider = new Map<string, { lat: number; lng: number }>();
+  for (const t of activeTasks) {
+    if (!t.riderId) continue;
+    activeByRider.set(t.riderId, (activeByRider.get(t.riderId) ?? 0) + 1);
+    // Keep the most-recent active task's dropoff (query is ordered desc, first wins).
+    if (!committedDropoffByRider.has(t.riderId)) {
+      const d = dropoffFromSnapshot(t.order.addressSnapshotJson);
+      if (d) committedDropoffByRider.set(t.riderId, d);
+    }
   }
 
   // Lender policies for the restaurants owning shared candidates.
@@ -181,13 +189,13 @@ async function buildScoredShortlist(
       rider,
       isSharedRider: isShared,
       activeJobCount: activeByRider.get(rider.id) ?? 0,
+      committedDropoff: committedDropoffByRider.get(rider.id) ?? null,
     };
     // The governing policy for a shared rider is their HOME restaurant's lender policy.
     const policy =
       isShared && rider.restaurantId ? (policyByRestaurant.get(rider.restaurantId) ?? null) : null;
     return scoreCandidate(cand, {
       pickup,
-      dropoff,
       sourceRestaurantId,
       isCod,
       policy,
@@ -507,12 +515,12 @@ builder.mutationFields((t) => ({
     },
   }),
 
-  // Ledger-split hook for a DELIVERED shared job. Posts the platform dispatch fee, lender
-  // share (when the rider belongs to another restaurant), and rider bonus as double-entry
-  // legs. Additive: leaves the normal settlement (onOrderDelivered) untouched, and is a
-  // no-op when the accepted rider is the seller's own. Idempotency is the caller's concern
-  // (a real build fires this from the delivered transition once); exposed as a mutation here
-  // so the foundation is exercisable end-to-end. Restaurant-scoped to the seller.
+  // Ledger-split hook for a DELIVERED shared job. Reallocates a cut of the delivery fee the
+  // seller received at settlement to the platform dispatch fee, the lender restaurant's
+  // payable, and the rider bonus (double-entry, balanced). Additive: leaves normal settlement
+  // (onOrderDelivered) untouched. postDispatchSplit itself is a no-op for a seller-owned rider
+  // (no lender) and is idempotent per order (safe to call more than once). Restaurant-scoped
+  // to the seller. (Codex #126)
   postSharedDispatchSplit: t.field({
     type: "String",
     nullable: true,
