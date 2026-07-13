@@ -103,12 +103,12 @@ type CsvPreviewRow = {
 };
 
 export default function MenuImportPage() {
-  const { branch } = useConsole();
+  const { branch, isOwner } = useConsole();
   const client = useClient();
   const [{ data }, refetch] = useQuery({
     query: SourceDocsQuery,
     variables: { branchId: branch?.id ?? "" },
-    pause: !branch,
+    pause: !branch || !isOwner,
     requestPolicy: "cache-and-network",
   });
   const [, registerDoc] = useMutation(RegisterDocMutation);
@@ -124,6 +124,9 @@ export default function MenuImportPage() {
   const [form, setForm] = useState({ categoryId: "", name: "", priceRs: "" });
 
   if (!branch) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
+  // Owner-only surface (#204): match the resolver-level gate on menu import.
+  if (!isOwner)
+    return <p className="text-kd-fg-muted">Only the restaurant owner can manage the menu.</p>;
 
   const docs = data?.menuSourceDocs ?? [];
   const draft = data?.draftMenu;

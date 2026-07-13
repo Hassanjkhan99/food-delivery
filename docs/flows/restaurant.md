@@ -78,11 +78,14 @@ mindmap
 | `admin`            | Approval queues (restaurant, KYC, campaign, rider) — see admin console |
 
 Nav is gated in `layout.tsx` (`isOwner ? NAV : NAV.filter(staff)`) and resolvers assert
-`restaurantMember` / `assertBranchMember`. ⚠️ **This is mostly nav-level hiding, not hard page-level
-owner enforcement.** Several owner-looking surfaces (e.g. `draftMenu`, `upsertMenuItem`, `publishMenu`)
-only require branch membership, so a `restaurant_staff` user reaching the URL directly can still hit
-parts of the menu flow. Treat "owner-only" here as "hidden from staff in the sidebar" unless the
-resolver specifically asserts ownership. Unbuilt-restaurant users are redirected to onboarding.
+`restaurantMember` / `assertBranchMember`. Menu editing/import, branch hours, and rider invite are now
+**owner-enforced at the resolver** via `assertBranchOwner` (and the menu pages block staff on direct
+URL), so nav-hiding is no longer the only barrier for those ([#204](https://github.com/Hassanjkhan99/food-delivery/issues/204)).
+⚠️ A full audit of the remaining owner-only surfaces (branding/theme, campaigns, promo-codes, and the
+read-only wallet/settlements/analytics/reviews views) is still open under
+[#204](https://github.com/Hassanjkhan99/food-delivery/issues/204) — treat those as "hidden from staff
+in the sidebar" until their resolvers assert ownership. Unbuilt-restaurant users are redirected to
+onboarding.
 
 ---
 
@@ -179,10 +182,11 @@ deliveryRadiusM)` → creates restaurant + branch (`pending_approval`). Location
 ### 6. Verification (KYC) — `/restaurant/verification` (owner-only)
 
 **Q** `restaurantKyc(restaurantId)`; **M** `submitKyc(...ownerName, ownerCnic, bankAccountName,
-bankIban, cnicAssetId)`. Status: submitted → approved/rejected (admin). ⚠️ **KYC is _not_ currently
-enforced as a payout gate** — `requestPayout` only checks owner access, a single pending payout, and
-the Rs 1,000 minimum; it does not read `RestaurantKyc`. Blocking payout on KYC is a should-be, not a
-current behaviour ([#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)).
+bankIban, cnicAssetId)`. Status: submitted → approved/rejected (admin). **KYC is now enforced as a
+payout gate** — `requestPayout` throws `kyc_not_approved` unless `RestaurantKyc.status === "approved"`,
+in addition to the owner / single-pending / Rs 1,000-minimum checks
+([#203](https://github.com/Hassanjkhan99/food-delivery/issues/203); broader PRA/tax pack
+[#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)).
 
 ### 7. Settings — `/restaurant/settings`
 
@@ -249,11 +253,10 @@ Orders + Today access only.
 ### 17. Support — `/restaurant/support` (owner-only)
 
 **Q** `restaurantTickets(restaurantId)`; **M** `respondToTicket(ticketId, body)`. 🔗 Tickets come from
-[Customer › order help](customer.md#10-order-help--helporderid). ⚠️ **The reply is stored
-(`restaurantResponse`) but is _not_ surfaced to the customer today** — the customer `OrderHelp` query
-only reads `body`, `resolutionNote`, and refund fields and does not render restaurant replies. QA
-should not expect a customer-facing reply thread yet (gap: wire `restaurantResponse` into
-`/help/[orderId]`).
+[Customer › order help](customer.md#10-order-help--helporderid). The reply (`restaurantResponse`) **is
+now surfaced to the customer** on `/help/[orderId]` (the `OrderHelp` query reads `restaurantResponse` /
+`restaurantRespondedAt` and renders a "Reply from the restaurant" block)
+([#205](https://github.com/Hassanjkhan99/food-delivery/issues/205)).
 
 ---
 
@@ -295,15 +298,15 @@ flowchart LR
 
 ## Cross-role hand-offs
 
-| Restaurant action                      | Triggers                                    | Where                                                                                                                 |
-| -------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `acceptOrder` / `rejectOrder`          | `orderStatus`                               | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
-| `markReady` (delivery)                 | order `→ ready_for_pickup` (no task yet)    | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
-| `assignRider` / `offerTask` (dispatch) | creates DeliveryTask → `riderJobFeed`       | 🔗 [Rider offer/home](rider.md#job-lifecycle) & [job detail](rider.md#2-job-detail--active-delivery--riderjobstaskid) |
-| `setItemAvailability` (86)             | menu updated                                | 🔗 [Customer menu / cart validation](customer.md#3-restaurant-detail--rslug)                                          |
-| `respondToRating`                      | public reply published                      | 🔗 [Customer reviews](customer.md#4-restaurant-reviews--rslugreviews) (shown to customers)                            |
-| `respondToTicket`                      | reply stored (⚠️ not shown to customer yet) | 🔗 [Customer order help](customer.md#10-order-help--helporderid)                                                      |
-| `inviteRider`                          | rider account created                       | 🔗 [Rider app](rider.md)                                                                                              |
+| Restaurant action                      | Triggers                                 | Where                                                                                                                 |
+| -------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `acceptOrder` / `rejectOrder`          | `orderStatus`                            | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
+| `markReady` (delivery)                 | order `→ ready_for_pickup` (no task yet) | 🔗 [Customer tracking](customer.md#8-order-tracking--ordersid)                                                        |
+| `assignRider` / `offerTask` (dispatch) | creates DeliveryTask → `riderJobFeed`    | 🔗 [Rider offer/home](rider.md#job-lifecycle) & [job detail](rider.md#2-job-detail--active-delivery--riderjobstaskid) |
+| `setItemAvailability` (86)             | menu updated                             | 🔗 [Customer menu / cart validation](customer.md#3-restaurant-detail--rslug)                                          |
+| `respondToRating`                      | public reply published                   | 🔗 [Customer reviews](customer.md#4-restaurant-reviews--rslugreviews) (shown to customers)                            |
+| `respondToTicket`                      | reply shown to the customer              | 🔗 [Customer order help](customer.md#10-order-help--helporderid)                                                      |
+| `inviteRider`                          | rider account created                    | 🔗 [Rider app](rider.md)                                                                                              |
 
 ---
 
@@ -331,8 +334,10 @@ flowchart LR
 **Onboarding / KYC / money**
 
 - [ ] Menu editable while `pending_approval`; ordering blocked until approved.
-- [ ] Payout requires balance ≥ Rs 1,000 and only one pending payout. ⚠️ Confirm whether KYC should
-      block payout — it currently does **not** ([#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)).
+- [ ] Payout requires **approved KYC** + balance ≥ Rs 1,000 + only one pending payout; a restaurant
+      without approved KYC gets `kyc_not_approved` ([#203](https://github.com/Hassanjkhan99/food-delivery/issues/203)).
+- [ ] Staff (non-owner) cannot open the menu / import pages by direct URL, and menu/hours/rider-invite
+      mutations reject non-owners ([#204](https://github.com/Hassanjkhan99/food-delivery/issues/204)).
 - [ ] Settlement + eIMS CSVs download for a date range (empty range = valid empty CSV).
 
 ---
@@ -353,6 +358,9 @@ flowchart LR
 | PRA / tax compliance (eIMS, Raast QR)                                                                            | P0          | [#18](https://github.com/Hassanjkhan99/food-delivery/issues/18)                                                                      |
 | Promoted deals / featured placements (Campaign UI depth)                                                         | P1          | [#22](https://github.com/Hassanjkhan99/food-delivery/issues/22)                                                                      |
 | Uploads off ephemeral /tmp → object storage                                                                      | gated       | [#142](https://github.com/Hassanjkhan99/food-delivery/issues/142), [#193](https://github.com/Hassanjkhan99/food-delivery/issues/193) |
+| KYC not enforced at payout                                                                                       | **fixed**   | [#203](https://github.com/Hassanjkhan99/food-delivery/issues/203)                                                                    |
+| Owner-only surfaces reachable by URL (menu/hours/roster gated; branding/campaigns/promo/reads pending)           | **partial** | [#204](https://github.com/Hassanjkhan99/food-delivery/issues/204)                                                                    |
+| Restaurant ticket replies not shown to the customer                                                              | **fixed**   | [#205](https://github.com/Hassanjkhan99/food-delivery/issues/205)                                                                    |
 
 > **Note on scheduled orders:** the "Scheduled" lane and `scheduledFor` exist, but **auto-promotion to
 > "New" at `scheduledFor − leadTime` is a noted TODO in `orderService.ts`** — staff must accept

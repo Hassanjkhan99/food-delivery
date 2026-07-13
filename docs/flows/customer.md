@@ -224,10 +224,13 @@ Static FAQ accordion + pointer to order-specific help + support email. No networ
 
 ### 10. Order help — `/help/[orderId]`
 
-| Element / action | Operation                                      | Effect                                            |
-| ---------------- | ---------------------------------------------- | ------------------------------------------------- |
-| Load             | **Q** `OrderHelp` (`order`, `ticketsForOrder`) | Order recap + existing tickets                    |
-| File ticket      | **M** `CreateHelpTicket` (`createHelpTicket`)  | Creates ticket; may auto-start refund by category |
+| Element / action | Operation                                      | Effect                                                       |
+| ---------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| Load             | **Q** `OrderHelp` (`order`, `ticketsForOrder`) | Order recap + existing tickets, incl. the restaurant's reply |
+| File ticket      | **M** `CreateHelpTicket` (`createHelpTicket`)  | Creates ticket; may auto-start refund by category            |
+
+Each ticket now renders a **"Reply from the restaurant"** block when `restaurantResponse` is set
+([#205](https://github.com/Hassanjkhan99/food-delivery/issues/205)).
 
 🔗 Tickets surface on [Restaurant › Support](restaurant.md#17-support--restaurantsupport) and the admin
 ticket queue.
@@ -389,6 +392,7 @@ See the full picture in the [shared cross-role sequence](README.md#cross-role-ha
 | Area                                                              | Status                      | Issue                                                             |
 | ----------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------- |
 | Tax-inclusive pricing + price-view toggle                         | P0, not fully done          | [#146](https://github.com/Hassanjkhan99/food-delivery/issues/146) |
+| Restaurant ticket replies now shown on order help                 | **fixed**                   | [#205](https://github.com/Hassanjkhan99/food-delivery/issues/205) |
 | Block ordering from closed-by-hours branches (home advertises it) | **bug**                     | [#63](https://github.com/Hassanjkhan99/food-delivery/issues/63)   |
 | Persist "notify me" waitlist emails                               | enhancement                 | [#64](https://github.com/Hassanjkhan99/food-delivery/issues/64)   |
 | Phone input validation / PK normalization / gate submit           | P1                          | [#148](https://github.com/Hassanjkhan99/food-delivery/issues/148) |
