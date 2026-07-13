@@ -115,6 +115,15 @@ const Set86Mutation = graphql(`
     }
   }
 `);
+// Currently-86'd live items, so staff can restock without the owner-only menu page (#204).
+const UnavailableItemsQuery = graphql(`
+  query BranchUnavailableItems($branchId: String!) {
+    branchUnavailableItems(branchId: $branchId) {
+      id
+      name
+    }
+  }
+`);
 const MarkCollectedMutation = graphql(`
   mutation MarkCollected($id: String!) {
     markCollected(id: $id) {
@@ -300,6 +309,12 @@ export default function OrdersBoardPage() {
     pause: !branch,
     requestPolicy: "cache-and-network",
   });
+  const [{ data: unavailableData }, refetchUnavailable] = useQuery({
+    query: UnavailableItemsQuery,
+    variables: { branchId: branch?.id ?? "" },
+    pause: !branch,
+    requestPolicy: "cache-and-network",
+  });
   const [, accept] = useMutation(AcceptMutation);
   const [, reject] = useMutation(RejectMutation);
   const [, startPreparing] = useMutation(StartPreparingMutation);
@@ -367,7 +382,14 @@ export default function OrdersBoardPage() {
     "failed_delivery_attempt",
   ]).slice(0, 6);
 
-  const refresh = () => refetch({ requestPolicy: "network-only" });
+  const refresh = () => {
+    refetch({ requestPolicy: "network-only" });
+    refetchUnavailable({ requestPolicy: "network-only" });
+  };
+  const restock = async (itemId: string) => {
+    await set86({ itemId, available: true });
+    refresh();
+  };
   const setBusy = async (minutes: number) => {
     if (!branch) return;
     await setBusyMode({ branchId: branch.id, bufferMinutes: minutes });
@@ -423,6 +445,24 @@ export default function OrdersBoardPage() {
           )}
         </div>
       </div>
+
+      {/* 86'd items — staff can restock here without the owner-only menu page (#204). */}
+      {(unavailableData?.branchUnavailableItems?.length ?? 0) > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-kd-border bg-kd-surface px-3 py-2 text-sm">
+          <span className="font-medium">86&apos;d items:</span>
+          {unavailableData!.branchUnavailableItems.map((it) => (
+            <Button
+              key={it.id}
+              size="xs"
+              variant="outline"
+              onClick={() => restock(it.id)}
+              title={`Restock ${it.name}`}
+            >
+              {it.name} — restock
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* New-order acknowledge bar */}
       {alarm.active && (

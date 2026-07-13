@@ -111,6 +111,7 @@ Legend: **Q** query, **M** mutation, **S** subscription.
 | Assign rider (dropdown, delivery)     | **M** `assignRider(orderId, riderId)`                        | Creates/assigns the `DeliveryTask` to a roster rider → `rider_assigned`; 🔗 [rider job](rider.md#job-lifecycle). (Offer-based dispatch uses `offerTask` / `generateSharedOffers`.)             |
 | Mark collected (pickup)               | **M** `markCollected(id)`                                    | Pickup terminal                                                                                                                                                                                |
 | 86 an item (EightySixSheet)           | **M** `setItemAvailability(itemId, available:false, until?)` | Item hidden from customer menu + cart validation; optional auto-restore                                                                                                                        |
+| Restock a 86'd item                   | **M** `setItemAvailability(itemId, available:true)`          | Staff-accessible "86'd items" panel (from **Q** `branchUnavailableItems`) flips indefinitely-86'd items back on without the owner-only menu page                                               |
 | Busy mode +10/20/30/clear             | **M** `setBusyMode(branchId, bufferMinutes)`                 | Buffer added to all prep ETAs customer sees                                                                                                                                                    |
 | Print ticket                          | client `printKitchenTicket`                                  | —                                                                                                                                                                                              |
 
@@ -252,7 +253,8 @@ Orders + Today access only.
 
 ### 17. Support — `/restaurant/support` (owner-only)
 
-**Q** `restaurantTickets(restaurantId)`; **M** `respondToTicket(ticketId, body)`. 🔗 Tickets come from
+**Q** `restaurantTickets(restaurantId)`; **M** `respondToTicket(ticketId, body)` (**owner-only** — the
+reply is customer-visible, so staff can't publish one). 🔗 Tickets come from
 [Customer › order help](customer.md#10-order-help--helporderid). The reply (`restaurantResponse`) **is
 now surfaced to the customer** on `/help/[orderId]` (the `OrderHelp` query reads `restaurantResponse` /
 `restaurantRespondedAt` and renders a "Reply from the restaurant" block)

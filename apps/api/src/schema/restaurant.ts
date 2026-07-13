@@ -486,6 +486,28 @@ builder.queryFields((t) => ({
     },
   }),
 
+  // Live (published) menu items that are currently 86'd. Member-scoped (#204): the menu
+  // editor is owner-only, but staff run the board — they must be able to see and restock
+  // items they took offline via the board's 86 flow (setItemAvailability stays member-level).
+  branchUnavailableItems: t.prismaField({
+    type: ["MenuItem"],
+    authScopes: { restaurantMember: true },
+    args: { branchId: t.arg.string({ required: true }) },
+    resolve: async (query, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const live = await prisma.menu.findFirst({
+        where: { branchId: args.branchId, status: "published" },
+        orderBy: { version: "desc" },
+      });
+      if (!live) return [];
+      return prisma.menuItem.findMany({
+        ...query,
+        where: { category: { menuId: live.id }, isAvailable: false },
+        orderBy: { name: "asc" },
+      });
+    },
+  }),
+
   branchRiders: t.prismaField({
     type: ["Rider"],
     authScopes: { restaurantMember: true },
