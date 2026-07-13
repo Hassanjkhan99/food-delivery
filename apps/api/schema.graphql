@@ -929,6 +929,7 @@ type RiderProfile {
   agreementAccepted: Boolean!
   cashLimitMinor: Int!
   isOnline: Boolean!
+  lastLocationAt: DateTime
   missingRequirements: [String!]!
   rejectionReason: String
   riderId: String!

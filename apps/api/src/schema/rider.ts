@@ -155,6 +155,7 @@ builder.queryFields((t) => ({
         rejectionReason: string | null;
         missingRequirements: string[];
         cashLimitMinor: number;
+        lastLocationAt: Date | null;
       }>("RiderProfile")
       .implement({
         fields: (f) => ({
@@ -175,6 +176,14 @@ builder.queryFields((t) => ({
           // approaches this; enforcement (blocking new assignments) is the fraud
           // issue #25's job — this only surfaces the number.
           cashLimitMinor: f.exposeInt("cashLimitMinor"),
+          // Wall-clock of the rider's last GPS ping (#163). The home screen shows an
+          // "updated Xs ago" freshness line so the rider knows their position is
+          // actually being shared with customers.
+          lastLocationAt: f.field({
+            type: "DateTime",
+            nullable: true,
+            resolve: (p) => p.lastLocationAt,
+          }),
         }),
       }),
     nullable: true,
@@ -189,6 +198,7 @@ builder.queryFields((t) => ({
       return {
         riderId: rider.id,
         isOnline: rider.availability?.isOnline ?? false,
+        lastLocationAt: rider.availability?.lastLocationAt ?? null,
         riderType: rider.riderType,
         verificationStatus: rider.verificationStatus,
         trustScore: rider.trustScore,

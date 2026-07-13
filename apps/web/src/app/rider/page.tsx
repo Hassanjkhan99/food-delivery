@@ -12,6 +12,16 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CashPanel } from "@/components/rider/cash-panel";
 import { AssignmentAlert, type AlertJob } from "@/components/rider/assignment-alert";
+import { useLocationPing, IDLE_PING_INTERVAL_MS } from "@/components/rider/use-location-ping";
+
+// "updated Xs ago" for the online location-freshness line.
+function relativeAge(iso: string | null | undefined): string {
+  if (!iso) return "not shared yet";
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 15) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  return `${Math.round(secs / 60)} min ago`;
+}
 
 const RiderHomeQuery = graphql(`
   query RiderHome {
@@ -20,6 +30,7 @@ const RiderHomeQuery = graphql(`
       isOnline
       riderType
       cashLimitMinor
+      lastLocationAt
     }
     myCashSummary {
       todayCodCollectedMinor
@@ -115,6 +126,12 @@ export default function RiderHomePage() {
   const profile = data?.myRiderProfile;
   const jobs = useMemo(() => data?.myJobs ?? [], [data?.myJobs]);
 
+  // Idle heartbeat (#163): while online (even with no active job) keep a slow location
+  // ping running so dispatch has a fresh fix for proximity and the customer map gets a
+  // head-start dot the moment a job lands. Stops when offline to protect battery. The
+  // per-job page runs a faster ping during active delivery.
+  const locationStatus = useLocationPing(!!profile?.isOnline, IDLE_PING_INTERVAL_MS);
+
   // Offered jobs await the rider's accept/decline. Legacy auto-assign creates
   // "assigned" directly, so those stay in the active list untouched.
   const offered = jobs.filter((j) => j.status === "offered");
@@ -195,20 +212,56 @@ export default function RiderHomePage() {
         />
       )}
 
-      <div className="flex items-center justify-between rounded-2xl border border-kd-border bg-kd-surface p-4">
-        <div>
-          <p className="font-semibold">{profile.isOnline ? "You're online" : "You're offline"}</p>
-          <p className="text-xs text-kd-fg-muted">{profile.riderType} rider</p>
+      <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold">{profile.isOnline ? "You're online" : "You're offline"}</p>
+            <p className="text-xs text-kd-fg-muted">{profile.riderType} rider</p>
+          </div>
+          <Button
+            variant={profile.isOnline ? "destructive" : "default"}
+            onClick={async () => {
+              // Going online: request the location permission up front, tied to this
+              // explicit tap, so the browser prompt has clear context and we can warn if
+              // it's blocked. We still go online even if denied — the backend doesn't
+              // require a fix — but the rider sees why customers can't track them.
+              if (!profile.isOnline && typeof navigator !== "undefined" && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  () => {},
+                  () => {},
+                  { timeout: 10_000 },
+                );
+              }
+              await setAvailability({ online: !profile.isOnline });
+              refetch({ requestPolicy: "network-only" });
+            }}
+          >
+            {profile.isOnline ? "Go offline" : "Go online"}
+          </Button>
         </div>
-        <Button
-          variant={profile.isOnline ? "destructive" : "default"}
-          onClick={async () => {
-            await setAvailability({ online: !profile.isOnline });
-            refetch({ requestPolicy: "network-only" });
-          }}
-        >
-          {profile.isOnline ? "Go offline" : "Go online"}
-        </Button>
+
+        {/* Location permission / freshness (#163). */}
+        {profile.isOnline ? (
+          locationStatus === "denied" ? (
+            <p className="mt-3 rounded-lg bg-kd-warning-soft px-3 py-2 text-xs text-kd-warning">
+              Location is blocked — customers can&apos;t see you move and you won&apos;t be matched
+              to nearby orders. Enable location for this site in your browser settings, then reload.
+            </p>
+          ) : locationStatus === "unavailable" ? (
+            <p className="mt-3 text-xs text-kd-fg-subtle">
+              Live location isn&apos;t available on this device.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-kd-fg-muted">
+              Sharing your location · updated {relativeAge(profile.lastLocationAt)}
+            </p>
+          )
+        ) : (
+          <p className="mt-3 text-xs text-kd-fg-subtle">
+            We use your location to match nearby orders and let customers track you while you
+            deliver.
+          </p>
+        )}
       </div>
 
       <CashPanel
