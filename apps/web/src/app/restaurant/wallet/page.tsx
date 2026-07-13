@@ -1,10 +1,14 @@
 "use client";
 
-import { useQuery } from "urql";
+import { useState } from "react";
+import { useQuery, useMutation } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { useConsole } from "../useConsole";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+const MIN_PAYOUT_MINOR = 100_000; // Rs 1,000 — mirrors the API floor
 
 const WalletQuery = graphql(`
   query Wallet($restaurantId: String!) {
@@ -27,18 +31,43 @@ const WalletQuery = graphql(`
   }
 `);
 
+const RequestPayoutMutation = graphql(`
+  mutation RequestPayout($restaurantId: String!) {
+    requestPayout(restaurantId: $restaurantId) {
+      id
+      status
+      amountMinor
+    }
+  }
+`);
+
 export default function WalletPage() {
   const { restaurant } = useConsole();
-  const [{ data }] = useQuery({
+  const [{ data }, refetch] = useQuery({
     query: WalletQuery,
     variables: { restaurantId: restaurant?.id ?? "" },
     pause: !restaurant,
     requestPolicy: "cache-and-network",
   });
+  const [, requestPayout] = useMutation(RequestPayoutMutation);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!restaurant) return <p className="text-kd-fg-muted">Complete onboarding first.</p>;
 
   const balance = data?.walletBalance ?? 0;
+  const hasPending = (data?.payoutHistory ?? []).some((p) => p.status === "pending");
+  const canRequest = balance >= MIN_PAYOUT_MINOR && !hasPending;
+
+  async function onRequestPayout() {
+    if (!restaurant) return;
+    setBusy(true);
+    setError(null);
+    const r = await requestPayout({ restaurantId: restaurant.id });
+    setBusy(false);
+    if (r.error) setError(r.error.graphQLErrors[0]?.message ?? "Couldn't request a payout.");
+    else refetch({ requestPolicy: "network-only" });
+  }
 
   return (
     <main className="max-w-2xl">
@@ -55,6 +84,21 @@ export default function WalletPage() {
             against future card orders or is invoiced.
           </p>
         )}
+        <div className="mt-4 flex items-center gap-3">
+          <Button size="sm" disabled={busy || !canRequest} onClick={onRequestPayout}>
+            {busy ? "Requesting…" : "Request payout"}
+          </Button>
+          {hasPending ? (
+            <span className="text-xs text-kd-fg-muted">A payout is already in progress.</span>
+          ) : (
+            balance < MIN_PAYOUT_MINOR && (
+              <span className="text-xs text-kd-fg-subtle">
+                Minimum {formatRs(MIN_PAYOUT_MINOR)} to request a payout.
+              </span>
+            )
+          )}
+        </div>
+        {error && <p className="mt-2 text-sm text-kd-danger">{error}</p>}
       </div>
 
       <h2 className="mb-2 font-semibold">Payouts</h2>
