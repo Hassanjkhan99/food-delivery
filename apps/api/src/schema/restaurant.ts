@@ -7,7 +7,7 @@ import { transition, type Actor } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { publishOrderChanged } from "../pubsub.js";
 import { formatRs } from "@fd/shared";
-import { accountBalance, postLedgerTx } from "../services/ledgerService.js";
+import { accountBalance, postLedgerTx, postItemRemovalRefund } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
 import { builder } from "./builder.js";
@@ -786,6 +786,116 @@ builder.mutationFields((t) => ({
         where: { id: args.id },
         data: { prepEtaMinutes: args.prepEtaMinutes },
       });
+    },
+  }),
+
+  // Remove a single unavailable line item from a live order (#111). Honours the
+  // customer's `remove_item` preference: deletes the line, recomputes the order totals,
+  // and issues a platform-controlled partial refund so the customer is NOT charged for an
+  // item they won't receive. Allowed while the order is still in the kitchen
+  // (pending_acceptance … ready_for_pickup); removing the last line is disallowed (that's a
+  // full cancellation — reject/cancel instead).
+  removeOrderItem: t.prismaField({
+    type: "Order",
+    authScopes: { restaurantMember: true },
+    args: {
+      orderId: t.arg.string({ required: true }),
+      orderItemId: t.arg.string({ required: true }),
+    },
+    resolve: async (query, _root, args, ctx) => {
+      await assertOrderBranchMember(ctx, args.orderId);
+      const REMOVABLE_STATUSES = [
+        "pending_acceptance",
+        "accepted",
+        "preparing",
+        "ready_for_pickup",
+      ];
+      const { branchId, status } = await prisma.$transaction(async (tx) => {
+        const order = await tx.order.findUniqueOrThrow({
+          where: { id: args.orderId },
+          include: { payment: true, branch: true, items: true, deliveryTask: true },
+        });
+        if (!REMOVABLE_STATUSES.includes(order.status)) {
+          throw new GraphQLError("This order can no longer be edited.", {
+            extensions: { code: "invalid_state" },
+          });
+        }
+        const item = order.items.find((i) => i.id === args.orderItemId);
+        if (!item) {
+          throw new GraphQLError("That item isn't on this order (it may already be removed).", {
+            extensions: { code: "not_found" },
+          });
+        }
+        if (order.items.length <= 1) {
+          throw new GraphQLError(
+            "This is the only item on the order — reject or cancel the whole order instead.",
+            { extensions: { code: "last_item" } },
+          );
+        }
+
+        // Refund the removed line's own subtotal + its proportional share of tax; scale the
+        // restaurant commission down so the platform doesn't over-collect. Delivery fee, the
+        // flat platform fee and any tip stay (the order still ships). NB: with a voucher /
+        // loyalty discount applied this can slightly over-refund the discounted portion —
+        // acceptable for v1; clamped to the order's grand total.
+        const removedSubtotal = item.lineTotalMinor;
+        const oldSubtotal = order.subtotalMinor;
+        const share = oldSubtotal > 0 ? removedSubtotal / oldSubtotal : 0;
+        const removedTax = Math.round(order.taxTotalMinor * share);
+        const removedCommission = Math.round(order.commissionMinor * share);
+        const refundMinor = Math.max(
+          0,
+          Math.min(removedSubtotal + removedTax, order.grandTotalMinor),
+        );
+
+        await tx.orderItem.delete({ where: { id: item.id } });
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            subtotalMinor: order.subtotalMinor - removedSubtotal,
+            taxTotalMinor: order.taxTotalMinor - removedTax,
+            commissionMinor: order.commissionMinor - removedCommission,
+            grandTotalMinor: order.grandTotalMinor - refundMinor,
+          },
+        });
+
+        if (order.paymentMode === "cod") {
+          // No cash collected yet: reduce what the rider must collect. If the task isn't
+          // created yet, codAmountMinor is derived from grandTotalMinor at creation, so the
+          // update above already carries the reduction forward.
+          if (order.deliveryTask) {
+            await tx.deliveryTask.update({
+              where: { id: order.deliveryTask.id },
+              data: {
+                codAmountMinor: Math.max(0, order.deliveryTask.codAmountMinor - refundMinor),
+              },
+            });
+          }
+        } else {
+          await postItemRemovalRefund(tx, order, refundMinor);
+        }
+
+        await tx.auditLog.create({
+          data: {
+            actorRole: "restaurant",
+            actorUserId: ctx.userId,
+            action: "order.item_removed",
+            subjectType: "Order",
+            subjectId: order.id,
+            afterJson: {
+              orderItemId: item.id,
+              name: (item.menuSnapshotJson as { name?: string } | null)?.name ?? null,
+              refundMinor,
+              paymentMode: order.paymentMode,
+            },
+          },
+        });
+        return { branchId: order.branchId, status: order.status };
+      });
+
+      // Refresh the live board / customer tracking (totals + items changed).
+      publishOrderChanged({ orderId: args.orderId, branchId, status });
+      return prisma.order.findUniqueOrThrow({ ...query, where: { id: args.orderId } });
     },
   }),
 

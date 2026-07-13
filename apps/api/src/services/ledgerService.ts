@@ -18,6 +18,13 @@ type OrderWithMoney = Order & {
 // only leaves on settlement (to restaurant/platform) or reversal (back to prepaid).
 export const WALLET_HOLDING = "platform:wallet_holding";
 
+// Escrow account for CARD-paid orders (Codex #116 P1). A captured card charge is held here
+// from placement until settlement/refund — NOT in `customer:{id}:prepaid`, which is the
+// customer's *spendable* wallet. Keeping card escrow out of prepaid stops an in-flight card
+// order's amount from showing up as spendable balance in myWallet / the wallet-checkout guard
+// / referral walletBalanceMinor (which all read prepaid).
+const cardEscrow = (customerId: string) => `customer:${customerId}:card_escrow`;
+
 // Liability account for rider tips collected at checkout. The tip rides inside
 // grandTotalMinor but is neither restaurant share nor platform revenue, so on
 // settlement it parks here (owed to riders) instead of inflating platform:revenue.
@@ -139,7 +146,8 @@ export async function onOrderDelivered(tx: Tx, order: OrderWithMoney): Promise<v
       `Settlement ${order.code} (card)`,
       [
         {
-          code: `customer:${order.customerId}:prepaid`,
+          // Release the card escrow held since placement (#116 P1), not the spendable wallet.
+          code: cardEscrow(order.customerId),
           ownerType: "customer",
           ownerId: order.customerId,
           debit: order.grandTotalMinor,
@@ -310,7 +318,9 @@ export async function onOrderMoneyReversal(
     `Refund ${order.code} (${to})`,
     [
       {
-        code: `customer:${order.customerId}:prepaid`,
+        // Reverse the card escrow (#116 P1) — the captured charge was held here, not in
+        // the customer's spendable prepaid balance.
+        code: cardEscrow(order.customerId),
         ownerType: "customer",
         ownerId: order.customerId,
         debit: amount,
@@ -321,6 +331,98 @@ export async function onOrderMoneyReversal(
   );
 }
 
+/**
+ * Partial refund when a single line item is removed from an order before fulfilment
+ * (#111). Unlike onOrderMoneyReversal this does NOT terminate the order — it returns
+ * `refundMinor` to the customer and leaves the (recomputed) order live. COD is handled by
+ * the caller (it reduces the cash the rider collects; no money has moved yet), so this only
+ * covers the prepaid modes. Returns the Refund id, or null when nothing was refundable.
+ */
+export async function postItemRemovalRefund(
+  tx: Tx,
+  order: OrderWithMoney,
+  refundMinor: number,
+): Promise<string | null> {
+  if (refundMinor <= 0) return null;
+  if (!order.payment || order.payment.status === "pending") return null;
+
+  if (order.paymentMode === "wallet") {
+    if (order.payment.status !== "captured" && order.payment.status !== "partially_refunded")
+      return null;
+    const refund = await tx.refund.create({
+      data: {
+        orderId: order.id,
+        status: "refunded",
+        amountMinor: refundMinor,
+        destination: "wallet",
+        reason: `Item removed from order ${order.code}`,
+        decidedAt: new Date(),
+      },
+    });
+    await tx.payment.update({
+      where: { id: order.payment.id },
+      data: { status: "partially_refunded", refundedMinor: { increment: refundMinor } },
+    });
+    await postLedgerTx(
+      tx,
+      `Item refund ${order.code} (wallet)`,
+      [
+        { code: WALLET_HOLDING, ownerType: "platform", debit: refundMinor },
+        {
+          code: `customer:${order.customerId}:prepaid`,
+          ownerType: "customer",
+          ownerId: order.customerId,
+          credit: refundMinor,
+        },
+      ],
+      { orderId: order.id, refundId: refund.id },
+    );
+    return refund.id;
+  }
+
+  // Card: refund the captured charge partially, drawing from the card escrow (#116 P1).
+  if (order.paymentMode === "card") {
+    if (!order.payment.providerRef) return null;
+    const { mockProvider } = await import("./payments/mockProvider.js");
+    await mockProvider.refund({
+      chargeRef: order.payment.providerRef,
+      amountMinor: refundMinor,
+      reference: order.code,
+    });
+    const refund = await tx.refund.create({
+      data: {
+        orderId: order.id,
+        status: "refunded",
+        amountMinor: refundMinor,
+        destination: "card",
+        reason: `Item removed from order ${order.code}`,
+        decidedAt: new Date(),
+      },
+    });
+    await tx.payment.update({
+      where: { id: order.payment.id },
+      data: { status: "partially_refunded", refundedMinor: { increment: refundMinor } },
+    });
+    await postLedgerTx(
+      tx,
+      `Item refund ${order.code} (card)`,
+      [
+        {
+          code: cardEscrow(order.customerId),
+          ownerType: "customer",
+          ownerId: order.customerId,
+          debit: refundMinor,
+        },
+        { code: "platform:cash", ownerType: "platform", credit: refundMinor },
+      ],
+      { orderId: order.id, refundId: refund.id },
+    );
+    return refund.id;
+  }
+
+  return null;
+}
+
 /** Post the charge legs after a successful card capture. */
 export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void> {
   await postLedgerTx(
@@ -329,7 +431,8 @@ export async function onCardCharged(tx: Tx, order: OrderWithMoney): Promise<void
     [
       { code: "platform:cash", ownerType: "platform", debit: order.grandTotalMinor },
       {
-        code: `customer:${order.customerId}:prepaid`,
+        // Hold the captured charge in card escrow, NOT the spendable prepaid wallet (#116 P1).
+        code: cardEscrow(order.customerId),
         ownerType: "customer",
         ownerId: order.customerId,
         credit: order.grandTotalMinor,
