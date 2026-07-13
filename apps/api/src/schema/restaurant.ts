@@ -46,6 +46,19 @@ async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
   return restaurant;
 }
 
+// Stricter than membership: only the restaurant_owner (or admin) — used to keep money and
+// business config out of restaurant_staff's hands (#156).
+function assertRestaurantOwner(ctx: AppContext, restaurantId: string) {
+  const isOwner = ctx.roles.some(
+    (r) => r.role === "restaurant_owner" && r.restaurantId === restaurantId,
+  );
+  if (!isOwner && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Only the restaurant owner can do this.", {
+      extensions: { code: "forbidden" },
+    });
+  }
+}
+
 async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -255,6 +268,22 @@ function pktStartOfToday(): Date {
   return new Date(midnightPkt - PKT_OFFSET_MS);
 }
 
+// Staff roster row (#156) — a restaurant_staff UserRole flattened with its user's contact.
+const StaffMemberRef = builder.objectRef<{
+  roleId: string;
+  userId: string;
+  name: string | null;
+  phone: string;
+}>("StaffMember");
+StaffMemberRef.implement({
+  fields: (t) => ({
+    roleId: t.exposeString("roleId"),
+    userId: t.exposeString("userId"),
+    name: t.exposeString("name", { nullable: true }),
+    phone: t.exposeString("phone"),
+  }),
+});
+
 // ── queries ─────────────────────────────────────────────────────────────────
 
 builder.queryFields((t) => ({
@@ -263,6 +292,27 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     resolve: (query, _root, _args, ctx) =>
       prisma.restaurant.findMany({ ...query, where: { id: { in: ctx.restaurantIds } } }),
+  }),
+
+  // Owner-only: the restaurant's staff roster (#156).
+  restaurantStaff: t.field({
+    type: [StaffMemberRef],
+    authScopes: { restaurantMember: true },
+    args: { restaurantId: t.arg.string({ required: true }) },
+    resolve: async (_root, args, ctx) => {
+      assertRestaurantOwner(ctx, args.restaurantId);
+      const roles = await prisma.userRole.findMany({
+        where: { role: "restaurant_staff", restaurantId: args.restaurantId },
+        include: { user: true },
+        orderBy: { id: "asc" },
+      });
+      return roles.map((r) => ({
+        roleId: r.id,
+        userId: r.userId,
+        name: r.user.name,
+        phone: r.user.phone,
+      }));
+    },
   }),
 
   boardOrders: t.prismaField({
@@ -993,7 +1043,8 @@ builder.mutationFields((t) => ({
       deliveryRadiusM: t.arg.int({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      const commercialsBranch = await assertBranchMember(ctx, args.branchId);
+      assertRestaurantOwner(ctx, commercialsBranch.restaurantId);
       const data: { minOrderMinor?: number; deliveryFeeMinor?: number; deliveryRadiusM?: number } =
         {};
       if (args.minOrderMinor != null) {
@@ -1033,6 +1084,7 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       await assertRestaurantMember(ctx, args.restaurantId);
+      assertRestaurantOwner(ctx, args.restaurantId);
       const data: { name?: string; cuisineTags?: string[] } = {};
       if (args.name != null) {
         const trimmed = args.name.trim();
@@ -1062,6 +1114,7 @@ builder.mutationFields((t) => ({
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
       await assertRestaurantMember(ctx, args.restaurantId);
+      assertRestaurantOwner(ctx, args.restaurantId);
       const MIN_PAYOUT_MINOR = 100_000; // Rs 1,000 floor
       return prisma.$transaction(async (tx) => {
         const inFlight = await tx.payout.findFirst({
@@ -1118,6 +1171,57 @@ builder.mutationFields((t) => ({
           data: { ledgerTxId: txId },
         });
       });
+    },
+  }),
+
+  // Owner-only: add a staff member by phone (#156). Staff get the restaurant_staff role,
+  // which reaches the order board but not menu/wallet/settings (owner-only mutations +
+  // console nav gating). Idempotent on (user, restaurant).
+  inviteStaff: t.field({
+    type: StaffMemberRef,
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      phone: t.arg.string({ required: true }),
+      name: t.arg.string({ required: false }),
+    },
+    resolve: async (_root, args, ctx) => {
+      assertRestaurantOwner(ctx, args.restaurantId);
+      if (!/^\+92\d{10}$/.test(args.phone))
+        throw new GraphQLError("Please enter a valid phone number, for example +923001234567.", {
+          extensions: { code: "validation_error" },
+        });
+      const user = await prisma.user.upsert({
+        where: { phone: args.phone },
+        update: args.name ? { name: args.name } : {},
+        create: { phone: args.phone, name: args.name ?? null },
+      });
+      const existing = await prisma.userRole.findFirst({
+        where: { userId: user.id, role: "restaurant_staff", restaurantId: args.restaurantId },
+      });
+      const role =
+        existing ??
+        (await prisma.userRole.create({
+          data: { userId: user.id, role: "restaurant_staff", restaurantId: args.restaurantId },
+        }));
+      return { roleId: role.id, userId: user.id, name: user.name, phone: user.phone };
+    },
+  }),
+
+  // Owner-only: revoke a staff member's access to this restaurant (#156).
+  removeStaff: t.field({
+    type: "Boolean",
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      userId: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      assertRestaurantOwner(ctx, args.restaurantId);
+      await prisma.userRole.deleteMany({
+        where: { userId: args.userId, role: "restaurant_staff", restaurantId: args.restaurantId },
+      });
+      return true;
     },
   }),
 
