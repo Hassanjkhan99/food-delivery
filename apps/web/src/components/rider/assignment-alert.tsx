@@ -18,7 +18,20 @@ export type AlertJob = {
   pickupName: string;
   dropText: string;
   codAmountMinor: number;
+  pickupDistanceMeters?: number | null;
 };
+
+// "≈1.2 km · ~6 min to pickup" from a straight-line pickup distance (#166). Assumes a rough
+// ~18 km/h urban rider speed for the ETA — deliberately approximate (no routing), so it
+// reads as an estimate. Returns null when we have no distance, so the caller can hide the
+// line rather than render a placeholder.
+export function formatPickupDistance(meters: number | null | undefined): string | null {
+  if (meters == null || meters < 0) return null;
+  const km = meters / 1000;
+  const dist = km < 1 ? `${Math.round(meters)} m` : `${km.toFixed(1)} km`;
+  const etaMin = Math.max(1, Math.round((km / 18) * 60));
+  return `≈${dist} · ~${etaMin} min to pickup`;
+}
 
 // A short two-tone chime via WebAudio — no bundled asset needed and it plays on locked
 // attention. Best-effort: browsers block audio until the rider has interacted with the
@@ -147,6 +160,11 @@ export function AssignmentAlert({
           {mode === "offer" ? "New offer" : "New assignment"}
         </Badge>
         <h2 className="text-2xl font-bold">{job.code}</h2>
+        {formatPickupDistance(job.pickupDistanceMeters) && (
+          <p className="mt-1 text-sm text-kd-fg-muted">
+            {formatPickupDistance(job.pickupDistanceMeters)}
+          </p>
+        )}
 
         <div className="mt-6 w-full max-w-xs space-y-3 text-left">
           <div className="rounded-2xl border border-kd-border bg-kd-surface p-3">

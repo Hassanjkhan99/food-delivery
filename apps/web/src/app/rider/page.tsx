@@ -11,7 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CashPanel } from "@/components/rider/cash-panel";
-import { AssignmentAlert, type AlertJob } from "@/components/rider/assignment-alert";
+import {
+  AssignmentAlert,
+  formatPickupDistance,
+  type AlertJob,
+} from "@/components/rider/assignment-alert";
 import { useLocationPing, IDLE_PING_INTERVAL_MS } from "@/components/rider/use-location-ping";
 
 // Map the 0–100 trust score to a rider-facing standing label (#164). Bands are a
@@ -53,6 +57,7 @@ const RiderHomeQuery = graphql(`
       status
       offeredAt
       codAmountMinor
+      pickupDistanceMeters
       order {
         id
         code
@@ -163,6 +168,7 @@ export default function RiderHomePage() {
         pickupName: alertJobRaw.order.branch.restaurant.name,
         dropText: (alertJobRaw.order.addressSnapshotJson as { text?: string })?.text ?? "",
         codAmountMinor: alertJobRaw.codAmountMinor,
+        pickupDistanceMeters: alertJobRaw.pickupDistanceMeters,
       }
     : null;
 
@@ -337,6 +343,11 @@ export default function RiderHomePage() {
                     Pickup: {j.order.branch.restaurant.name}
                   </p>
                   <p className="text-sm text-kd-fg-muted">Drop: {addr?.text ?? "—"}</p>
+                  {formatPickupDistance(j.pickupDistanceMeters) && (
+                    <p className="text-xs text-kd-fg-subtle">
+                      {formatPickupDistance(j.pickupDistanceMeters)}
+                    </p>
+                  )}
                   {j.codAmountMinor > 0 && (
                     <p className="mt-1 text-sm font-semibold text-kd-warning">
                       Collect {formatRs(j.codAmountMinor)} (COD)
@@ -390,6 +401,12 @@ export default function RiderHomePage() {
                   Pickup: {j.order.branch.restaurant.name}
                 </p>
                 <p className="text-sm text-kd-fg-muted">Drop: {addr?.text ?? "—"}</p>
+                {/* Distance-to-pickup only matters before the rider has collected. */}
+                {j.status !== "picked_up" && formatPickupDistance(j.pickupDistanceMeters) && (
+                  <p className="text-xs text-kd-fg-subtle">
+                    {formatPickupDistance(j.pickupDistanceMeters)}
+                  </p>
+                )}
                 {j.codAmountMinor > 0 && (
                   <p className="mt-1 text-sm font-semibold text-kd-warning">
                     Collect {formatRs(j.codAmountMinor)} (COD)
