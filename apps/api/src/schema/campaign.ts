@@ -35,6 +35,28 @@ async function acceptanceSlaPct(restaurantId: string, days = 30): Promise<number
   return (inSla.length / decided.length) * 100;
 }
 
+// Double-billing guard (#117): a restaurant may only have ONE live featured_slot at a
+// time — accrueCampaigns bills per active campaign, so two overlapping featured slots
+// would debit the wallet twice for a single promoted rail. `pending_approval` counts too
+// so a second slot can't be queued to slip through right behind the first. `exceptId`
+// lets a campaign re-check without matching itself.
+async function assertNoActiveFeaturedSlot(restaurantId: string, exceptId?: string) {
+  const existing = await prisma.campaign.findFirst({
+    where: {
+      restaurantId,
+      type: "featured_slot",
+      status: { in: ["active", "pending_approval"] },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+  });
+  if (existing) {
+    throw new GraphQLError(
+      "This restaurant already has a featured placement live or awaiting approval. End it before starting another.",
+      { extensions: { code: "duplicate_active_placement" } },
+    );
+  }
+}
+
 async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
   if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
     throw new GraphQLError("You don't have access to this restaurant.", {
@@ -177,17 +199,24 @@ builder.queryFields((t) => ({
       for (const c of campaigns) {
         if (!campaignWindowContains(c, now)) continue;
         if (c.restaurant.status !== "approved") continue;
-        const branch = c.restaurant.branches[0];
-        if (!branch || seen.has(branch.id)) continue;
-        seen.add(branch.id);
-        const sla = await acceptanceSlaPct(c.restaurantId);
-        out.push({
-          campaignId: c.id,
-          branchId: branch.id,
-          label: c.label ?? null,
-          slaCapped: sla < SLA_CAP_PCT,
-          rank: c.dailyRateMinor,
-        });
+        // Emit a placement for EVERY branch of the campaign, not just branches[0] (#117):
+        // a chain campaign should surface for whichever of its branches the user is near.
+        // The caller intersects these against the in-range feed (browseBranches), so a
+        // branch that doesn't reach the user is dropped client-side; here we just fan out.
+        // SLA is per-restaurant, so compute it once per campaign.
+        if (c.restaurant.branches.length === 0) continue;
+        const slaCapped = (await acceptanceSlaPct(c.restaurantId)) < SLA_CAP_PCT;
+        for (const branch of c.restaurant.branches) {
+          if (seen.has(branch.id)) continue;
+          seen.add(branch.id);
+          out.push({
+            campaignId: c.id,
+            branchId: branch.id,
+            label: c.label ?? null,
+            slaCapped,
+            rank: c.dailyRateMinor,
+          });
+        }
       }
       // Capped placements sink below healthy ones; within a group, higher spend ranks first.
       return out
@@ -271,6 +300,8 @@ builder.mutationFields((t) => ({
           extensions: { code: "invalid_state" },
         });
       }
+      // #117: block a second featured slot from entering the approval/active pipeline.
+      if (c.type === "featured_slot") await assertNoActiveFeaturedSlot(c.restaurantId, c.id);
       if (c.dailyRateMinor > 0) {
         const balance = await prisma.$transaction((tx) =>
           accountBalance(tx as never, `restaurant:${c.restaurantId}:payable`),
@@ -324,6 +355,9 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("This campaign is not awaiting approval.", {
           extensions: { code: "invalid_state" },
         });
+      // #117: re-check at approval time — two slots could have been submitted before
+      // either was approved. Excludes this campaign so it doesn't match itself.
+      if (c.type === "featured_slot") await assertNoActiveFeaturedSlot(c.restaurantId, c.id);
       const updated = await prisma.campaign.update({
         ...query,
         where: { id: args.id },
