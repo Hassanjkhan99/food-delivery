@@ -12,6 +12,7 @@ const MyRestaurantsQuery = graphql(`
       slug
       status
       tier
+      cuisineTags
       branches {
         id
         name

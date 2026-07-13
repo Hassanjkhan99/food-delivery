@@ -31,6 +31,20 @@ async function assertBranchMember(ctx: AppContext, branchId: string) {
   return branch;
 }
 
+async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
+  const restaurant = await prisma.restaurant.findUnique({ where: { id: restaurantId } });
+  if (!restaurant)
+    throw new GraphQLError("We couldn't find that restaurant.", {
+      extensions: { code: "not_found" },
+    });
+  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("You don't have access to this restaurant.", {
+      extensions: { code: "forbidden" },
+    });
+  }
+  return restaurant;
+}
+
 async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -962,6 +976,78 @@ builder.mutationFields((t) => ({
         }
       });
       return prisma.branch.findUniqueOrThrow({ where: { id: args.branchId } });
+    },
+  }),
+
+  // Owner-editable commercial terms (#153). Tier/commission stay admin-only; these three
+  // are day-to-day levers a restaurant should control itself. Only provided fields are
+  // patched, and each is range-checked to avoid nonsensical storefront values.
+  updateBranchCommercials: t.prismaField({
+    type: "Branch",
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      minOrderMinor: t.arg.int({ required: false }),
+      deliveryFeeMinor: t.arg.int({ required: false }),
+      deliveryRadiusM: t.arg.int({ required: false }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertBranchMember(ctx, args.branchId);
+      const data: { minOrderMinor?: number; deliveryFeeMinor?: number; deliveryRadiusM?: number } =
+        {};
+      if (args.minOrderMinor != null) {
+        if (args.minOrderMinor < 0 || args.minOrderMinor > 1_000_000)
+          throw new GraphQLError("Please enter a valid minimum order.", {
+            extensions: { code: "validation_error" },
+          });
+        data.minOrderMinor = args.minOrderMinor;
+      }
+      if (args.deliveryFeeMinor != null) {
+        if (args.deliveryFeeMinor < 0 || args.deliveryFeeMinor > 1_000_000)
+          throw new GraphQLError("Please enter a valid delivery fee.", {
+            extensions: { code: "validation_error" },
+          });
+        data.deliveryFeeMinor = args.deliveryFeeMinor;
+      }
+      if (args.deliveryRadiusM != null) {
+        if (args.deliveryRadiusM < 100 || args.deliveryRadiusM > 50_000)
+          throw new GraphQLError("Delivery radius must be between 0.1 and 50 km.", {
+            extensions: { code: "validation_error" },
+          });
+        data.deliveryRadiusM = args.deliveryRadiusM;
+      }
+      return prisma.branch.update({ where: { id: args.branchId }, data });
+    },
+  }),
+
+  // Owner-editable storefront profile (#153): name + cuisine tags. The slug is left stable
+  // on purpose so existing storefront links keep resolving. Tier/commission remain admin-only.
+  updateRestaurantProfile: t.prismaField({
+    type: "Restaurant",
+    authScopes: { restaurantMember: true },
+    args: {
+      restaurantId: t.arg.string({ required: true }),
+      name: t.arg.string({ required: false }),
+      cuisineTags: t.arg.stringList({ required: false }),
+    },
+    resolve: async (_q, _root, args, ctx) => {
+      await assertRestaurantMember(ctx, args.restaurantId);
+      const data: { name?: string; cuisineTags?: string[] } = {};
+      if (args.name != null) {
+        const trimmed = args.name.trim();
+        if (trimmed.length < 2 || trimmed.length > 80)
+          throw new GraphQLError("Restaurant name must be 2–80 characters.", {
+            extensions: { code: "validation_error" },
+          });
+        data.name = trimmed;
+      }
+      if (args.cuisineTags != null) {
+        data.cuisineTags = args.cuisineTags
+          .map((c) => c.trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 10);
+      }
+      return prisma.restaurant.update({ where: { id: args.restaurantId }, data });
     },
   }),
 
