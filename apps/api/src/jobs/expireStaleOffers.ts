@@ -54,14 +54,23 @@ export async function sweepExpiredOffers(): Promise<{
     // accept (task → assigned) or a fresh re-offer loses cleanly here.
     const { count } = await prisma.deliveryTask.updateMany({
       where: { id: task.id, status: "offered", offers: { none: { status: "pending" } } },
-      data: { status: "unassigned", riderId: null, offeredAt: null, declineReason: "offer_expired" },
+      data: {
+        status: "unassigned",
+        riderId: null,
+        offeredAt: null,
+        declineReason: "offer_expired",
+      },
     });
     if (count === 0) continue;
     // Reuse the `declined` event type — an expiry is an auto-decline — with a note that
     // distinguishes it (no `expired` value in DeliveryEventType, and adding one would need a
     // migration this change doesn't otherwise require).
     await prisma.deliveryEvent.create({
-      data: { taskId: task.id, type: "declined", note: "Offer expired — returned to dispatch queue" },
+      data: {
+        taskId: task.id,
+        type: "declined",
+        note: "Offer expired — returned to dispatch queue",
+      },
     });
     tasksReleased++;
   }
