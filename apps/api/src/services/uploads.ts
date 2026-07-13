@@ -27,11 +27,14 @@ const presignSchema = z.object({
   contentType: z.string().min(3).max(100),
   byteSize: z.number().int().positive(),
   kind: z.enum(["image", "document", "csv"]),
+  // Sensitive uploads (KYC/CNIC scans, rider verification docs) opt into a `private/`
+  // key prefix so reads are served via short-lived signed URLs, not the public path (#119).
+  private: z.boolean().optional(),
 });
 
 export async function presignUpload(
   userId: string,
-  input: { contentType: string; byteSize: number; kind: string },
+  input: { contentType: string; byteSize: number; kind: string; private?: boolean },
 ) {
   const parsed = presignSchema.parse(input);
   const rules = KIND_RULES[parsed.kind];
@@ -48,7 +51,11 @@ export async function presignUpload(
   }
 
   const ext = parsed.contentType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") ?? "bin";
-  const objectKey = `${parsed.kind}/${randomUUID()}.${ext}`;
+  // Private assets get a `private/` prefix so objectStore can gate reads behind a signed
+  // URL; public assets (menu/hero/POD photos, menu-source docs/CSV) keep the flat key (#119).
+  const objectKey = parsed.private
+    ? `private/${parsed.kind}/${randomUUID()}.${ext}`
+    : `${parsed.kind}/${randomUUID()}.${ext}`;
 
   const asset = await prisma.mediaAsset.create({
     data: {
@@ -87,4 +94,13 @@ export async function finalizeUpload(userId: string, assetId: string) {
 
 export function assetUrl(objectKey: string): string {
   return objectStore.publicUrl(objectKey);
+}
+
+// Read URL that respects sensitivity (#119): a `private/` key yields a short-lived signed
+// URL (fresh per read), everything else uses the plain public URL. Callers serving asset
+// URLs to clients should prefer this over the sync `assetUrl`.
+export async function assetReadUrl(objectKey: string): Promise<string> {
+  return objectKey.startsWith("private/")
+    ? objectStore.signedReadUrl(objectKey)
+    : objectStore.publicUrl(objectKey);
 }

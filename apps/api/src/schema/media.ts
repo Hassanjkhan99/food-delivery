@@ -3,7 +3,7 @@
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
-import { assetUrl, finalizeUpload, presignUpload } from "../services/uploads.js";
+import { assetReadUrl, finalizeUpload, presignUpload } from "../services/uploads.js";
 import { importMenuCsv, parseMenuCsvAsset } from "../services/menuImport.js";
 import { ensureDraft } from "../services/menuService.js";
 import { builder } from "./builder.js";
@@ -42,7 +42,9 @@ const MediaAssetType = builder.prismaObject("MediaAsset", {
     id: t.exposeID("id"),
     contentType: t.exposeString("contentType"),
     status: t.exposeString("status"),
-    url: t.string({ resolve: (a) => assetUrl(a.objectKey) }),
+    // Async so a private asset yields a fresh short-lived signed URL each read (#119);
+    // public assets still resolve to the plain public URL.
+    url: t.string({ resolve: (a) => assetReadUrl(a.objectKey) }),
   }),
 });
 
@@ -115,8 +117,11 @@ builder.mutationFields((t) => ({
       contentType: t.arg.string({ required: true }),
       byteSize: t.arg.int({ required: true }),
       kind: t.arg.string({ required: true }),
+      // Route sensitive uploads (KYC/CNIC, rider docs) to a signed-read private key (#119).
+      private: t.arg.boolean({ required: false }),
     },
-    resolve: (_root, args, ctx) => presignUpload(ctx.userId!, args),
+    resolve: (_root, args, ctx) =>
+      presignUpload(ctx.userId!, { ...args, private: args.private ?? undefined }),
   }),
 
   finalizeUpload: t.prismaField({

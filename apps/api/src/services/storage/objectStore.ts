@@ -13,6 +13,8 @@ export interface ObjectStore {
   presignPut(objectKey: string, contentType: string, byteSizeLimit: number): Promise<string>;
   /** Public URL to read the object. */
   publicUrl(objectKey: string): string;
+  /** Short-lived signed URL to read a private object (#119). */
+  signedReadUrl(objectKey: string): Promise<string>;
   head(objectKey: string): Promise<{ exists: boolean; byteSize: number; sha256?: string }>;
 }
 
@@ -36,6 +38,16 @@ export const localDiskStore: ObjectStore = {
 
   publicUrl(objectKey) {
     return `${env.objectStoreBaseUrl}/files/${objectKey}`;
+  },
+
+  // Private-asset read URL (#119): a 15m HS256 token bound to this exact objectKey, which
+  // handleLocalFileGet verifies before streaming a `private/` file.
+  async signedReadUrl(objectKey) {
+    const token = await new SignJWT({ objectKey })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("15m")
+      .sign(secret());
+    return `${env.objectStoreBaseUrl}/files/${objectKey}?token=${encodeURIComponent(token)}`;
   },
 
   async head(objectKey) {
@@ -74,7 +86,7 @@ export async function handleLocalUploadPut(req: Request): Promise<Response> {
   return new Response(null, { status: 200 });
 }
 
-export function handleLocalFileGet(req: Request): Response {
+export async function handleLocalFileGet(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const objectKey = decodeURIComponent(url.pathname.replace(/^\/files\//, ""));
   let path: string;
@@ -82,6 +94,20 @@ export function handleLocalFileGet(req: Request): Response {
     path = diskPath(objectKey);
   } catch {
     return new Response("Bad key", { status: 400 });
+  }
+  // Private assets (#119): reads must present a valid signed token whose objectKey claim
+  // matches the requested key. Public keys stream unauthenticated as before.
+  if (objectKey.startsWith("private/")) {
+    const token = url.searchParams.get("token");
+    if (!token) return new Response("Missing token", { status: 401 });
+    try {
+      const { payload } = await jwtVerify(token, secret());
+      if ((payload as { objectKey?: string }).objectKey !== objectKey) {
+        return new Response("Token does not match resource", { status: 401 });
+      }
+    } catch {
+      return new Response("Invalid or expired token", { status: 401 });
+    }
   }
   if (!existsSync(path)) return new Response("Not found", { status: 404 });
   const stream = createReadStream(path);

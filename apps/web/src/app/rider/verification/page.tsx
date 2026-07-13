@@ -98,7 +98,8 @@ export default function RiderVerificationPage() {
     setUploadingKind(kind);
     setError(null);
     try {
-      const { assetId } = await uploadFile(client, file, "image");
+      // Verification docs are sensitive — upload as a private (signed-read) asset (#119).
+      const { assetId } = await uploadFile(client, file, "image", true);
       const res = await submitDoc({ kind, assetId });
       if (res.error) throw new Error(res.error.graphQLErrors[0]?.message ?? "Submit failed");
       refetch({ requestPolicy: "network-only" });

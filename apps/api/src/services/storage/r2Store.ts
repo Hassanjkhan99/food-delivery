@@ -7,7 +7,12 @@
 // local adapter does, but presignUpload() already validates byteSize against the
 // per-kind cap before we ever mint a URL, so an honest client can't exceed it and a
 // dishonest one is bounded by the finalize head() check reading the real size back.
-import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../env.js";
 import type { ObjectStore } from "./objectStore.js";
@@ -41,6 +46,13 @@ export const r2Store: ObjectStore = {
 
   publicUrl(objectKey) {
     return `${env.r2.publicBaseUrl.replace(/\/$/, "")}/${objectKey}`;
+  },
+
+  // Private-asset read URL (#119): a 15m presigned GET against the (private) bucket,
+  // mirroring how presignPut mints a PUT. Public assets still use publicUrl above.
+  async signedReadUrl(objectKey) {
+    const cmd = new GetObjectCommand({ Bucket: env.r2.bucket, Key: objectKey });
+    return getSignedUrl(s3(), cmd, { expiresIn: 15 * 60 });
   },
 
   async head(objectKey) {

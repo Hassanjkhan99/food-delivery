@@ -5,8 +5,8 @@ import type { Client } from "urql";
 import { graphql } from "@/graphql/generated";
 
 const PresignMutation = graphql(`
-  mutation Presign($contentType: String!, $byteSize: Int!, $kind: String!) {
-    presignUpload(contentType: $contentType, byteSize: $byteSize, kind: $kind) {
+  mutation Presign($contentType: String!, $byteSize: Int!, $kind: String!, $private: Boolean) {
+    presignUpload(contentType: $contentType, byteSize: $byteSize, kind: $kind, private: $private) {
       assetId
       uploadUrl
     }
@@ -27,9 +27,17 @@ export async function uploadFile(
   client: Client,
   file: File,
   kind: "image" | "document" | "csv",
+  // Sensitive uploads (KYC/CNIC, rider verification docs) pass true so the asset gets a
+  // private, signed-read object key instead of a world-readable public one (#119).
+  isPrivate = false,
 ): Promise<{ assetId: string; url: string }> {
   const presign = await client
-    .mutation(PresignMutation, { contentType: file.type || "text/csv", byteSize: file.size, kind })
+    .mutation(PresignMutation, {
+      contentType: file.type || "text/csv",
+      byteSize: file.size,
+      kind,
+      private: isPrivate,
+    })
     .toPromise();
   const target = presign.data?.presignUpload;
   if (presign.error || !target) {

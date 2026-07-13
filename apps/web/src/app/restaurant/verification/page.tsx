@@ -88,7 +88,8 @@ function KycForm({
   async function onCnicUpload(file: File) {
     setError(null);
     try {
-      const { assetId } = await uploadFile(client, file, "image");
+      // The CNIC scan is sensitive — upload as a private (signed-read) asset (#119).
+      const { assetId } = await uploadFile(client, file, "image", true);
       setCnicAssetId(assetId);
     } catch (e) {
       setError((e as Error).message);
