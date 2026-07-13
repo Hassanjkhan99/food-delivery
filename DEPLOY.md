@@ -78,6 +78,10 @@ move. All free tiers.
    URL. This is what makes SSE push across invocations.
 2. **Object storage (Cloudflare R2)** — create a bucket + an S3 API token at
    <https://dash.cloudflare.com> → R2. Note the account endpoint and a public URL for reads.
+   The browser uploads **directly** to the presigned R2 URL (`apps/web/src/lib/upload.ts`
+   does a cross-origin `PUT`), so add a **bucket CORS rule** allowing the web origin
+   (`https://app.<domain>`), methods `PUT`/`GET`, and the `Content-Type` header — without
+   it the presign succeeds but every upload is blocked at the preflight.
 3. **API host (Render)** — `render.yaml` at the repo root is a ready Blueprint. New →
    Blueprint → pick the repo. It builds `apps/api` and runs `pnpm --filter @fd/api start`
    (the standalone `server.ts`, which also runs the expiry/offer/trust sweepers). Fill the

@@ -5,20 +5,25 @@
 # apps/api as a single long-lived process here fixes realtime (with REDIS_URL), gives
 # the sweepers a home, and lets the notification channels fan out.
 #
-# The web app stays on Vercel. Point it at this service by setting, on Vercel:
-#   NEXT_PUBLIC_API_URL = https://<this-service>.onrender.com/graphql
+# The web app stays on Vercel. This ONLY works on a shared parent domain: put the web app
+# on app.<domain> and this API on api.<domain> (both custom domains). Then, on Vercel:
+#   NEXT_PUBLIC_API_URL = https://api.<domain>/graphql
 #   NEXT_PUBLIC_VAPID_PUBLIC_KEY = <your VAPID public key>   (only when enabling push)
-# and set WEB_ORIGIN here to the Vercel origin so CORS + cookies line up.
+# and set WEB_ORIGIN + SESSION_COOKIE_DOMAIN below so the ONE session cookie is shared.
 #
-# Note: splitting the API onto its own origin makes the session cookie cross-site, so it
-# must be issued SameSite=None; Secure. Verify that before flipping the web app over.
+# Do NOT point Vercel at the raw *.onrender.com hostname: it's a different registrable
+# domain, so the API's cookie can't be read by the web edge proxy (proxy.ts) and every
+# role-gated route bounces to /login. See DEPLOY.md "Production unlock" for the full cutover.
 services:
   - type: web
     name: herald-api
     runtime: node
     plan: free # free instance sleeps after 15m idle; upgrade to Starter at launch to keep SSE + sweepers alive
     rootDir: .
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @fd/db build
+    # --prod=false forces devDependencies to install even though NODE_ENV=production is
+    # set below (Render exposes it at build time): the build needs @fd/db's `prisma` and
+    # the start command needs @fd/api's `tsx`, both devDependencies.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @fd/db build
     startCommand: pnpm --filter @fd/api start
     healthCheckPath: /graphql?query=%7B__typename%7D
     envVars:

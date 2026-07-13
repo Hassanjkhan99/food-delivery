@@ -7,9 +7,10 @@ config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 
 export const env = {
   get apiPort(): number {
-    // PORT is what most persistent hosts (Render/Railway/Fly) inject; honour it so the
-    // standalone API binds correctly there, falling back to API_PORT then the dev default.
-    return Number(process.env.API_PORT ?? process.env.PORT ?? 4000);
+    // PORT is what most persistent hosts (Render/Railway/Fly) inject and route to, so it
+    // MUST win over a stale API_PORT that might linger in the env (e.g. copied from the
+    // standalone-mode block). API_PORT stays as the local/dev override; 4000 is the default.
+    return Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   },
   get webOrigin(): string {
     return process.env.WEB_ORIGIN ?? "http://localhost:3000";
