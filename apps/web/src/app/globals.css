@@ -12,7 +12,8 @@
      default.) The final display font is a one-line swap here + in layout.tsx. */
   /* Body/UI = Inter, headings = Poppins (founder design-system spec). Robust generic
      fallbacks so type never drops to a serif if a webfont fails to load. */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-poppins), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -59,6 +60,7 @@
   --color-kd-primary-hover: var(--kd-primary-hover);
   --color-kd-primary-active: var(--kd-primary-active);
   --color-kd-primary-soft: var(--kd-primary-soft);
+  --color-kd-primary-fg: var(--kd-primary-fg);
   --color-kd-accent: var(--kd-accent);
   --color-kd-accent-soft: var(--kd-accent-soft);
   --color-kd-overlay: var(--kd-overlay);
@@ -73,6 +75,7 @@
   --color-kd-border: var(--kd-border);
   --color-kd-warning: var(--kd-warning);
   --color-kd-warning-soft: var(--kd-warning-soft);
+  --color-kd-warning-soft-fg: var(--kd-warning-soft-fg);
   --color-kd-danger: var(--kd-danger);
   --color-kd-danger-soft: var(--kd-danger-soft);
   --color-kd-info: var(--kd-info);
@@ -139,6 +142,8 @@
   --kd-primary-hover: #ea580c; /* orange 600 */
   --kd-primary-active: #c2410c; /* orange 700 */
   --kd-primary-soft: #fff7ed; /* orange 50 — hover/soft surfaces */
+  --kd-primary-fg: #ffffff; /* on-primary text/icons (#107) — tokenized so bg-kd-primary
+                               pairs with a single source instead of hard-coded text-white */
   --kd-accent: #f59e0b; /* amber — rating stars */
   --kd-accent-soft: #fef3c7;
   --kd-success: #16a34a;
@@ -152,6 +157,8 @@
   --kd-border: #ececec;
   --kd-warning: #d97706;
   --kd-warning-soft: #fef3c7;
+  --kd-warning-soft-fg: #92400e; /* amber 800 on amber-100 ≈ 6.4:1 AA (#107) — safety-relevant
+                                    warning banners (e.g. COD cash amounts) need real contrast */
   --kd-danger: #dc2626;
   --kd-danger-soft: #fee2e2;
   --kd-info: #0284c7;
@@ -198,6 +205,7 @@
   --kd-primary-hover: #fdba74;
   --kd-primary-active: #ea580c;
   --kd-primary-soft: #431407;
+  --kd-primary-fg: #431407; /* dark on the lighter dark-mode primary (#107) */
   --kd-accent: #fbbf24;
   --kd-accent-soft: #3d2f05;
   --kd-success: #34d399;
@@ -211,6 +219,7 @@
   --kd-border: #443c30;
   --kd-warning: #fbbf24;
   --kd-warning-soft: #451a03;
+  --kd-warning-soft-fg: #fde68a; /* amber 200 on the dark warning-soft (#107) */
   --kd-danger: #f87171;
   --kd-danger-soft: #450a0a;
   --kd-info: #38bdf8;

@@ -4,12 +4,42 @@ Issue #33. Defense-in-depth **on top of** the existing resolver-level RBAC + own
 if a resolver ever forgets an ownership check, Postgres RLS makes the leak return **zero rows**
 instead of another tenant's data.
 
-## Status: authored, NOT yet applied or tested (DB was offline)
+## Status: DESIGNED ONLY — no migration exists, RLS is unenforced (issue #130 open)
 
-The migration `prisma/migrations/20260710000128_rls-hardening/migration.sql` and the `withTenant()`
-helper in `src/index.ts` were written without a live database. Nothing enforces RLS until the
-migration is applied against a cluster whose app role is non-superuser. **Apply + verify before
-relying on it.**
+There is **no RLS migration in this repo**. An earlier note referenced
+`prisma/migrations/20260710000128_rls-hardening/migration.sql`, but that migration was never
+committed — the `migrations/` directory contains no `CREATE POLICY` / `FORCE ROW LEVEL SECURITY`
+SQL. The `withTenant()` helper in `src/index.ts` sets the tenant GUC but is a **functional no-op**
+without policies, so **tenant isolation is currently enforced only by the resolver-level RBAC +
+ownership checks** (which is the app's actual guarantee today).
+
+Applying FORCE RLS naively would **break four working paths** — this is why #130 is deferred rather
+than shipped half-built. Any future migration MUST handle all four (see next section) and be
+validated against the dev cluster before merge.
+
+## Design blockers before any FORCE-RLS migration (issue #130)
+
+A migration that puts the tables below under `FORCE ROW LEVEL SECURITY` with only a
+tenant-GUC policy would break these paths. Each needs an explicit policy/connection decision,
+encoded in the migration and validated on the dev cluster:
+
+1. **Public marketplace reads.** `browseBranches` / `branchBySlug` / `searchMarketplace` and the
+   whole customer menu-browse path (`branches`, `restaurants`, `menus`, `menu_items`, …) read on
+   the plain client with no tenant GUC. Under FORCE RLS every public read returns zero rows.
+   → The policy set MUST include a **public-read policy** (e.g. `USING (status = 'approved')` for
+   branches/restaurants and menu tables), or those tables must be excluded from FORCE. This matches
+   the "marketplace reads stay on resolver authz" scope below — it just has to be encoded, not implied.
+2. **Tenant bootstrap (`submitOnboarding`).** Creating a restaurant + first branch happens with no
+   tenant context (the id doesn't exist yet), so a `restaurants` `WITH CHECK (id = current_...)`
+   write policy rejects the insert. → Bootstrap must run on a BYPASSRLS/owner connection, or a
+   dedicated bootstrap policy must allow the initial insert.
+3. **Admin cross-tenant reads (`payoutHistory`, etc.).** Admin resolvers run on the plain client
+   outside `withTenant` (correct — admin has no single restaurantId). Under FORCE RLS with no admin
+   role they see zero rows. → Needs the **`fd_admin` BYPASSRLS role** wired through context (see
+   Follow-ups) before admin surfaces can rely on RLS.
+4. **Customer rating writes (`rateOrder`).** Insert into `ratings` happens outside `withTenant`
+   (NULL GUC) and fails a `WITH CHECK`. → `ratings` needs a customer-insert-allowed policy (or set
+   the order's restaurant tenant for that insert), tied to decision (1).
 
 ## How it works
 
@@ -66,21 +96,27 @@ resolve: (query, _root, args, ctx) => {
 },
 ```
 
-## Applying + verifying (needs a live DB)
+## Applying + verifying (needs a live DB) — once the migration is authored
+
+No migration exists yet (see Status). When one is written it must implement all four design
+blockers above; then:
 
 ```bash
 # 1. embedded dev cluster (creates the NOSUPERUSER `fd` role)
-pnpm --filter @fd/db exec node scripts/db-dev.mjs   # or however the dev cluster is started
+node scripts/db-dev.mjs   # leave running
 
 # 2. apply the migration
-pnpm --filter @fd/db exec prisma migrate deploy
+pnpm --filter @fd/db migrate:deploy
 
-# 3. one-time role hardening (as superuser) — uncomment the ALTER ROLE at the bottom of the
-#    migration, or run manually:
-#    ALTER ROLE fd NOBYPASSRLS;
+# 3. one-time role hardening (as superuser):
+#    ALTER ROLE fd NOBYPASSRLS;   and create the fd_admin BYPASSRLS role (blocker #3)
 
-# 4. verify: connect as `fd`, SET app.current_restaurant_id to restaurant A, confirm a SELECT
-#    on branches returns only A's rows; unset it and confirm zero rows.
+# 4. verify EACH blocker path end-to-end, not just tenant isolation:
+#    - as `fd` with app.current_restaurant_id = A → SELECT on branches returns only A's rows;
+#      unset it → still returns approved rows (public-read policy), NOT zero;
+#    - submitOnboarding creates a restaurant (bootstrap path);
+#    - admin payoutHistory (fd_admin) returns rows;
+#    - a customer rateOrder insert succeeds.
 ```
 
 ## Follow-ups (out of scope for #33 best-effort)

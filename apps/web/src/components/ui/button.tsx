@@ -12,7 +12,7 @@ const buttonVariants = cva(
         // Explicit brand CTA (red) with a proper darker-red hover — use for the primary
         // action on a screen (Add to cart, Checkout, Place order). See ui/THEME.md.
         brand:
-          "bg-kd-primary text-white shadow-sm hover:bg-kd-primary-hover focus-visible:ring-kd-primary/40",
+          "bg-kd-primary text-kd-primary-fg shadow-sm hover:bg-kd-primary-hover focus-visible:ring-kd-primary/40",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
