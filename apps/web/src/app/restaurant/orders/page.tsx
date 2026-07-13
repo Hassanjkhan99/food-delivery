@@ -330,7 +330,14 @@ export default function OrdersBoardPage() {
 
   const orders = data?.boardOrders ?? [];
   const byStatus = (statuses: string[]) => orders.filter((o) => statuses.includes(o.status));
-  const newOrders = byStatus(["pending_acceptance"]);
+  // Scheduled orders get their own lane (#158): a pre-order (scheduledFor set) shouldn't
+  // clutter the immediate queue or trip the new-order alarm — it's for prep planning. The
+  // card shows the target time; the restaurant accepts it when they start on it. (Auto-
+  // promoting to New at scheduledFor − leadTime is a noted follow-up in orderService.ts.)
+  const scheduledOrders = orders.filter(
+    (o) => o.status === "pending_acceptance" && !!o.scheduledFor,
+  );
+  const newOrders = byStatus(["pending_acceptance"]).filter((o) => !o.scheduledFor);
   const busyBuffer = branch?.prepBufferMinutes ?? 0;
 
   // New-order alarm — must run every render (hooks can't be conditional), so it lives
@@ -428,7 +435,38 @@ export default function OrdersBoardPage() {
         </button>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        {/* SCHEDULED — future scheduledFor, prep-planning lane */}
+        {scheduledOrders.length > 0 && (
+          <section>
+            <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
+              Scheduled ({scheduledOrders.length})
+            </h2>
+            <div className="space-y-2">
+              {scheduledOrders.map((o) => (
+                <OrderCard key={o.id} order={o}>
+                  <div className="mt-2 flex gap-1">
+                    <Button size="xs" onClick={() => setAcceptFor(o)}>
+                      Accept
+                    </Button>
+                    <Button size="xs" variant="destructive" onClick={() => setRejectFor(o)}>
+                      Reject
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => printKitchenTicket(toTicket(o))}
+                      title="Print kitchen ticket"
+                    >
+                      <Printer className="h-3 w-3" /> Ticket
+                    </Button>
+                  </div>
+                </OrderCard>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* NEW */}
         <section>
           <h2 className="mb-2 text-sm font-bold uppercase text-kd-fg-muted">
