@@ -52,13 +52,38 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// Web push stub — payloads render as a basic notification once VAPID is configured.
+// Web push (#13): render the dispatched payload and deep-link on tap. Payload shape
+// is { title, body, url } from the API's web-push channel.
 self.addEventListener("push", (event) => {
-  const data = event.data?.json?.() ?? { title: "KhaanaDo", body: "Order update" };
+  let data = { title: "Herald Eats", body: "Order update", url: "/" };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    /* non-JSON payload — keep defaults */
+  }
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "KhaanaDo", {
-      body: data.body ?? "",
+    self.registration.showNotification(data.title, {
+      body: data.body,
       icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+// Focus an existing tab if one is open, otherwise open the deep link.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.navigate(target);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
     }),
   );
 });

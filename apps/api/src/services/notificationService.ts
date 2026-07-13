@@ -11,6 +11,7 @@ import { prisma } from "@fd/db";
 import type { OrderStatus } from "@fd/shared";
 import { logger } from "../logger.js";
 import { publishNotification } from "../pubsub.js";
+import { dispatchNotification } from "./notifications/dispatch.js";
 
 // Customer-facing copy for each status that warrants an inbox entry. Statuses not in
 // this map (e.g. reassigning, failed_delivery_attempt) don't create a notification.
@@ -54,18 +55,27 @@ export async function notifyOrderStatus(
 ): Promise<void> {
   const copy = STATUS_COPY[status];
   if (!copy) return;
+  const body = `${copy.body} (${order.code})`;
+  const linkHref = `/orders/${order.id}`;
   try {
     await prisma.notification.create({
       data: {
         userId: order.customerId,
         kind: "transactional",
         title: copy.title,
-        body: `${copy.body} (${order.code})`,
-        linkHref: `/orders/${order.id}`,
+        body,
+        linkHref,
         orderId: order.id,
       },
     });
     await publishUnread(order.customerId);
+    // Out-of-app fan-out (#13). No-op unless a channel is enabled; never throws.
+    await dispatchNotification(order.customerId, {
+      kind: "transactional",
+      title: copy.title,
+      body,
+      linkHref,
+    });
   } catch (err) {
     logger.error({ err, orderId: order.id, status }, "notifyOrderStatus failed (non-fatal)");
   }
@@ -131,6 +141,18 @@ export async function blastPromo(input: {
 
   // Best-effort live badge refresh per recipient (non-fatal).
   await Promise.allSettled(userIds.map((userId) => publishUnread(userId)));
+  // Out-of-app fan-out (#13). No-op unless a channel is enabled; each dispatch is
+  // self-isolating, so a slow provider can't fail the blast.
+  await Promise.allSettled(
+    userIds.map((userId) =>
+      dispatchNotification(userId, {
+        kind: "promo",
+        title: input.title,
+        body: input.body,
+        linkHref: input.linkHref ?? null,
+      }),
+    ),
+  );
   logger.info({ segment: input.segment, count: userIds.length }, "promo blast sent");
   return userIds.length;
 }

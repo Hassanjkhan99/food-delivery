@@ -67,4 +67,55 @@ export const env = {
       publicBaseUrl: process.env.R2_PUBLIC_BASE_URL ?? "",
     };
   },
+
+  // ── Out-of-app notifications (#13) ────────────────────────────────────────
+  // Every channel is off by default so nothing costs money or fires until launch.
+  // A channel is only *active* when its flag is on AND its credentials are present
+  // (enforced per-channel), so flipping a flag without keys is a safe no-op.
+  get notify(): {
+    webpush: boolean;
+    email: boolean;
+    whatsapp: boolean;
+    sms: boolean;
+  } {
+    const on = (v: string | undefined) => v === "on" || v === "true" || v === "1";
+    return {
+      webpush: on(process.env.NOTIFY_WEBPUSH),
+      email: on(process.env.NOTIFY_EMAIL),
+      whatsapp: on(process.env.NOTIFY_WHATSAPP),
+      sms: on(process.env.NOTIFY_SMS),
+    };
+  },
+  get vapid(): { publicKey: string; privateKey: string; subject: string } {
+    return {
+      publicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+      privateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+      // mailto: or https: contact required by the web-push spec.
+      subject: process.env.VAPID_SUBJECT ?? "mailto:ops@heraldeats.app",
+    };
+  },
+  get resend(): { apiKey: string; from: string } {
+    return {
+      apiKey: process.env.RESEND_API_KEY ?? "",
+      from: process.env.EMAIL_FROM ?? "Herald Eats <orders@heraldeats.app>",
+    };
+  },
+  get whatsappCloud(): { token: string; phoneNumberId: string } {
+    return {
+      token: process.env.WHATSAPP_TOKEN ?? "",
+      phoneNumberId: process.env.WHATSAPP_PHONE_ID ?? "",
+    };
+  },
+  get twilio(): { accountSid: string; authToken: string; from: string } {
+    return {
+      accountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
+      authToken: process.env.TWILIO_AUTH_TOKEN ?? "",
+      from: process.env.TWILIO_FROM ?? "",
+    };
+  },
+  // Absolute origin used to build deep links in outbound messages (email/SMS/WA
+  // can't use relative hrefs). Falls back to the web origin.
+  get publicWebUrl(): string {
+    return process.env.PUBLIC_WEB_URL ?? process.env.WEB_ORIGIN ?? "http://localhost:3000";
+  },
 };

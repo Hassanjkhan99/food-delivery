@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PushOptIn } from "@/components/PushOptIn";
 
 const AccountViewerQuery = graphql(`
   query AccountViewer {
@@ -277,6 +278,9 @@ export default function AccountPage() {
           KhaanaDo Pro membership
         </Link>
       </nav>
+
+      {/* Push notification opt-in (#13) — self-hides until web push is configured */}
+      <PushOptIn />
 
       {/* Marketing notification preference (#56) */}
       <div className="flex items-start justify-between gap-4 rounded-xl border border-kd-border bg-kd-surface p-4">
