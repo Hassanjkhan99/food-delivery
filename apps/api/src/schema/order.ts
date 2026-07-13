@@ -147,6 +147,46 @@ QuoteType.implement({
   }),
 });
 
+// Assigned-rider view for customer live tracking (#162). Identity (name/phone) plus the
+// last GPS fix, exposed ONLY to the order's own customer while the order is actively out
+// for delivery. `isStale` reflects whether the last location ping is fresh enough to trust.
+type AssignedRiderInfo = {
+  name: string | null;
+  phone: string;
+  lat: number | null;
+  lng: number | null;
+  lastLocationAt: Date | null;
+  isStale: boolean;
+};
+
+// Statuses at which the rider is en route and the customer may see them + their position.
+// Before rider_assigned there is no rider to show; after delivery the leg is done.
+const RIDER_TRACKING_STATUSES = [
+  "rider_assigned",
+  "picked_up",
+  "out_for_delivery",
+  "failed_delivery_attempt",
+];
+// A location fix older than this is considered stale (rider app pings every ~20s).
+const RIDER_LOCATION_STALE_MS = 60_000;
+
+const AssignedRiderType = builder.objectRef<AssignedRiderInfo>("AssignedRider").implement({
+  fields: (t) => ({
+    name: t.exposeString("name", { nullable: true }),
+    phone: t.exposeString("phone"),
+    lat: t.float({ nullable: true, resolve: (r) => r.lat }),
+    lng: t.float({ nullable: true, resolve: (r) => r.lng }),
+    lastLocationAt: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (r) => r.lastLocationAt,
+    }),
+    // True when we have no fresh fix — the customer UI shows "locating…" instead of a
+    // stale marker.
+    isStale: t.exposeBoolean("isStale"),
+  }),
+});
+
 export const OrderType = builder.prismaObject("Order", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -223,6 +263,36 @@ export const OrderType = builder.prismaObject("Order", {
     prepEtaMinutes: t.exposeInt("prepEtaMinutes", { nullable: true }),
     placedAt: t.field({ type: "DateTime", resolve: (o) => o.placedAt }),
     deliveredAt: t.field({ type: "DateTime", nullable: true, resolve: (o) => o.deliveredAt }),
+    // Assigned rider for live tracking (#162). Scoped to the order's own customer (or
+    // admin) — the restaurant board and the rider themselves must never read this here.
+    // Returns null before a rider is en route; coordinates are withheld outside the
+    // active-delivery window even when a rider exists.
+    assignedRider: t.field({
+      type: AssignedRiderType,
+      nullable: true,
+      resolve: async (o, _args, ctx) => {
+        if (o.customerId !== ctx.userId && !ctx.hasRole("admin")) return null;
+        if (!RIDER_TRACKING_STATUSES.includes(o.status)) return null;
+        const task = await prisma.deliveryTask.findUnique({
+          where: { orderId: o.id },
+          include: { rider: { include: { user: true, availability: true } } },
+        });
+        const rider = task?.rider;
+        if (!rider) return null;
+        const avail = rider.availability;
+        const lastLocationAt = avail?.lastLocationAt ?? null;
+        const isStale =
+          !lastLocationAt || Date.now() - lastLocationAt.getTime() > RIDER_LOCATION_STALE_MS;
+        return {
+          name: rider.user.name,
+          phone: rider.user.phone,
+          lat: avail?.lat != null ? Number(avail.lat) : null,
+          lng: avail?.lng != null ? Number(avail.lng) : null,
+          lastLocationAt,
+          isStale,
+        };
+      },
+    }),
     branch: t.relation("branch"),
     items: t.relation("items"),
     events: t.relation("events", { query: { orderBy: { createdAt: "asc" } } }),

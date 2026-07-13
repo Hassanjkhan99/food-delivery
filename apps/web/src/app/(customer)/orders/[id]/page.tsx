@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ReorderButton } from "@/components/ReorderButton";
+import { RiderTrackMap } from "@/components/orders/rider-track-map";
 import { REORDERABLE_STATUSES, type OrderItemSnapshot } from "@/lib/cart";
 
 const OrderQuery = graphql(`
@@ -37,6 +38,14 @@ const OrderQuery = graphql(`
       placedAt
       pickupPin
       addressSnapshotJson
+      assignedRider {
+        name
+        phone
+        lat
+        lng
+        lastLocationAt
+        isStale
+      }
       branch {
         id
         restaurant {
@@ -241,11 +250,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const isOutForDelivery = !isPickup && OUT_FOR_DELIVERY_STATUSES.includes(order.status);
   const failedAttempt = order.status === "failed_delivery_attempt";
 
-  // TODO(rider-contact): the API contract does not expose the assigned rider on
-  // Order (no rider relation / phone field). When the backend adds it (e.g.
-  // Order.deliveryTask.rider { user { name phone } }), read it here and wire the
-  // tel: link. Until then we surface the restaurant/support entry point instead.
-  const rider = (order as { rider?: { name?: string; phone?: string } | null }).rider ?? null;
+  // Assigned rider for live tracking (#162). The API scopes this to the order's own
+  // customer and only returns it while a rider is en route; null otherwise.
+  const rider = order.assignedRider;
 
   return (
     <main className="mx-auto max-w-lg">
@@ -402,33 +409,39 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* Rider contact — shown while the order is out for delivery. */}
+      {/* Rider contact + live map — shown while the order is out for delivery. */}
       {isOutForDelivery && (
-        <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-kd-fg">
-                {rider?.name ? `${rider.name} is on the way` : "Your rider is on the way"}
-              </p>
-              <p className="text-xs text-kd-fg-muted">
-                {order.status === "out_for_delivery"
-                  ? "Out for delivery now"
-                  : "Picked up your order"}
-              </p>
+        <>
+          <RiderTrackMap
+            lat={rider?.lat}
+            lng={rider?.lng}
+            isStale={rider?.isStale ?? true}
+            lastLocationAt={rider?.lastLocationAt as string | null | undefined}
+          />
+          <div className="mb-6 rounded-xl border border-kd-border bg-kd-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-kd-fg">
+                  {rider?.name ? `${rider.name} is on the way` : "Your rider is on the way"}
+                </p>
+                <p className="text-xs text-kd-fg-muted">
+                  {order.status === "out_for_delivery"
+                    ? "Out for delivery now"
+                    : "Picked up your order"}
+                </p>
+              </div>
+              {rider?.phone ? (
+                <Button size="sm" variant="outline" render={<a href={`tel:${rider.phone}`} />}>
+                  Call rider
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" render={<Link href={`/help/${order.id}`} />}>
+                  Contact
+                </Button>
+              )}
             </div>
-            {rider?.phone ? (
-              <Button size="sm" variant="outline" render={<a href={`tel:${rider.phone}`} />}>
-                Call rider
-              </Button>
-            ) : (
-              // TODO(rider-contact): enable a direct tel: link once the API exposes
-              // the assigned rider's phone on Order. For now route to order help.
-              <Button size="sm" variant="outline" render={<Link href={`/help/${order.id}`} />}>
-                Contact
-              </Button>
-            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* Items */}
