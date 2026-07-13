@@ -17,6 +17,7 @@ import { NavButton } from "@/components/rider/nav-buttons";
 import { SlideToConfirm } from "@/components/rider/slide-to-confirm";
 import { useLocationPing } from "@/components/rider/use-location-ping";
 import { NudgeCard } from "@/components/rider/nudge";
+import { IncidentSheet } from "@/components/rider/incident-sheet";
 
 const JobQuery = graphql(`
   query RiderJob {
@@ -374,19 +375,13 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         </div>
       )}
 
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={async () => {
-          const note = prompt("Describe the problem (customer unreachable, accident, …):");
-          if (note?.trim()) {
-            await incident({ taskId, note });
-            alert("Incident reported — support will follow up.");
-          }
+      {/* Themed incident reporter (#169) — replaces the old prompt()/alert() flow. */}
+      <IncidentSheet
+        onSubmit={async (note) => {
+          const r = await incident({ taskId, note });
+          return r.error?.graphQLErrors[0]?.message ?? (r.error ? "Couldn’t send report." : null);
         }}
-      >
-        Report a problem
-      </Button>
+      />
 
       {/* Bottom-anchored single action per state (#47) — one huge button, never a menu. */}
       <div className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-kd-border bg-kd-surface p-4">
