@@ -35,4 +35,36 @@ export const env = {
   get isProduction(): boolean {
     return process.env.NODE_ENV === "production";
   },
+
+  // ── Realtime scale-out (#11/#26) ──────────────────────────────────────────
+  // When set (e.g. rediss://…@upstash), the GraphQL pubsub fans events out through
+  // Redis so SSE works across multiple API instances / serverless invocations.
+  // Absent = in-memory pubsub (single-instance dev + the collapsed Vercel deploy).
+  get redisUrl(): string | null {
+    return process.env.REDIS_URL || null;
+  },
+
+  // ── Object storage (#142) ─────────────────────────────────────────────────
+  // "local" (default) = disk served by this API; "r2" = Cloudflare R2 / any
+  // S3-compatible bucket (persistent, production). Selected in storage/store.ts.
+  get storageDriver(): "local" | "r2" {
+    return process.env.STORAGE_DRIVER === "r2" ? "r2" : "local";
+  },
+  get r2(): {
+    endpoint: string;
+    bucket: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    publicBaseUrl: string;
+  } {
+    return {
+      endpoint: process.env.R2_ENDPOINT ?? "",
+      bucket: process.env.R2_BUCKET ?? "",
+      accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+      // Public read URL base (R2 custom domain or r2.dev). Objects are read here,
+      // never proxied through the API.
+      publicBaseUrl: process.env.R2_PUBLIC_BASE_URL ?? "",
+    };
+  },
 };

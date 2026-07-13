@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
-import { localDiskStore } from "./storage/objectStore.js";
+import { objectStore } from "./storage/store.js";
 
 const KIND_RULES = {
   image: {
@@ -61,7 +61,7 @@ export async function presignUpload(
     },
   });
 
-  const uploadUrl = await localDiskStore.presignPut(objectKey, parsed.contentType, rules.maxBytes);
+  const uploadUrl = await objectStore.presignPut(objectKey, parsed.contentType, rules.maxBytes);
   return { assetId: asset.id, uploadUrl };
 }
 
@@ -73,7 +73,7 @@ export async function finalizeUpload(userId: string, assetId: string) {
     });
   if (asset.status === "finalized") return asset;
 
-  const head = await localDiskStore.head(asset.objectKey);
+  const head = await objectStore.head(asset.objectKey);
   if (!head.exists)
     throw new GraphQLError("We haven't received your upload yet. Please try again in a moment.", {
       extensions: { code: "invalid_state" },
@@ -86,5 +86,5 @@ export async function finalizeUpload(userId: string, assetId: string) {
 }
 
 export function assetUrl(objectKey: string): string {
-  return localDiskStore.publicUrl(objectKey);
+  return objectStore.publicUrl(objectKey);
 }
