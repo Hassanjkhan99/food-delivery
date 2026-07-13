@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Palette,
   Settings,
+  ShieldCheck,
   Sun,
   Ticket,
   UserCog,
@@ -35,6 +36,7 @@ const NAV = [
   { href: "/restaurant/wallet", label: "Wallet", icon: Wallet },
   { href: "/restaurant/settlements", label: "Settlements", icon: FileSpreadsheet },
   { href: "/restaurant/staff", label: "Staff", icon: UserCog },
+  { href: "/restaurant/verification", label: "Verification", icon: ShieldCheck },
   { href: "/restaurant/settings", label: "Settings", icon: Settings },
 ];
 

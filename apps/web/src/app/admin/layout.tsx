@@ -12,6 +12,7 @@ import {
   HandCoins,
   LifeBuoy,
   Megaphone,
+  ShieldCheck,
   Store,
   Tag,
   Undo2,
@@ -20,6 +21,7 @@ import {
 const NAV = [
   { href: "/admin", label: "Overview", icon: Gauge },
   { href: "/admin/restaurants", label: "Restaurants", icon: Store },
+  { href: "/admin/kyc", label: "KYC", icon: ShieldCheck },
   { href: "/admin/tickets", label: "Support", icon: LifeBuoy },
   { href: "/admin/campaigns", label: "Promotions", icon: Megaphone },
   { href: "/admin/riders", label: "Riders", icon: Bike },

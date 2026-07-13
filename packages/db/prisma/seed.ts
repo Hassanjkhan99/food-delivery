@@ -155,6 +155,20 @@ async function main() {
         hoursJson: opts.hoursJson ?? { open: "11:00", close: "23:30", days: [0, 1, 2, 3, 4, 5, 6] },
       },
     });
+    // KYC (#152): approved restaurants carry an approved record; the pending one is
+    // "submitted" so admin can approve it (approveRestaurant now requires a KYC record).
+    const approved = (opts.status ?? "approved") === "approved";
+    await prisma.restaurantKyc.create({
+      data: {
+        restaurantId: r.id,
+        ownerName: `${opts.name} Owner`,
+        ownerCnic: "42101-1234567-1",
+        bankAccountName: opts.name,
+        bankIban: "PK00SEED0000000000000000",
+        status: approved ? "approved" : "submitted",
+        reviewedAt: approved ? new Date() : null,
+      },
+    });
     return { r, b };
   }
 

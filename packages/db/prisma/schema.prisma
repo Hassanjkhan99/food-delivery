@@ -397,8 +397,33 @@ model Restaurant {
   ratings   Rating[]
   sharedRiderPolicy SharedRiderPolicy?
   vouchers  Voucher[]
+  kyc       RestaurantKyc?
 
   @@map("restaurants")
+}
+
+// Restaurant KYC / verification (#152). One record per restaurant. The owner submits
+// identity + bank details (CNIC scan via MediaAsset); an admin approves or rejects with a
+// reason. A restaurant cannot be approved for trading without an approved KYC record.
+model RestaurantKyc {
+  id              String    @id @default(cuid())
+  restaurantId    String    @unique
+  ownerName       String
+  ownerCnic       String
+  bankAccountName String?
+  bankIban        String?
+  cnicAssetId     String?
+  // submitted | approved | rejected
+  status          String    @default("submitted")
+  rejectionReason String?
+  submittedAt     DateTime  @default(now()) @db.Timestamptz()
+  reviewedAt      DateTime? @db.Timestamptz()
+  reviewedByUserId String?
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([status])
+  @@map("restaurant_kyc")
 }
 
 model TaxProfile {
