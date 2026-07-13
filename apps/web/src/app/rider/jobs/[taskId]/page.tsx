@@ -9,6 +9,7 @@ import { useClient, useMutation, useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { uploadFile } from "@/lib/upload";
+import { comboComponents } from "@/lib/orderSnapshot";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -207,9 +208,19 @@ export default function RiderJobPage({ params }: { params: Promise<{ taskId: str
         <ul className="mt-3 rounded-lg bg-kd-surface-muted p-3 text-sm">
           {job.order.items.map((i) => {
             const snap = i.menuSnapshotJson as { name?: string };
+            const components = comboComponents(i.menuSnapshotJson);
             return (
               <li key={i.id}>
                 {i.qty} × {snap.name}
+                {components.length > 0 && (
+                  <ul className="ml-4 mt-0.5 list-disc space-y-0.5 text-xs text-kd-fg-subtle">
+                    {components.map((c, idx) => (
+                      <li key={c.menuItemId ?? idx}>
+                        {c.qty * i.qty} × {c.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             );
           })}

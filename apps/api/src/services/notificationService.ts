@@ -40,6 +40,20 @@ const STATUS_COPY: Partial<Record<OrderStatus, { title: string; body: string }>>
   cancelled: { title: "Order cancelled", body: "Your order was cancelled." },
 };
 
+// Run an async task over items in fixed-size batches so a production-sized promo blast
+// can't open thousands of simultaneous DB queries / provider calls at once (#120). Each
+// batch settles before the next starts; failures are isolated (allSettled).
+const BLAST_FANOUT_CONCURRENCY = 25;
+async function forEachLimited<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<unknown>,
+): Promise<void> {
+  for (let i = 0; i < items.length; i += limit) {
+    await Promise.allSettled(items.slice(i, i + limit).map(task));
+  }
+}
+
 // Recompute and broadcast a user's unread count so the header bell badge updates live.
 // Exported so read mutations (mark one / mark all) can refresh the badge too.
 export async function publishUnread(userId: string) {
@@ -139,19 +153,18 @@ export async function blastPromo(input: {
     })),
   });
 
-  // Best-effort live badge refresh per recipient (non-fatal).
-  await Promise.allSettled(userIds.map((userId) => publishUnread(userId)));
+  // Best-effort live badge refresh per recipient (non-fatal), batched so a large blast
+  // doesn't fire thousands of simultaneous COUNT queries and exhaust the pool (#120).
+  await forEachLimited(userIds, BLAST_FANOUT_CONCURRENCY, (userId) => publishUnread(userId));
   // Out-of-app fan-out (#13). No-op unless a channel is enabled; each dispatch is
   // self-isolating, so a slow provider can't fail the blast.
-  await Promise.allSettled(
-    userIds.map((userId) =>
-      dispatchNotification(userId, {
-        kind: "promo",
-        title: input.title,
-        body: input.body,
-        linkHref: input.linkHref ?? null,
-      }),
-    ),
+  await forEachLimited(userIds, BLAST_FANOUT_CONCURRENCY, (userId) =>
+    dispatchNotification(userId, {
+      kind: "promo",
+      title: input.title,
+      body: input.body,
+      linkHref: input.linkHref ?? null,
+    }),
   );
   logger.info({ segment: input.segment, count: userIds.length }, "promo blast sent");
   return userIds.length;

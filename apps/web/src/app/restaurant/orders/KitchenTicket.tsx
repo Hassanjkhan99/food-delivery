@@ -10,6 +10,8 @@ export type TicketItem = {
   qty: number;
   name: string;
   modifiers?: Array<{ name?: string; optionName?: string } | string> | null;
+  // Frozen combo components (#114) so a generically-named deal prints the dishes to make.
+  components?: Array<{ name: string; qty: number }> | null;
   notes?: string | null;
 };
 
@@ -53,10 +55,13 @@ export function printKitchenTicket(order: TicketOrder) {
         .filter(Boolean)
         .map((m) => `<div class="mod">+ ${esc(m)}</div>`)
         .join("");
+      const parts = (it.components ?? [])
+        .map((c) => `<div class="mod">${c.qty * it.qty}× ${esc(c.name)}</div>`)
+        .join("");
       const note = it.notes ? `<div class="note">“${esc(it.notes)}”</div>` : "";
       return `<div class="line"><div class="row"><span class="qty">${it.qty}×</span><span class="name">${esc(
         it.name,
-      )}</span></div>${mods}${note}</div>`;
+      )}</span></div>${parts}${mods}${note}</div>`;
     })
     .join("");
 

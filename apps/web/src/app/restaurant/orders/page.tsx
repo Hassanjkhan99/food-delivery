@@ -12,6 +12,7 @@ import {
   formatRs,
   unavailabilityPreferenceLabel,
 } from "@fd/shared";
+import { comboComponents } from "@/lib/orderSnapshot";
 import { useConsole } from "../useConsole";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -214,6 +215,7 @@ function toTicket(order: BoardOrder): TicketOrder {
         qty: it.qty,
         name: snap?.name ?? "Item",
         modifiers: snap?.modifiers ?? null,
+        components: comboComponents(it.menuSnapshotJson),
         notes: it.notes,
       };
     }),
@@ -266,6 +268,7 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
             name?: string;
             unavailabilityPreference?: string;
           };
+          const components = comboComponents(i.menuSnapshotJson);
           // Only surface a non-default preference — "remove item" is the norm and
           // would just add noise to every line.
           const pref = snap.unavailabilityPreference ?? DEFAULT_UNAVAILABILITY_PREFERENCE;
@@ -285,6 +288,16 @@ function OrderCard({ order, children }: { order: BoardOrder; children?: React.Re
                   )}
                   )
                 </span>
+              )}
+              {components.length > 0 && (
+                // Combo line: show the frozen components so kitchen staff know what to make.
+                <ul className="ml-4 mt-0.5 list-disc space-y-0.5 text-xs text-kd-fg-subtle">
+                  {components.map((c, idx) => (
+                    <li key={c.menuItemId ?? idx}>
+                      {c.qty * i.qty} × {c.name}
+                    </li>
+                  ))}
+                </ul>
               )}
             </li>
           );

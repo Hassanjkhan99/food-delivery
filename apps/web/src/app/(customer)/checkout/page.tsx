@@ -504,6 +504,7 @@ export default function CheckoutPage() {
               selectedId={selectedAddressId}
               onSelect={selectSavedAddress}
               onNew={startNewAddress}
+              loggedIn={loggedIn}
             />
 
             {selectedAddressId === null && (

@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ReorderButton } from "@/components/ReorderButton";
 import { RiderTrackMap } from "@/components/orders/rider-track-map";
 import { REORDERABLE_STATUSES, type OrderItemSnapshot } from "@/lib/cart";
+import { comboComponents } from "@/lib/orderSnapshot";
 
 const OrderQuery = graphql(`
   query OrderDetail($id: String!) {
@@ -48,6 +49,7 @@ const OrderQuery = graphql(`
       }
       branch {
         id
+        isOpenNow
         restaurant {
           name
           slug
@@ -451,6 +453,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             name?: string;
             modifiers?: Array<{ optionName: string }>;
           };
+          const components = comboComponents(i.menuSnapshotJson);
           return (
             <div key={i.id} className="mb-2 flex justify-between">
               <div>
@@ -461,6 +464,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   <p className="text-xs text-kd-fg-subtle">
                     {snap.modifiers.map((m) => m.optionName).join(", ")}
                   </p>
+                )}
+                {components.length > 0 && (
+                  <ul className="mt-0.5 list-disc pl-4 text-xs text-kd-fg-subtle">
+                    {components.map((c, idx) => (
+                      <li key={c.menuItemId ?? idx}>
+                        {c.qty * i.qty} × {c.name}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
               <span>{formatRs(i.lineTotalMinor)}</span>
@@ -513,6 +525,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 id: order.branch.id,
                 slug: order.branch.restaurant.slug,
                 name: order.branch.restaurant.name,
+                isOpenNow: order.branch.isOpenNow,
               },
               items: order.items.map((i) => ({
                 qty: i.qty,

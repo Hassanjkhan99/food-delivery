@@ -43,13 +43,6 @@ function readStoredLocale(): Locale {
   return DEFAULT_LOCALE;
 }
 
-function applyDocumentLocale(locale: Locale) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  root.lang = locale;
-  root.dir = isRtl(locale) ? "rtl" : "ltr";
-}
-
 function subscribe(cb: () => void) {
   listeners.add(cb);
   // Cross-tab sync: another tab changing the locale updates this one.
@@ -66,7 +59,6 @@ function writeLocale(next: Locale) {
   } catch {
     // best-effort persistence
   }
-  applyDocumentLocale(next);
   listeners.forEach((cb) => cb());
 }
 
@@ -89,12 +81,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale, setLocale],
   );
 
-  // Keep <html lang/dir> in sync with the store snapshot on first client render
-  // (covers a stored non-default locale without a setState-in-effect).
-  if (typeof document !== "undefined" && document.documentElement.lang !== locale) {
-    applyDocumentLocale(locale);
-  }
-
+  // NOTE: lang/dir are intentionally NOT applied to the global <html> here. Switching
+  // to Urdu must only mirror the customer surface — the restaurant/admin/rider/login
+  // consoles are English/LTR and share the same browser (#129). CustomerLayout reads
+  // `locale`/`rtl` from this context and sets lang/dir on its own subtree wrapper.
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

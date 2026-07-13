@@ -180,7 +180,9 @@ export const REORDERABLE_STATUSES = new Set(["delivered", "cancelled", "rejected
 
 /** A past order reduced to what reorder needs: the branch and its item snapshots. */
 export type ReorderSource = {
-  branch: { id: string; slug: string; name: string };
+  // isOpenNow lets the reorder affordance be disabled while the branch is closed by
+  // hours, instead of rebuilding the cart and only failing at placement (#125).
+  branch: { id: string; slug: string; name: string; isOpenNow?: boolean };
   items: OrderItemSnapshot[];
 };
 

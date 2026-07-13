@@ -29,10 +29,12 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const lines = useCart((s) => s.lines);
   const [{ data }] = useQuery({ query: ViewerQuery });
   const viewer = data?.viewer;
-  const { t } = useI18n();
+  const { t, locale, rtl } = useI18n();
 
   return (
-    <div className="flex min-h-screen flex-col bg-kd-bg">
+    // lang/dir are scoped to the customer surface here (not global <html>) so an Urdu
+    // (RTL) selection never mirrors the English restaurant/admin/rider consoles (#129).
+    <div lang={locale} dir={rtl ? "rtl" : "ltr"} className="flex min-h-screen flex-col bg-kd-bg">
       <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
         <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-12">
           <Link href="/" className="text-kd-fg" aria-label="KhaanaDo home">
