@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HoursEditor } from "../HoursEditor";
 import { RiderSharingPanel } from "../RiderSharingPanel";
+import { BranchPinPicker } from "@/components/restaurant/BranchPinPicker";
+import { DEFAULT_LOCATION } from "@/lib/location";
 
 const SetAcceptingMutation = graphql(`
   mutation SetAccepting($branchId: String!, $accepting: Boolean!) {
@@ -36,20 +38,32 @@ const UpdateCommercialsMutation = graphql(`
     $minOrderMinor: Int
     $deliveryFeeMinor: Int
     $deliveryRadiusM: Int
+    $lat: Float
+    $lng: Float
   ) {
     updateBranchCommercials(
       branchId: $branchId
       minOrderMinor: $minOrderMinor
       deliveryFeeMinor: $deliveryFeeMinor
       deliveryRadiusM: $deliveryRadiusM
+      lat: $lat
+      lng: $lng
     ) {
       id
+      lat
+      lng
       minOrderMinor
       deliveryFeeMinor
       deliveryRadiusM
     }
   }
 `);
+
+// A branch still sitting on the shared pilot default (#200). Such branches need the owner to
+// correct the pin — this is the low-risk, owner-driven backfill (no DB migration).
+function isAtDefaultPin(lat: number, lng: number): boolean {
+  return Math.abs(lat - DEFAULT_LOCATION.lat) < 1e-6 && Math.abs(lng - DEFAULT_LOCATION.lng) < 1e-6;
+}
 
 type ConsoleData = ReturnType<typeof useConsole>;
 type Restaurant = NonNullable<ConsoleData["restaurant"]>;
@@ -76,6 +90,8 @@ function CommercialProfileForm({
   const [minOrder, setMinOrder] = useState(String(branch.minOrderMinor / 100));
   const [fee, setFee] = useState(String(branch.deliveryFeeMinor / 100));
   const [radiusKm, setRadiusKm] = useState((branch.deliveryRadiusM / 1000).toFixed(1));
+  // Branch map pin (#200). Seeded from the branch coords at mount (via the parent `key`).
+  const [pin, setPin] = useState({ lat: branch.lat, lng: branch.lng });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -98,6 +114,8 @@ function CommercialProfileForm({
         minOrderMinor: Math.round(Number(minOrder) * 100),
         deliveryFeeMinor: Math.round(Number(fee) * 100),
         deliveryRadiusM: Math.round(Number(radiusKm) * 1000),
+        lat: pin.lat,
+        lng: pin.lng,
       });
       const err = p.error ?? c.error;
       if (err) {
@@ -166,6 +184,20 @@ function CommercialProfileForm({
               onChange={(e) => setRadiusKm(e.target.value)}
             />
           </div>
+        </div>
+
+        <div>
+          <Label>Branch location</Label>
+          {isAtDefaultPin(branch.lat, branch.lng) && (
+            <p className="mb-2 mt-1 rounded-lg border border-kd-warning bg-kd-warning-soft px-2 py-1.5 text-xs text-kd-warning-soft-fg">
+              This branch is still on the shared pilot default pin. Drag the pin to your real
+              location and save so delivery radius, distance and rider dispatch work correctly.
+            </p>
+          )}
+          <p className="mb-2 mt-1 text-xs text-kd-fg-subtle">
+            Drag the map so the pin sits on your branch, then save.
+          </p>
+          <BranchPinPicker lat={pin.lat} lng={pin.lng} onChange={setPin} disabled={saving} />
         </div>
       </div>
 

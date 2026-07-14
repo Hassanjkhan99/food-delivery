@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { BranchPinPicker } from "@/components/restaurant/BranchPinPicker";
 
 const OnboardMutation = graphql(`
   mutation SubmitOnboarding(
@@ -45,6 +46,11 @@ export default function OnboardingPage() {
     deliveryFeeRs: "80",
     radiusKm: "5",
   });
+  // Real branch map pin (#200). Seeded at DEFAULT_LOCATION as the initial map centre, but the
+  // owner must move it to their actual branch and tick the confirm box before we submit —
+  // otherwise every branch would share one geo point and break radius/ETA/dispatch.
+  const [pin, setPin] = useState({ lat: DEFAULT_LOCATION.lat, lng: DEFAULT_LOCATION.lng });
+  const [pinConfirmed, setPinConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
@@ -74,11 +80,15 @@ export default function OnboardingPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           setError(null);
+          if (!pinConfirmed) {
+            setError("Please place your branch pin on the map and confirm it.");
+            return;
+          }
           const r = await submit({
             name: form.name,
             addressText: form.addressText,
-            lat: DEFAULT_LOCATION.lat,
-            lng: DEFAULT_LOCATION.lng,
+            lat: pin.lat,
+            lng: pin.lng,
             minOrderMinor: Math.round(Number(form.minOrderRs) * 100),
             deliveryFeeMinor: Math.round(Number(form.deliveryFeeRs) * 100),
             deliveryRadiusM: Math.round(Number(form.radiusKm) * 1000),
@@ -110,8 +120,34 @@ export default function OnboardingPage() {
             required
           />
           <p className="mt-1 text-xs text-kd-fg-subtle">
-            Pinned near {DEFAULT_LOCATION.label} in this pilot.
+            Type the address, then drop the exact pin below.
           </p>
+        </div>
+        <div>
+          <Label>Branch location on the map</Label>
+          <p className="mb-2 mt-1 text-xs text-kd-fg-subtle">
+            Drag the map so the pin sits on your branch (or use your current location). This sets
+            your delivery radius, distance and rider dispatch — please be precise.
+          </p>
+          <BranchPinPicker
+            lat={pin.lat}
+            lng={pin.lng}
+            onChange={(next) => {
+              setPin(next);
+              // Moving the pin invalidates a prior confirmation so the owner re-confirms the
+              // final spot.
+              setPinConfirmed(false);
+            }}
+          />
+          <label className="mt-2 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={pinConfirmed}
+              onChange={(e) => setPinConfirmed(e.target.checked)}
+            />
+            <span>This pin is my branch&apos;s real location.</span>
+          </label>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <div>
@@ -143,7 +179,7 @@ export default function OnboardingPage() {
           </div>
         </div>
         {error && <p className="text-sm text-kd-danger">{error}</p>}
-        <Button type="submit" className="w-full" disabled={state.fetching}>
+        <Button type="submit" className="w-full" disabled={state.fetching || !pinConfirmed}>
           {state.fetching ? "Submitting…" : "Submit for approval"}
         </Button>
       </form>

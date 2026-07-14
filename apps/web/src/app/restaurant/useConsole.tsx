@@ -19,6 +19,8 @@ const MyRestaurantsQuery = graphql(`
       branches {
         id
         name
+        lat
+        lng
         isAcceptingOrders
         prepBufferMinutes
         minOrderMinor

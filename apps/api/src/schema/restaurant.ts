@@ -18,6 +18,23 @@ function dateRangeWhere(field: string, from?: Date | null, to?: Date | null) {
   return { [field]: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } };
 }
 
+// Guard branch map-pin coordinates (#200). Rejects out-of-range / non-finite values so a
+// bad pin can never poison delivery-radius matching, distance/ETA, or rider dispatch.
+function assertValidCoords(lat: number, lng: number) {
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    throw new GraphQLError("Please drop a valid map pin for the branch.", {
+      extensions: { code: "validation_error" },
+    });
+  }
+}
+
 async function assertBranchMember(ctx: AppContext, branchId: string) {
   const branch = await prisma.branch.findUnique({ where: { id: branchId } });
   if (!branch)
@@ -1229,13 +1246,23 @@ builder.mutationFields((t) => ({
       minOrderMinor: t.arg.int({ required: false }),
       deliveryFeeMinor: t.arg.int({ required: false }),
       deliveryRadiusM: t.arg.int({ required: false }),
+      // Branch map pin (#200). Owners correct a branch stuck at DEFAULT_LOCATION here; this
+      // doubles as the backfill path (owner-driven, no DB migration). Both must be sent
+      // together to move the pin.
+      lat: t.arg.float({ required: false }),
+      lng: t.arg.float({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
       // #204: delivery fee / min order / tax profile are money & business config — owner-only.
       const commercialsBranch = await assertBranchOwner(ctx, args.branchId);
       assertRestaurantOwner(ctx, commercialsBranch.restaurantId);
-      const data: { minOrderMinor?: number; deliveryFeeMinor?: number; deliveryRadiusM?: number } =
-        {};
+      const data: {
+        minOrderMinor?: number;
+        deliveryFeeMinor?: number;
+        deliveryRadiusM?: number;
+        lat?: number;
+        lng?: number;
+      } = {};
       if (args.minOrderMinor != null) {
         if (args.minOrderMinor < 0 || args.minOrderMinor > 1_000_000)
           throw new GraphQLError("Please enter a valid minimum order.", {
@@ -1257,7 +1284,19 @@ builder.mutationFields((t) => ({
           });
         data.deliveryRadiusM = args.deliveryRadiusM;
       }
-      return prisma.branch.update({ where: { id: args.branchId }, data });
+      if (args.lat != null || args.lng != null) {
+        if (args.lat == null || args.lng == null)
+          throw new GraphQLError("Please provide both latitude and longitude for the pin.", {
+            extensions: { code: "validation_error" },
+          });
+        assertValidCoords(args.lat, args.lng);
+        data.lat = args.lat;
+        data.lng = args.lng;
+      }
+      return prisma.branch.update({
+        where: { id: args.branchId },
+        data: data as never,
+      });
     },
   }),
 
@@ -2136,6 +2175,8 @@ builder.mutationFields((t) => ({
       deliveryRadiusM: t.arg.int({ required: true }),
     },
     resolve: async (query, _root, args, ctx) => {
+      // The onboarding UI now sends the owner's real dropped pin (#200); guard it.
+      assertValidCoords(args.lat, args.lng);
       const slugBase = args.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")

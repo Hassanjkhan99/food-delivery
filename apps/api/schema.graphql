@@ -593,7 +593,7 @@ type Mutation {
   suspendRestaurant(id: String!, reason: String!): Restaurant!
   topUpWallet(amountMinor: Int!, idempotencyKey: String!, paymentMethodId: String!): Wallet!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
-  updateBranchCommercials(branchId: String!, deliveryFeeMinor: Int, deliveryRadiusM: Int, minOrderMinor: Int): Branch!
+  updateBranchCommercials(branchId: String!, deliveryFeeMinor: Int, deliveryRadiusM: Int, lat: Float, lng: Float, minOrderMinor: Int): Branch!
   updateFeeConfig(chainCommissionBps: Int!, chainPlatformFeeMinor: Int!, featuredSlotDailyRateChainMinor: Int, featuredSlotDailyRateSmallMinor: Int, smallBusinessCommissionBps: Int!, smallBusinessPlatformFeeMinor: Int!): FeeConfig!
   updateMenuLayout(branchId: String!, layoutJson: JSON!): Menu!
   updatePrepEta(id: String!, prepEtaMinutes: Int!): Order!
