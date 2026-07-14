@@ -115,6 +115,9 @@ QuoteLineType.implement({
     qty: t.exposeInt("qty"),
     unitPriceMinor: t.exposeInt("unitPriceMinor"),
     lineTotalMinor: t.exposeInt("lineTotalMinor"),
+    // Per-line tax breakdown (#146). taxableMinor = pre-tax base, taxMinor = allocated tax.
+    taxableMinor: t.exposeInt("taxableMinor"),
+    taxMinor: t.exposeInt("taxMinor"),
   }),
 });
 
@@ -128,6 +131,12 @@ QuoteType.implement({
     membershipDeliverySavingMinor: t.exposeInt("membershipDeliverySavingMinor"),
     membershipApplied: t.exposeBoolean("membershipApplied"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
+    // Tax presentation (#146). The client renders the breakdown + toggles inclusive/exclusive
+    // DISPLAY only; grandTotalMinor already accounts for tax, so never add taxTotalMinor to it.
+    taxRateBps: t.exposeInt("taxRateBps"),
+    taxLabel: t.exposeString("taxLabel"),
+    taxInclusive: t.exposeBoolean("taxInclusive"),
+    taxResponsibility: t.exposeString("taxResponsibility"),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
     discountMinor: t.exposeInt("discountMinor"),
@@ -203,6 +212,12 @@ export const OrderType = builder.prismaObject("Order", {
     subtotalMinor: t.exposeInt("subtotalMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),
+    // Tax snapshot frozen at placement (#146) — drives the receipt's legal tax line. Null on
+    // orders placed before this shipped (render a plain "Tax" line as a fallback).
+    taxRateBpsSnapshot: t.exposeInt("taxRateBpsSnapshot", { nullable: true }),
+    taxInclusiveSnapshot: t.exposeBoolean("taxInclusiveSnapshot", { nullable: true }),
+    taxLabelSnapshot: t.exposeString("taxLabelSnapshot", { nullable: true }),
+    taxResponsibilitySnapshot: t.exposeString("taxResponsibilitySnapshot", { nullable: true }),
     platformFeeMinor: t.exposeInt("platformFeeMinor"),
     tipAmount: t.exposeInt("tipAmount"),
     loyaltyPointsRedeemed: t.exposeInt("loyaltyPointsRedeemed"),
@@ -305,6 +320,9 @@ builder.prismaObject("OrderItem", {
     qty: t.exposeInt("qty"),
     unitPriceMinor: t.exposeInt("unitPriceMinor"),
     lineTotalMinor: t.exposeInt("lineTotalMinor"),
+    // Immutable per-line tax snapshot (#146); null on items created before this shipped.
+    taxableMinor: t.exposeInt("taxableMinor", { nullable: true }),
+    taxMinor: t.exposeInt("taxMinor", { nullable: true }),
     notes: t.exposeString("notes", { nullable: true }),
     menuSnapshotJson: t.field({ type: "JSON", resolve: (i) => i.menuSnapshotJson }),
   }),

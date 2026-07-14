@@ -1,6 +1,13 @@
 // Public marketplace: browse restaurants, branch detail, published menu, theme.
 import { prisma } from "@fd/db";
-import { BROWSE_SORTS, type BrowseSort, haversineMeters, median, priceBandFor } from "@fd/shared";
+import {
+  BROWSE_SORTS,
+  type BrowseSort,
+  displayPriceMinor,
+  haversineMeters,
+  median,
+  priceBandFor,
+} from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
 import { branchOpenNow } from "../services/branchHours.js";
@@ -156,10 +163,40 @@ BranchPhoto.implement({
   }),
 });
 
+// Branch tax presentation context (#146) so the client can show tax-inclusive menu prices by
+// default and offer the inclusive/before-tax toggle — using the shared money contract, never
+// re-deriving tax. rateBps/inclusive describe how the branch's menu prices are stored.
+type BranchTaxInfo = {
+  rateBps: number;
+  inclusive: boolean;
+  label: string;
+  responsibility: string;
+};
+const BranchTaxInfoType = builder.objectRef<BranchTaxInfo>("BranchTaxInfo").implement({
+  fields: (t) => ({
+    rateBps: t.exposeInt("rateBps"),
+    inclusive: t.exposeBoolean("inclusive"),
+    label: t.exposeString("label"),
+    responsibility: t.exposeString("responsibility"),
+  }),
+});
+
 builder.prismaObject("Branch", {
   fields: (t) => ({
     id: t.exposeID("id"),
     name: t.exposeString("name"),
+    taxInfo: t.field({
+      type: BranchTaxInfoType,
+      resolve: async (b) => {
+        const tp = await prisma.taxProfile.findUnique({ where: { id: b.taxProfileId } });
+        return {
+          rateBps: tp?.rateBps ?? 0,
+          inclusive: tp?.inclusive ?? false,
+          label: tp?.label ?? "Sales tax",
+          responsibility: tp?.responsibility ?? "restaurant",
+        };
+      },
+    }),
     addressText: t.exposeString("addressText"),
     lat: t.float({ resolve: (b) => Number(b.lat) }),
     lng: t.float({ resolve: (b) => Number(b.lng) }),
@@ -617,7 +654,7 @@ builder.queryFields((t) => ({
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
       // Batch the computed inputs so we don't fan out per branch.
-      const [ratingRows, priceRows, popularityRows] = await Promise.all([
+      const [ratingRows, priceRows, popularityRows, branchTaxRows] = await Promise.all([
         prisma.rating.groupBy({
           by: ["restaurantId"],
           where: { restaurantId: { in: restaurantIds }, moderationStatus: "approved" },
@@ -637,7 +674,26 @@ builder.queryFields((t) => ({
           where: { branchId: { in: branchIds }, status: "delivered", placedAt: { gte: since } },
           _count: { _all: true },
         }),
+        // Per-branch tax context so price bands compare TAX-INCLUSIVE amounts across
+        // restaurants (#146) — an exclusive Rs 1,000 + 16% must band the same as an
+        // inclusive Rs 1,160, not cheaper.
+        prisma.branch.findMany({
+          where: { id: { in: branchIds } },
+          select: {
+            activeMenuId: true,
+            taxProfile: { select: { rateBps: true, inclusive: true } },
+          },
+        }),
       ]);
+      const taxByMenu = new Map<string, { rateBps: number; inclusive: boolean }>();
+      for (const b of branchTaxRows) {
+        if (b.activeMenuId) {
+          taxByMenu.set(b.activeMenuId, {
+            rateBps: b.taxProfile.rateBps,
+            inclusive: b.taxProfile.inclusive,
+          });
+        }
+      }
 
       const ratingByRestaurant = new Map(
         ratingRows.map((r) => [r.restaurantId, r._avg.stars ?? null]),
@@ -646,7 +702,13 @@ builder.queryFields((t) => ({
       for (const row of priceRows) {
         const mid = row.category.menuId;
         const list = pricesByMenu.get(mid) ?? [];
-        list.push(row.priceMinor);
+        // Band on the tax-INCLUSIVE price so restaurants are comparable regardless of whether
+        // their menu is stored inclusive or exclusive (#146).
+        const tax = taxByMenu.get(mid);
+        const inclusivePrice = tax
+          ? displayPriceMinor(row.priceMinor, tax.rateBps, tax.inclusive, "inclusive")
+          : row.priceMinor;
+        list.push(inclusivePrice);
         pricesByMenu.set(mid, list);
       }
       const popularityByBranch = new Map(popularityRows.map((r) => [r.branchId, r._count._all]));

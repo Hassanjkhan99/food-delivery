@@ -7,10 +7,10 @@
 // sibling of the card button (not nested) so we never emit an invalid button-in-button.
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
-import { formatRs } from "@fd/shared";
 import { cardClasses } from "@/components/theme/theme";
 import { TiltCard } from "@/components/theme/TiltCard";
 import { ItemImage } from "@/components/media/ItemImage";
+import { Price, type BranchTaxInfo } from "@/components/price/Price";
 import type { MenuItemForModal } from "./item-modal";
 
 export type ItemForCard = MenuItemForModal & {
@@ -45,6 +45,7 @@ export function ItemCard({
   onOpen,
   onQuickAdd,
   imageFallback,
+  taxInfo,
 }: {
   item: ItemForCard;
   mode: string;
@@ -53,6 +54,7 @@ export function ItemCard({
   onOpen: (item: ItemForCard) => void;
   onQuickAdd: (item: ItemForCard) => void;
   imageFallback?: string | null;
+  taxInfo?: BranchTaxInfo | null;
 }) {
   const reduced = useReducedMotion();
   const compact = mode === "compact";
@@ -100,13 +102,19 @@ export function ItemCard({
       </div>
       <span className="flex shrink-0 flex-col items-end">
         {off != null && (
-          <span className="text-xs text-kd-fg-subtle line-through">
-            {formatRs(item.compareAtPriceMinor!)}
-          </span>
+          <Price
+            minor={item.compareAtPriceMinor!}
+            taxInfo={taxInfo}
+            hint={false}
+            className="text-xs text-kd-fg-subtle line-through"
+          />
         )}
-        <span className="font-semibold" style={{ color: "var(--brand-primary)" }}>
-          {formatRs(item.priceMinor)}
-        </span>
+        <Price
+          minor={item.priceMinor}
+          taxInfo={taxInfo}
+          className="font-semibold"
+          style={{ color: "var(--brand-primary)" }}
+        />
       </span>
     </>
   );

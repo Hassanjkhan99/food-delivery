@@ -31,6 +31,7 @@ import { useCart } from "@/lib/cart";
 import { ItemModal, type EditContext, type MenuItemForModal } from "./item-modal";
 import { itemImagePlaceholder } from "@/components/media/placeholders";
 import { ItemCard, percentOff, type ItemForCard } from "./item-card";
+import { PriceDisplayToggle } from "@/components/price/Price";
 import { ComboCard, type ComboForCard } from "./combo-card";
 import { MenuNav, type NavSection } from "./menu-nav";
 import { CartBarSpacer, FloatingCartBar } from "./floating-cart-bar";
@@ -44,6 +45,12 @@ const BranchQuery = graphql(`
       addressText
       minOrderMinor
       deliveryFeeMinor
+      taxInfo {
+        rateBps
+        inclusive
+        label
+        responsibility
+      }
       isAcceptingOrders
       isOpenNow
       opensAtLabel
@@ -450,6 +457,13 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
         onJump={onJump}
       />
 
+      {branch.taxInfo.rateBps > 0 && (
+        <div className="mb-4 flex items-center justify-end gap-2 text-xs text-kd-fg-muted">
+          <span>Show prices</span>
+          <PriceDisplayToggle />
+        </div>
+      )}
+
       {!orderable && (
         <div
           role="status"
@@ -489,6 +503,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                 accepting={orderable}
                 onAdd={(c) => addCombo(c)}
                 imageFallback={itemFallback}
+                taxInfo={branch.taxInfo}
               />
             ))}
             {discountedItems.map((item) => (
@@ -501,6 +516,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                 onOpen={(it) => setOpenItem(it)}
                 onQuickAdd={(it) => quickAdd(it)}
                 imageFallback={itemFallback}
+                taxInfo={branch.taxInfo}
               />
             ))}
           </div>
@@ -552,6 +568,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
                     onOpen={(it) => setOpenItem(it)}
                     onQuickAdd={(it) => quickAdd(it)}
                     imageFallback={itemFallback}
+                    taxInfo={branch.taxInfo}
                   />
                 ))}
               </div>
@@ -573,6 +590,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
           disabledLabel={closedLabel}
           edit={editTarget.edit}
           onClose={closeEdit}
+          taxInfo={branch.taxInfo}
         />
       ) : (
         openItem && (
@@ -582,6 +600,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
             orderable={orderable}
             disabledLabel={closedLabel}
             onClose={() => setOpenItem(null)}
+            taxInfo={branch.taxInfo}
           />
         )
       )}

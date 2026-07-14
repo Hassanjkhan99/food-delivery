@@ -431,8 +431,22 @@ model TaxProfile {
   id        String   @id @default(cuid())
   name      String
   rateBps   Int
+  // When true, menu prices are entered/displayed tax-INCLUSIVE (the price the customer
+  // compares on already contains tax); the pre-tax base is backed out server-side. When
+  // false, tax is added on top of the menu price. See @fd/shared splitTax (#146).
   inclusive Boolean  @default(false)
-  createdAt DateTime @default(now()) @db.Timestamptz()
+  // #146 legal/display metadata. Jurisdiction-specific term shown on menus + receipts
+  // (allowlisted in @fd/shared ALLOWED_TAX_LABELS — never a generic "tax"). responsibility
+  // records who charges/remits ("restaurant" default, or "platform_collecting_agent" where a
+  // jurisdiction makes the platform a collecting agent) so receipts can name the party.
+  // effectiveFrom stamps when the current config took effect; changes are logged to AuditLog.
+  label              String   @default("Sales tax")
+  jurisdictionCode   String   @default("PK")
+  responsibility     String   @default("restaurant")
+  registrationStatus String   @default("registered")
+  registrationNumber String?
+  effectiveFrom      DateTime @default(now()) @db.Timestamptz()
+  createdAt          DateTime @default(now()) @db.Timestamptz()
 
   branches Branch[]
 
@@ -834,6 +848,14 @@ model Order {
   voucherId             String?
   grandTotalMinor       Int
   commissionBpsSnapshot Int
+  // Immutable tax snapshot taken at placement (#146) so receipts/refunds reconcile against
+  // the config in force when the order was placed, even if the branch's TaxProfile later
+  // changes. Nullable for orders created before this column existed. taxTotalMinor above is
+  // the summed tax; these describe how it was computed and what to print on the receipt.
+  taxRateBpsSnapshot        Int?
+  taxInclusiveSnapshot      Boolean?
+  taxLabelSnapshot          String?
+  taxResponsibilitySnapshot String?
   paymentMode           PaymentMode
   // Fulfillment (#54). `pickup` skips the radius check + delivery fee + rider assignment
   // and issues `pickupCode` for the customer to quote at the counter. `scheduledFor` is
@@ -877,6 +899,13 @@ model OrderItem {
   qty              Int
   unitPriceMinor   Int
   lineTotalMinor   Int
+  // Immutable per-line tax snapshot (#146). taxableMinor = pre-tax base for this line;
+  // taxMinor = its allocated tax (Σ line taxMinor == order.taxTotalMinor exactly, via
+  // @fd/shared allocateLineTax). lineTotalMinor stays the charged line total: it equals
+  // (taxableMinor + taxMinor) when the branch is tax-inclusive, and taxableMinor when
+  // tax-exclusive. Nullable for rows created before this column existed.
+  taxableMinor     Int?
+  taxMinor         Int?
   notes            String?
 
   order Order @relation(fields: [orderId], references: [id])

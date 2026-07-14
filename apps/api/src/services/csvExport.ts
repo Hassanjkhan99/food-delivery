@@ -210,11 +210,25 @@ export function eimsInvoiceCsv(orders: InvoiceOrder[]): string {
     let cumulativeSubtotal = 0;
     let taxAssigned = 0;
     o.items.forEach((it, idx) => {
-      cumulativeSubtotal += it.lineTotalMinor;
-      const cumulativeTax =
-        lineSubtotal > 0 ? Math.round((o.taxTotalMinor * cumulativeSubtotal) / lineSubtotal) : 0;
-      const lineTax = cumulativeTax - taxAssigned;
-      taxAssigned = cumulativeTax;
+      // #146: prefer the immutable per-line tax snapshot (taxableMinor/taxMinor) so the
+      // statutory export is correct for tax-INCLUSIVE orders — there lineTotalMinor is the
+      // GROSS, so treating it as excl-tax and adding tax again overstated the invoice. For
+      // pre-#146 rows the snapshot is null and lineTotalMinor was the pre-tax base, so fall
+      // back to the cumulative apportionment.
+      let lineExcl: number;
+      let lineTax: number;
+      if (it.taxableMinor != null && it.taxMinor != null) {
+        lineExcl = it.taxableMinor;
+        lineTax = it.taxMinor;
+      } else {
+        cumulativeSubtotal += it.lineTotalMinor;
+        const cumulativeTax =
+          lineSubtotal > 0 ? Math.round((o.taxTotalMinor * cumulativeSubtotal) / lineSubtotal) : 0;
+        lineTax = cumulativeTax - taxAssigned;
+        taxAssigned = cumulativeTax;
+        lineExcl = it.lineTotalMinor;
+      }
+      const unitExcl = it.qty > 0 ? Math.round(lineExcl / it.qty) : lineExcl;
       rows.push([
         o.code,
         o.branch.name,
@@ -223,10 +237,10 @@ export function eimsInvoiceCsv(orders: InvoiceOrder[]): string {
         idx + 1,
         itemName(it),
         it.qty,
-        money(it.unitPriceMinor),
-        money(it.lineTotalMinor),
+        money(unitExcl),
+        money(lineExcl),
         money(lineTax),
-        money(it.lineTotalMinor + lineTax),
+        money(lineExcl + lineTax),
       ]);
     });
   }

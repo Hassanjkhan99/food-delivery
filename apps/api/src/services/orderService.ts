@@ -235,6 +235,12 @@ export async function placeOrder(
           platformFeeMinor: quote.platformFeeMinor,
           commissionMinor: quote.commissionMinor,
           commissionBpsSnapshot: quote.commissionBps,
+          // Immutable tax snapshot (#146): freeze how tax was computed + how to print it, so
+          // receipts/refunds reconcile even if the branch's TaxProfile changes later.
+          taxRateBpsSnapshot: quote.taxRateBps,
+          taxInclusiveSnapshot: quote.taxInclusive,
+          taxLabelSnapshot: quote.taxLabel,
+          taxResponsibilitySnapshot: quote.taxResponsibility,
           loyaltyPointsRedeemed: quote.loyaltyPointsRedeemed,
           loyaltyDiscountMinor: quote.loyaltyDiscountMinor,
           tipAmount: quote.tipAmount,
@@ -272,6 +278,8 @@ export async function placeOrder(
               qty: l.qty,
               unitPriceMinor: l.unitPriceMinor,
               lineTotalMinor: l.lineTotalMinor,
+              taxableMinor: l.taxableMinor,
+              taxMinor: l.taxMinor,
               notes: l.notes,
             })),
           },
