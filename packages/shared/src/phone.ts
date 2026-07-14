@@ -8,8 +8,9 @@ import { z } from "zod";
 // "Phone must be in +92XXXXXXXXXX format". Never surface the raw pattern to users.
 export const PK_PHONE_MESSAGE = "Please enter a valid Pakistani mobile number, e.g. 0310 2658153.";
 
-// The 10 significant digits of a PK mobile number always start with 3 (03xx / +923xx).
-const CANONICAL = /^\+92\d{10}$/;
+// A PK mobile number is +92 followed by 10 significant digits that always start with 3
+// (local 03xx / international +923xx). Landlines and other non-mobile numbers are rejected.
+const CANONICAL = /^\+923\d{9}$/;
 
 /**
  * Normalize a user-entered Pakistani mobile number to canonical `+92XXXXXXXXXX`.
@@ -19,8 +20,11 @@ const CANONICAL = /^\+92\d{10}$/;
  *   - `3102658153`       (10-digit, no leading 0)      → `+923102658153`
  *   - `0310 265 8153`    (spaces)                      → `+923102658153`
  *   - `+92 310 2658153`  (spaces, already +92)         → `+923102658153`
+ *   - `+92 0310 2658153` (trunk 0 left after +92)      → `+923102658153`
  *   - `0092310...` / `92310...` (country code, no +)   → `+923102658153`
  *   - already-canonical `+923102658153`                → unchanged
+ *
+ * Only mobile numbers are accepted: the 10 significant digits must start with 3.
  *
  * Returns the canonical string, or `null` if the input can't be a valid PK mobile number.
  */
@@ -45,6 +49,10 @@ export function normalizePkPhone(input: string): string | null {
     // Bare national number, no leading 0 and no country code.
     national = digits;
   }
+
+  // Forgive a trunk `0` left after the country code, e.g. `+92 0310 2658153` (easy to
+  // type by keeping the field's prefilled `+92` and pasting the local example).
+  if (national.startsWith("0")) national = national.slice(1);
 
   const canonical = `+92${national}`;
   return CANONICAL.test(canonical) ? canonical : null;

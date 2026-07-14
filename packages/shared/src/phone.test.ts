@@ -24,6 +24,9 @@ test("normalizePkPhone accepts and normalizes common PK forms", () => {
   assert.equal(normalizePkPhone("923102658153"), CANONICAL);
   // surrounding whitespace
   assert.equal(normalizePkPhone("  03102658153  "), CANONICAL);
+  // trunk 0 left after +92 (keeping the field's prefilled +92 and typing the local form)
+  assert.equal(normalizePkPhone("+92 0310 2658153"), CANONICAL);
+  assert.equal(normalizePkPhone("+9203102658153"), CANONICAL);
 });
 
 test("normalizePkPhone rejects invalid inputs", () => {
@@ -33,6 +36,9 @@ test("normalizePkPhone rejects invalid inputs", () => {
   assert.equal(normalizePkPhone("031026581530"), null); // one digit long
   assert.equal(normalizePkPhone("abc"), null);
   assert.equal(normalizePkPhone("+1 555 123 4567"), null); // wrong country
+  // non-mobile PK number: 10 significant digits but not starting with 3
+  assert.equal(normalizePkPhone("01234567890"), null);
+  assert.equal(normalizePkPhone("+921234567890"), null);
 });
 
 test("pkPhoneSchema normalizes on parse and errors with friendly copy", () => {
