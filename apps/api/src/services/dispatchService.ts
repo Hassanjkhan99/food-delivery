@@ -71,7 +71,7 @@ const SPLIT_BPS = {
 
 // ─────────────────────────── geo / route seam ───────────────────────────
 
-type LatLng = { lat: number; lng: number };
+export type LatLng = { lat: number; lng: number };
 
 /**
  * ETA to pickup in seconds. Route-matrix seam: derived from haversine + a fixed speed for
@@ -114,6 +114,11 @@ export type RiderCandidate = {
   rider: Rider & { availability: RiderAvailability | null };
   isSharedRider: boolean; // rider belongs to a DIFFERENT restaurant (lent capacity)
   activeJobCount: number;
+  // The dropoff of the rider's ALREADY-committed job, if any — the reference point for the
+  // diversion estimate (how far the new pickup detours them from where they're already
+  // headed). null for an idle rider: there's no committed customer to delay, so diversion
+  // is just the pickup distance (Codex #126 P2). NOT the new order's dropoff.
+  committedDropoff: LatLng | null;
 };
 
 export type ScoredCandidate = {
@@ -131,7 +136,6 @@ export type ScoredCandidate = {
 
 type ScoreContext = {
   pickup: LatLng; // source-branch location (where the food is)
-  dropoff: LatLng | null; // this order's customer dropoff (for diversion)
   sourceRestaurantId: string;
   isCod: boolean;
   policy: SharedRiderPolicy | null; // lender policy governing shared riders
@@ -154,12 +158,17 @@ export function scoreCandidate(cand: RiderCandidate, ctx: ScoreContext): ScoredC
     : Number.POSITIVE_INFINITY;
   const etaToPickupSec = riderAt ? estimateEtaSec(riderAt, ctx.pickup) : Number.POSITIVE_INFINITY;
   const diversionMeters = riderAt
-    ? estimateDiversionMeters(riderAt, ctx.pickup, ctx.dropoff)
+    ? estimateDiversionMeters(riderAt, ctx.pickup, cand.committedDropoff)
     : Number.POSITIVE_INFINITY;
-  // Incremental delay estimate: the detour distance turned back into seconds.
-  const incrementalDelaySec = Number.isFinite(diversionMeters)
-    ? Math.round(diversionMeters / RIDER_SPEED_MPS)
-    : Number.POSITIVE_INFINITY;
+  // Incremental delay is the delay this new pickup adds to an ALREADY-committed customer.
+  // An idle rider (no committed dropoff) has no existing order to delay, so their
+  // incremental delay is 0 — otherwise the pickup-distance-derived diversion would push
+  // the best candidates past maxIncrementalDelaySec and wrongly reject them (Codex #126).
+  const incrementalDelaySec = !riderAt
+    ? Number.POSITIVE_INFINITY
+    : cand.committedDropoff
+      ? Math.round(diversionMeters / RIDER_SPEED_MPS)
+      : 0;
 
   const trust = clamp01(cand.rider.trustScore / 100);
   // Cash risk only applies to COD carried by SHARED riders below the trust threshold.
@@ -265,27 +274,56 @@ export function computeDispatchSplit(deliveryFeeMinor: number, hasLender: boolea
   };
 }
 
+// Memo prefix for shared-dispatch ledger txs; also the idempotency probe key (per order).
+const DISPATCH_SPLIT_MEMO_PREFIX = "Shared dispatch";
+
 /**
- * Post the shared-dispatch ledger legs for a delivered shared job. Runs inside a caller tx.
- * Double-entry: the platform's delivery-fee pool is debited and re-routed to the platform
- * dispatch-fee revenue, the lender restaurant's payable, and the rider's payable. The seller's
- * food principal is untouched here — normal settlement (onOrderDelivered) already handles it.
+ * Post the shared-dispatch ledger legs for a delivered SHARED job. Runs inside a caller tx.
  *
- * FOUNDATION: this is additive and only fires for shared jobs via a resolver that opts in; the
- * existing settlement path is unchanged. If a real contract later governs the fee routing this
- * becomes the single place to change it.
+ * Funding (Codex #126): the split REALLOCATES the delivery fee the seller actually received
+ * at settlement — onOrderDelivered credits the whole delivery fee into the seller's payable
+ * (restaurantShare includes order.deliveryFeeMinor). For a shared job the seller owes a cut
+ * for using someone else's rider, so we DEBIT the seller's payable and credit the platform
+ * dispatch-fee revenue, the lender restaurant's payable, and the rider's bonus payable. This
+ * moves real money instead of minting it from an empty `platform:delivery_fees` pool that
+ * nothing ever credits.
+ *
+ * No-lender short-circuit (Codex #126): a seller-owned rider is NOT a shared dispatch — there
+ * is no lender to pay and no cut to skim — so this is a no-op (returns null) when
+ * lenderRestaurantId is null. The seller keeps the full delivery fee via normal settlement.
+ *
+ * Idempotent (Codex #126): a shared-dispatch tx is posted at most once per order. A replay
+ * (retry / double-call) detects the prior tx by (orderId, memo prefix) and returns null
+ * rather than double-paying the lender + rider.
  */
 export async function postDispatchSplit(tx: Tx, input: DispatchSplitInput): Promise<string | null> {
-  const split = computeDispatchSplit(input.deliveryFeeMinor, input.lenderRestaurantId !== null);
+  // Seller-owned rider → not a shared dispatch, nothing to split.
+  if (input.lenderRestaurantId === null) return null;
+
+  // Serialize concurrent split posts for this order before the existence probe: without a
+  // lock two callers can both pass findFirst and double-post (LedgerEntry has no unique
+  // (orderId, memo) constraint). A per-order advisory lock makes the check-then-insert
+  // atomic — same primitive as the placement/pickup locks (Codex #126 P1).
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dispatch-split:${input.orderId}`})::bigint)`;
+
+  // Idempotency guard: bail if a shared-dispatch tx already exists for this order.
+  const existing = await tx.ledgerEntry.findFirst({
+    where: { orderId: input.orderId, memo: { startsWith: DISPATCH_SPLIT_MEMO_PREFIX } },
+    select: { id: true },
+  });
+  if (existing) return null;
+
+  const split = computeDispatchSplit(input.deliveryFeeMinor, true);
   const distributed =
     split.platformDispatchFeeMinor + split.lenderShareMinor + split.riderBonusMinor;
   if (distributed <= 0) return null;
 
   const legs: Leg[] = [
-    // Source: the delivery fee the platform is holding for this order funds the split.
+    // Source of funds: the delivery fee the seller received at settlement funds the split.
     {
-      code: "platform:delivery_fees",
-      ownerType: "platform",
+      code: `restaurant:${input.sourceRestaurantId}:payable`,
+      ownerType: "restaurant",
+      ownerId: input.sourceRestaurantId,
       debit: distributed,
     },
     {
@@ -299,17 +337,15 @@ export async function postDispatchSplit(tx: Tx, input: DispatchSplitInput): Prom
       ownerId: input.riderId,
       credit: split.riderBonusMinor,
     },
-  ];
-  if (input.lenderRestaurantId && split.lenderShareMinor > 0) {
-    legs.push({
+    {
       code: `restaurant:${input.lenderRestaurantId}:payable`,
       ownerType: "restaurant",
       ownerId: input.lenderRestaurantId,
       credit: split.lenderShareMinor,
-    });
-  }
+    },
+  ];
 
-  return postLedgerTx(tx, `Shared dispatch ${input.orderCode}`, legs, {
+  return postLedgerTx(tx, `${DISPATCH_SPLIT_MEMO_PREFIX} ${input.orderCode}`, legs, {
     orderId: input.orderId,
   });
 }

@@ -20,3 +20,6 @@ test-results/
 blob-report/
 
 .vercel
+
+# Claude Code agent worktrees (never commit)
+.claude/worktrees/
