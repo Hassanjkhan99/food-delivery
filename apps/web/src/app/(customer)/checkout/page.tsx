@@ -382,10 +382,12 @@ export default function CheckoutPage() {
         cutleryRequested,
         voucherCode: voucherCode ?? undefined,
         fulfillmentMode,
-        // Only send a scheduled slot when the customer actually chose the "scheduled"
-        // option and picked a time — a stale slot must never leak into a standard order.
+        // Send a scheduled slot when a time is set AND the customer is in a scheduling
+        // context: pickup (its own picker above) or the delivery "scheduled" option. This
+        // stops a stale slot leaking into a standard *delivery* order while still honouring
+        // scheduled pickups, which the order model + order views support.
         scheduledFor:
-          deliveryOption === "scheduled" && scheduledLocal
+          scheduledLocal && (isPickup || deliveryOption === "scheduled")
             ? new Date(scheduledLocal).toISOString()
             : undefined,
         deliveryOption,
@@ -635,6 +637,23 @@ export default function CheckoutPage() {
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pickup scheduling (#54). The delivery-option selector above is delivery-only, so
+            pickup keeps its own optional slot picker — a scheduled pickup is still supported
+            by the order model and shown on the customer/restaurant order views. Empty = ASAP. */}
+        {isPickup && (
+          <div>
+            <Label htmlFor="pickup-schedule">Schedule pickup for later (optional)</Label>
+            <Input
+              id="pickup-schedule"
+              type="datetime-local"
+              value={scheduledLocal}
+              onChange={(e) => setScheduledLocal(e.target.value)}
+              className="mt-1"
+            />
+            <p className="mt-1 text-xs text-kd-fg-subtle">Leave blank to order now.</p>
           </div>
         )}
 
