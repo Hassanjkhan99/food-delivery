@@ -1456,6 +1456,21 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("Please enter a valid CNIC, e.g. 42101-1234567-1.", {
           extensions: { code: "validation_error" },
         });
+      // Enforce that a supplied CNIC scan is a PRIVATE asset owned by this user (#119).
+      // The UI uploads it privately, but a direct GraphQL client could pass a public image
+      // id, leaving the scan readable via the unauthenticated /files path — mirror the
+      // submitRiderDoc guard here so the server, not just the client, guarantees privacy.
+      if (args.cnicAssetId) {
+        const asset = await prisma.mediaAsset.findUnique({ where: { id: args.cnicAssetId } });
+        if (!asset || asset.ownerId !== ctx.userId)
+          throw new GraphQLError("We couldn't find that upload.", {
+            extensions: { code: "not_found" },
+          });
+        if (!asset.objectKey.startsWith("private/"))
+          throw new GraphQLError("The CNIC document must be uploaded as a private asset.", {
+            extensions: { code: "insecure_asset" },
+          });
+      }
       const data = {
         ownerName,
         ownerCnic,

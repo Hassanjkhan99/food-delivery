@@ -49,7 +49,7 @@ const server = createServer(async (req, res) => {
         : req.method === "PUT" && url.startsWith("/api/uploads")
           ? await handleLocalUploadPut(request)
           : req.method === "GET" && url.startsWith("/files/")
-            ? handleLocalFileGet(request)
+            ? await handleLocalFileGet(request) // now async: verifies private-asset tokens (#119)
             : new Response("Method not allowed", { status: 405 });
     res.writeHead(response.status, { ...CORS_HEADERS, ...Object.fromEntries(response.headers) });
     if (response.body) {

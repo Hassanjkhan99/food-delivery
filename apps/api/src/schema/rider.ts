@@ -953,6 +953,16 @@ builder.mutationFields((t) => ({
           { extensions: { code: "forbidden" } },
         );
       }
+      // Verification docs must have been uploaded as a private (signed-read) asset (#119).
+      // Refusing a public-key upload here stops a CNIC/license scan from being served on
+      // the world-readable /files path. (Restaurant submitKyc needs the same server-side
+      // guard — tracked as a follow-up since restaurant.ts is owned by another PR.)
+      if (!asset.objectKey.startsWith("private/")) {
+        throw new GraphQLError(
+          "This document must be uploaded as a private file. Please upload it again.",
+          { extensions: { code: "insecure_asset" } },
+        );
+      }
       // Replace any existing doc of the same kind for this rider.
       await prisma.riderVerificationDoc.deleteMany({
         where: { riderId: ctx.riderId, kind: args.kind as never },

@@ -482,7 +482,12 @@ type Mutation {
   patchRiderLocation(lat: Float!, lng: Float!, taskId: String): Boolean!
   placeOrder(idempotencyKey: String!, input: PlaceOrderInput!): Order!
   postSharedDispatchSplit(orderId: String!): String
-  presignUpload(byteSize: Int!, contentType: String!, kind: String!): PresignResult!
+  presignUpload(
+    byteSize: Int!
+    contentType: String!
+    kind: String!
+    private: Boolean
+  ): PresignResult!
   previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
   publishMenu(branchId: String!): Menu!
   purchaseGiftCard(input: GiftCardPurchaseInput!): GiftCard!
