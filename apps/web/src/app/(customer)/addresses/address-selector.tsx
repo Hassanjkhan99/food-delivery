@@ -36,6 +36,12 @@ type Props = {
    * once the session lands — instead of the query resolving empty and never re-running (#125).
    */
   loggedIn?: boolean;
+  /**
+   * Whether to auto-pick the default/first saved address on load. The checkout passes
+   * false once the guest has typed a manual address, so a post-OTP fetch doesn't clobber
+   * it (#125 review). Defaults to true.
+   */
+  autoSelect?: boolean;
 };
 
 /**
@@ -45,7 +51,13 @@ type Props = {
  * customer has no saved addresses (or isn't logged in): it simply shows the
  * "new address" branch and the manual fields stay in charge.
  */
-export function AddressSelector({ onSelect, onNew, selectedId, loggedIn = true }: Props) {
+export function AddressSelector({
+  onSelect,
+  onNew,
+  selectedId,
+  loggedIn = true,
+  autoSelect = true,
+}: Props) {
   const [{ data, fetching }] = useQuery({
     query: MyAddressesQuery,
     requestPolicy: "cache-and-network",
@@ -63,11 +75,11 @@ export function AddressSelector({ onSelect, onNew, selectedId, loggedIn = true }
   // trigger a cascading render, and after that we respect the user's choice.
   const autoPicked = useRef(false);
   useEffect(() => {
-    if (autoPicked.current || addresses.length === 0) return;
+    if (autoPicked.current || addresses.length === 0 || !autoSelect) return;
     autoPicked.current = true;
     onSelect(addresses.find((a) => a.isDefault) ?? addresses[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addresses]);
+  }, [addresses, autoSelect]);
 
   if (fetching && addresses.length === 0) {
     return <p className="text-sm text-kd-fg-subtle">Loading saved addresses…</p>;
