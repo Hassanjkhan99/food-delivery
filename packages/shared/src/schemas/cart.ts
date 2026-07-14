@@ -5,6 +5,7 @@ import {
   MAX_CART_LINE_QTY,
   UNAVAILABILITY_PREFERENCES,
 } from "../constants";
+import { pkPhoneSchema } from "../phone";
 
 const unavailabilityPreferenceValues = UNAVAILABILITY_PREFERENCES.map((p) => p.value) as [
   "remove_item",
@@ -54,7 +55,8 @@ export const quoteInputSchema = z.object({
 export const placeOrderInputSchema = quoteInputSchema.extend({
   addressText: z.string().min(5).max(500),
   addressLabel: z.string().max(50).default("Home"),
-  contactPhone: z.string().regex(/^\+92\d{10}$/, "Phone must be in +92XXXXXXXXXX format"),
+  // Shared PK-phone rule (#148): normalizes local forms to canonical +92, friendly copy.
+  contactPhone: pkPhoneSchema,
   customerNote: z.string().max(500).optional(),
   paymentMode: z.enum(["cod", "card", "wallet"]),
   paymentMethodId: z.string().optional(),

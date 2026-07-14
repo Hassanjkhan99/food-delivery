@@ -2,15 +2,19 @@
 // and returned in the mutation response outside production.
 import { createHash, randomInt } from "node:crypto";
 import { prisma } from "@fd/db";
-import { OTP_MAX_ATTEMPTS, OTP_RATE_LIMIT_PER_HOUR, OTP_TTL_SECONDS } from "@fd/shared";
+import {
+  OTP_MAX_ATTEMPTS,
+  OTP_RATE_LIMIT_PER_HOUR,
+  OTP_TTL_SECONDS,
+  pkPhoneSchema,
+} from "@fd/shared";
 import { GraphQLError } from "graphql";
-import { z } from "zod";
 import { env } from "../env.js";
 import { logger } from "../logger.js";
 
-export const phoneSchema = z
-  .string()
-  .regex(/^\+92\d{10}$/, "Phone must be in +92XXXXXXXXXX format");
+// Shared PK-phone rule (#148): normalizes local forms (03xx…) to canonical +92 and
+// surfaces friendly copy. Login OTP + checkout contactPhone use the one helper.
+export const phoneSchema = pkPhoneSchema;
 
 const hash = (code: string) => createHash("sha256").update(code).digest("hex");
 
