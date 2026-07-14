@@ -2,15 +2,18 @@
 // customer-facing "available offers" list for the checkout sheet. Validation/pricing
 // lives in services/voucherService; this module is the GraphQL surface only.
 import { prisma } from "@fd/db";
-import { normalizeVoucherCode } from "@fd/shared";
+import { isRestaurantOwner, normalizeVoucherCode } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { builder } from "./builder.js";
 
-// Owner guard for restaurant-scoped voucher management (#159).
+// Owner guard for restaurant-scoped voucher/promo management (#159). #204: this must
+// require the restaurant_OWNER (promo codes are a marketing surface) — the previous
+// implementation only checked membership, so restaurant_staff could manage promos by
+// direct call despite the name.
 function assertOwnsRestaurant(ctx: AppContext, restaurantId: string) {
-  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("You don't have access to this restaurant.", {
+  if (!isRestaurantOwner(ctx.roles, restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Only the restaurant owner can do this.", {
       extensions: { code: "forbidden" },
     });
   }

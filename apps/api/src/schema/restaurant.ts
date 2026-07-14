@@ -6,7 +6,7 @@ import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { publishOrderChanged } from "../pubsub.js";
-import { formatRs } from "@fd/shared";
+import { formatRs, isRestaurantOwner } from "@fd/shared";
 import { accountBalance, postLedgerTx, postItemRemovalRefund } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
@@ -49,10 +49,7 @@ async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
 // Stricter than membership: only the restaurant_owner (or admin) — used to keep money and
 // business config out of restaurant_staff's hands (#156).
 function assertRestaurantOwner(ctx: AppContext, restaurantId: string) {
-  const isOwner = ctx.roles.some(
-    (r) => r.role === "restaurant_owner" && r.restaurantId === restaurantId,
-  );
-  if (!isOwner && !ctx.hasRole("admin")) {
+  if (!isRestaurantOwner(ctx.roles, restaurantId) && !ctx.hasRole("admin")) {
     throw new GraphQLError("Only the restaurant owner can do this.", {
       extensions: { code: "forbidden" },
     });
@@ -354,7 +351,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      // #204: KYC holds identity/bank docs — owner-only, never staff.
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.restaurantKyc.findUnique({
         ...query,
         where: { restaurantId: args.restaurantId },
@@ -465,11 +463,8 @@ builder.queryFields((t) => ({
       offset: t.arg.int({ required: false }),
     },
     resolve: async (query, _root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: reviews are an owner-only surface (staff see Orders + Today only).
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.rating.findMany({
         ...query,
         where: { restaurantId: args.restaurantId, moderationStatus: "approved" },
@@ -530,11 +525,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: the payable balance is money data — owner-only (staff = Orders + Today).
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.$transaction((tx) =>
         accountBalance(tx as never, `restaurant:${args.restaurantId}:payable`),
       );
@@ -546,11 +538,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: the wallet/settlement statement is money data — owner-only.
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.ledgerEntry.findMany({
         ...query,
         where: { account: { code: `restaurant:${args.restaurantId}:payable` } },
@@ -565,11 +554,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: payout history is money data — owner-only.
+      assertRestaurantOwner(ctx, args.restaurantId);
       // Reference adoption of the #33 RLS withTenant() pattern (see packages/db/RLS.md).
       // Admin cuts across tenants (no single restaurantId) so it must run OUTSIDE the wrapper;
       // tenant users go through withTenant so Postgres RLS enforces isolation as defense-in-depth.
@@ -594,7 +580,8 @@ builder.queryFields((t) => ({
       days: t.arg.int({ required: false }),
     },
     resolve: async (_root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      // #204: analytics is owner-only business intelligence.
+      await assertBranchOwner(ctx, args.branchId);
       const days = Math.min(Math.max(args.days ?? 30, 1), 365);
       const since = new Date(Date.now() - days * 24 * 60 * 60_000);
       const orders = await prisma.order.findMany({
@@ -727,11 +714,8 @@ builder.queryFields((t) => ({
       to: t.arg({ type: "DateTime", required: false }),
     },
     resolve: async (_root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: analytics is an owner-only business-intelligence surface.
+      assertRestaurantOwner(ctx, args.restaurantId);
       const orders = await prisma.order.findMany({
         where: {
           branch: { restaurantId: args.restaurantId },
@@ -757,7 +741,8 @@ builder.queryFields((t) => ({
       to: t.arg({ type: "DateTime", required: false }),
     },
     resolve: async (_root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      // #204: the eIMS statutory invoice export is money/settlement data — owner-only.
+      await assertBranchOwner(ctx, args.branchId);
       const orders = await prisma.order.findMany({
         where: {
           branchId: args.branchId,
@@ -1243,7 +1228,8 @@ builder.mutationFields((t) => ({
       deliveryRadiusM: t.arg.int({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      const commercialsBranch = await assertBranchMember(ctx, args.branchId);
+      // #204: delivery fee / min order / tax profile are money & business config — owner-only.
+      const commercialsBranch = await assertBranchOwner(ctx, args.branchId);
       assertRestaurantOwner(ctx, commercialsBranch.restaurantId);
       const data: { minOrderMinor?: number; deliveryFeeMinor?: number; deliveryRadiusM?: number } =
         {};
@@ -1283,7 +1269,8 @@ builder.mutationFields((t) => ({
       cuisineTags: t.arg.stringList({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      // #204: restaurant profile/branding is a settings surface — owner-only.
+      assertRestaurantOwner(ctx, args.restaurantId);
       assertRestaurantOwner(ctx, args.restaurantId);
       const data: { name?: string; cuisineTags?: string[] } = {};
       if (args.name != null) {
