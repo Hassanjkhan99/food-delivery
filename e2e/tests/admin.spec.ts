@@ -10,10 +10,11 @@ test.describe("admin UI", () => {
     await ensureBackend();
   });
 
-  test("marketplace overview loads", async ({ page }) => {
+  test("command center loads", async ({ page }) => {
     await loginAs(page, "admin");
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: /marketplace overview/i })).toBeVisible();
+    // #135 rebuilt /admin as the live-ops "Command center" (was "Marketplace overview").
+    await expect(page.getByRole("heading", { name: /command center/i })).toBeVisible();
   });
 
   test("restaurants approvals page loads", async ({ page }) => {

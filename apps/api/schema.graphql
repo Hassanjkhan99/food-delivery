@@ -36,6 +36,16 @@ type AssignedRider {
   phone: String!
 }
 
+type AttentionItem {
+  count: Int!
+  detail: String!
+  href: String!
+  key: String!
+  kind: String!
+  severity: String!
+  title: String!
+}
+
 type AuditLog {
   action: String!
   actorRole: String
@@ -191,6 +201,32 @@ type ComboItem {
   id: ID!
   menuItem: MenuItem!
   qty: Int!
+}
+
+type CommandCenter {
+  attention: [AttentionItem!]!
+  health: CommandCenterHealth!
+  money: CommandCenterMoney!
+}
+
+type CommandCenterHealth {
+  acceptanceSlaPct: Float!
+  activeOrders: Int!
+  avgAcceptanceSeconds: Float
+  cancellationRatePct: Float!
+  gmvTodayMinor: Int!
+  ordersToday: Int!
+  restaurantsLive: Int!
+  restaurantsTotal: Int!
+  ridersOnline: Int!
+  ridersTotal: Int!
+  slaRiskOrders: Int!
+}
+
+type CommandCenterMoney {
+  codOutstandingMinor: Int!
+  pendingPayoutMinor: Int!
+  refundLiabilityMinor: Int!
 }
 
 type CsvImportResult {
@@ -687,6 +723,7 @@ type Query {
   browseBranches(filter: BrowseFilter, lat: Float!, lng: Float!, sort: BrowseSort): [BranchSearchResult!]!
   campaignApprovalQueue: [Campaign!]!
   cancellationPolicyMatrix: CancellationPolicy!
+  commandCenter: CommandCenter!
   currentFeeConfig: FeeConfig
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
