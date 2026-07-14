@@ -149,11 +149,19 @@ export async function placeOrder(
     throw new GraphQLError("This restaurant could not be found.", {
       extensions: { code: "branch_not_found" },
     });
-  const openNow = scheduledFor !== null || (await branchOpenNow(branch)).isOpen;
-  if (!branch.isAcceptingOrders || !openNow) {
-    throw new GraphQLError("This restaurant is currently closed", {
-      extensions: { code: "branch_closed" },
-    });
+  // For a scheduled pre-order, check the branch is open AT THE REQUESTED SLOT (not now) — a
+  // pre-order is placed while closed precisely to be fulfilled later, but it must still land
+  // inside opening hours, or the restaurant can't honour it. Immediate orders check now.
+  const isOpenForOrder = scheduledFor
+    ? (await branchOpenNow(branch, scheduledFor.getTime())).isOpen
+    : (await branchOpenNow(branch)).isOpen;
+  if (!branch.isAcceptingOrders || !isOpenForOrder) {
+    throw new GraphQLError(
+      scheduledFor
+        ? "This restaurant isn't open at your selected time. Please pick another slot."
+        : "This restaurant is currently closed",
+      { extensions: { code: "branch_closed" } },
+    );
   }
 
   // Card orders charge at placement (Foodpanda-style): validate the saved method first.
