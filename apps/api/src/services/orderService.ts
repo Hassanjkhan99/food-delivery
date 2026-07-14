@@ -138,17 +138,18 @@ export async function placeOrder(
     });
   }
 
-  // Closed-by-hours guard (#63). Reject when the branch isn't open. quoteCart already
-  // rejects when isAcceptingOrders is false; here we also honour the opening hours so an
-  // order can't be placed after close. branchOpenNow reads the structured BranchHours
-  // model (#19) and falls back to the legacy hoursJson. Uses a stable error code the
-  // client maps to a friendly "closed" message.
+  // Closed-by-hours guard (#63). A manual pause (isAcceptingOrders=false) blocks EVERY order.
+  // The opening-HOURS check blocks only IMMEDIATE orders: a scheduled pre-order (#54/#199) is
+  // placed on purpose for a future slot when the branch will be open, so it's exempt from the
+  // "closed now" hours check (otherwise pre-ordering outside hours — the whole point — is
+  // impossible). branchOpenNow reads the structured BranchHours model (#19), falling back to
+  // legacy hoursJson. Stable error code → the client shows a friendly "closed" message.
   const branch = await prisma.branch.findUnique({ where: { id: quote.branchId } });
   if (!branch)
     throw new GraphQLError("This restaurant could not be found.", {
       extensions: { code: "branch_not_found" },
     });
-  const openNow = (await branchOpenNow(branch)).isOpen;
+  const openNow = scheduledFor !== null || (await branchOpenNow(branch)).isOpen;
   if (!branch.isAcceptingOrders || !openNow) {
     throw new GraphQLError("This restaurant is currently closed", {
       extensions: { code: "branch_closed" },
