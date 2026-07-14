@@ -6,6 +6,11 @@ import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { assetReadUrl, finalizeUpload, presignUpload } from "../services/uploads.js";
 import { importMenuCsv, parseMenuCsvAsset } from "../services/menuImport.js";
+import {
+  previewMenuOcrAsset,
+  importMenuOcrToDraft,
+  type MenuOcrResult,
+} from "../services/menuOcr.js";
 import { ensureDraft } from "../services/menuService.js";
 import { builder } from "./builder.js";
 
@@ -86,6 +91,20 @@ CsvRowType.implement({
   }),
 });
 
+// Photo/PDF OCR preview (#177). Reuses CsvPreviewRow so the extracted rows flow into the
+// same review UI + importMenuCsvToDraft pipeline as CSV. With MENU_OCR_DRIVER=none (default)
+// `status` is "not_configured" and `rows` is empty — a safe no-op until a provider is wired.
+const MenuOcrPreviewType = builder.objectRef<MenuOcrResult>("MenuOcrPreview");
+MenuOcrPreviewType.implement({
+  fields: (t) => ({
+    // "ok" | "not_configured" | "unsupported" | "failed"
+    status: t.exposeString("status"),
+    message: t.exposeString("message"),
+    driver: t.exposeString("driver"),
+    rows: t.field({ type: [CsvRowType], resolve: (r) => r.rows }),
+  }),
+});
+
 const ImportResult = builder.objectRef<{ created: number; updated: number }>("CsvImportResult");
 ImportResult.implement({
   fields: (t) => ({
@@ -162,6 +181,40 @@ builder.mutationFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { assetId: t.arg.string({ required: true }) },
     resolve: (_root, args, ctx) => parseMenuCsvAsset(ctx.userId!, args.assetId),
+  }),
+
+  // Photo/PDF OCR preview (#177). Owner-gated like the other menu-import mutations.
+  // Additive: routes the asset through the MENU_OCR_DRIVER provider and returns rows in
+  // the CsvPreviewRow shape, so the client feeds them straight into importMenuCsvToDraft.
+  // Default driver "none" returns an empty preview + a "connect an OCR provider" message.
+  previewMenuOcr: t.field({
+    type: MenuOcrPreviewType,
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      assetId: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchOwner(ctx, args.branchId);
+      return previewMenuOcrAsset(ctx.userId!, args.assetId);
+    },
+  }),
+
+  // Import an OCR'd photo/PDF menu into the draft (#177). Owner-gated; re-runs extraction
+  // and merges valid rows through the same helper importMenuCsvToDraft uses, returning the
+  // same CsvImportResult. With MENU_OCR_DRIVER=none this errors with "connect an OCR
+  // provider" guidance instead of importing nothing.
+  importMenuOcrToDraft: t.field({
+    type: ImportResult,
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      assetId: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchOwner(ctx, args.branchId);
+      return importMenuOcrToDraft(ctx.userId!, args.branchId, args.assetId);
+    },
   }),
 
   importMenuCsvToDraft: t.field({

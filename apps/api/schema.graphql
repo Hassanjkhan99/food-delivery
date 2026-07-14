@@ -447,6 +447,13 @@ type MenuItem {
   unavailableUntil: DateTime
 }
 
+type MenuOcrPreview {
+  driver: String!
+  message: String!
+  rows: [CsvPreviewRow!]!
+  status: String!
+}
+
 type MenuSourceDoc {
   asset: MediaAsset!
   createdAt: DateTime!
@@ -502,6 +509,7 @@ type Mutation {
   finalizeUpload(assetId: String!): MediaAsset!
   generateSharedOffers(limit: Int, orderId: String!): [ScoredRiderCandidate!]!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
+  importMenuOcrToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   inviteStaff(name: String, phone: String!, restaurantId: String!): StaffMember!
   issueGoodwillCredit(amountMinor: Int!, customerId: String!, reason: String!): Int!
@@ -519,6 +527,7 @@ type Mutation {
   postSharedDispatchSplit(orderId: String!): String
   presignUpload(byteSize: Int!, contentType: String!, kind: String!, private: Boolean): PresignResult!
   previewMenuCsv(assetId: String!): [CsvPreviewRow!]!
+  previewMenuOcr(assetId: String!, branchId: String!): MenuOcrPreview!
   publishMenu(branchId: String!): Menu!
   purchaseGiftCard(input: GiftCardPurchaseInput!): GiftCard!
   quoteCart(input: QuoteCartInput!): Quote!

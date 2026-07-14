@@ -90,6 +90,15 @@ export const env = {
     };
   },
 
+  // ── Menu OCR import (#177) ────────────────────────────────────────────────
+  // "none" (default) = no OCR; photo/PDF menus can't be auto-transcribed and the
+  // preview returns an empty row set with a "connect an OCR provider" status. A real
+  // driver (e.g. "vision"/"textract"/"tesseract") drops in later via services/menuOcr.ts
+  // implementing the MenuOcrProvider seam — no new UI needed (rows reuse the CSV review).
+  get menuOcrDriver(): string {
+    return process.env.MENU_OCR_DRIVER ?? "none";
+  },
+
   // ── Out-of-app notifications (#13) ────────────────────────────────────────
   // Every channel is off by default so nothing costs money or fires until launch.
   // A channel is only *active* when its flag is on AND its credentials are present
