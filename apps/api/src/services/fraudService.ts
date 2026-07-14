@@ -3,7 +3,7 @@
 // COD mismatch still opens a cash_mismatch SupportTicket in rider.ts; this layer records
 // the signed variance, keeps a rolling per-rider total, and disables COD when abusive.
 import { randomInt } from "node:crypto";
-import { prisma } from "@fd/db";
+import { prisma, type Prisma } from "@fd/db";
 import {
   CASH_VARIANCE_DISABLE_THRESHOLD_MINOR,
   CASH_VARIANCE_WINDOW_DAYS,
@@ -24,13 +24,31 @@ export function generatePickupPin(): string {
 }
 
 /**
+ * Advisory-lock key that namespaces all per-customer order-placement serialization:
+ * the velocity count, the wallet balance re-read + debit, and the referral first-order
+ * check. Callers acquire it with pg_advisory_xact_lock inside their transaction so these
+ * per-customer invariants hold under concurrency (Codex #116 / #118 / #122).
+ */
+export function customerOrderLockKey(customerId: string): string {
+  return `customer-orders:${customerId}`;
+}
+
+/**
  * Throw if the customer has placed too many orders in the rolling velocity window.
  * Idempotency already collapses accidental double-taps; this catches sustained scripted
  * spam / cost-abuse (OTP + notification sends, promo farming) that idempotency can't.
+ *
+ * Pass the placement transaction client so the count runs inside the same tx that holds
+ * the per-customer advisory lock — otherwise the count-then-insert is a TOCTOU race and a
+ * burst of concurrent placements can each read the same pre-insert count and blow past the
+ * limit (Codex #118 P2). Defaults to the top-level client for any standalone caller.
  */
-export async function assertOrderVelocity(customerId: string): Promise<void> {
+export async function assertOrderVelocity(
+  customerId: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<void> {
   const since = new Date(Date.now() - ORDER_VELOCITY_WINDOW_MINUTES * 60_000);
-  const recent = await prisma.order.count({
+  const recent = await client.order.count({
     where: { customerId, placedAt: { gte: since } },
   });
   if (recent >= ORDER_VELOCITY_LIMIT) {

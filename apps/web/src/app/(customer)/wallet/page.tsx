@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "urql";
 import { Wallet as WalletIcon } from "lucide-react";
@@ -32,8 +32,12 @@ const WalletQuery = graphql(`
 `);
 
 const TopUpMutation = graphql(`
-  mutation TopUpWallet($amountMinor: Int!, $paymentMethodId: String!) {
-    topUpWallet(amountMinor: $amountMinor, paymentMethodId: $paymentMethodId) {
+  mutation TopUpWallet($amountMinor: Int!, $paymentMethodId: String!, $idempotencyKey: String!) {
+    topUpWallet(
+      amountMinor: $amountMinor
+      paymentMethodId: $paymentMethodId
+      idempotencyKey: $idempotencyKey
+    ) {
       balanceMinor
     }
   }
@@ -52,6 +56,9 @@ export default function WalletPage() {
   const [amountMinor, setAmountMinor] = useState<number>(PRESETS[1]);
   const [methodId, setMethodId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Stable key for the in-flight top-up so a double-click / retry is idempotent server-side
+  // (#116). Rotated after each completed attempt so the next top-up gets a fresh key.
+  const idempotencyKey = useRef<string>(crypto.randomUUID());
 
   const wallet = data?.myWallet;
   const methods = data?.myPaymentMethods ?? [];
@@ -64,11 +71,22 @@ export default function WalletPage() {
       setError("Add a card first to top up.");
       return;
     }
-    const result = await topUp({ amountMinor, paymentMethodId: selectedMethodId });
+    const result = await topUp({
+      amountMinor,
+      paymentMethodId: selectedMethodId,
+      idempotencyKey: idempotencyKey.current,
+    });
     if (result.error) {
+      // A networkError means the response was lost — the server MAY already have charged
+      // and credited. Keep the SAME key so a retry dedupes server-side instead of charging
+      // twice. Only rotate on a definite server response (a GraphQL decline/validation),
+      // where the customer needs a fresh key to try again (#116).
+      if (!result.error.networkError) idempotencyKey.current = crypto.randomUUID();
       setError(friendlyMessage(parseGqlError(result.error, "We couldn't complete the top-up.")));
       return;
     }
+    // Success: rotate so the next deliberate top-up isn't deduped against this one.
+    idempotencyKey.current = crypto.randomUUID();
     refetch({ requestPolicy: "network-only" });
   }
 

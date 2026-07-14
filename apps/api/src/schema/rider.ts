@@ -305,7 +305,12 @@ builder.queryFields((t) => ({
         return when >= startOfDay;
       });
       return {
-        todayCodCollectedMinor: todays.reduce((s, t2) => s + t2.codAmountMinor, 0),
+        // Declared collected cash (falls back to expected for legacy rows) so the
+        // cash-in-hand panel reflects what the rider actually took, not the order total (#113).
+        todayCodCollectedMinor: todays.reduce(
+          (s, t2) => s + (t2.codCollectedMinor ?? t2.codAmountMinor),
+          0,
+        ),
         cashLimitMinor: rider?.cashLimitMinor ?? 0,
         deliveriesToday: todays.length,
       };
@@ -340,7 +345,10 @@ builder.queryFields((t) => ({
       });
       return {
         deliveredCount: delivered.length,
-        codCollectedMinor: delivered.reduce((s, t2) => s + t2.codAmountMinor, 0),
+        codCollectedMinor: delivered.reduce(
+          (s, t2) => s + (t2.codCollectedMinor ?? t2.codAmountMinor),
+          0,
+        ),
       };
     },
   }),
@@ -386,7 +394,7 @@ builder.queryFields((t) => ({
           deliveredAt: task.order.deliveredAt,
           deliveryFeeMinor,
           tipMinor,
-          codCollectedMinor: task.codAmountMinor,
+          codCollectedMinor: task.codCollectedMinor ?? task.codAmountMinor,
           netMinor: deliveryFeeMinor + tipMinor,
         };
       });
@@ -735,6 +743,18 @@ builder.mutationFields((t) => ({
           extensions: { code: "invalid_state" },
         });
 
+      // The declared COD is now trusted by cash-in-hand / earnings summaries, so validate it
+      // before storing (#113 follow-up): never negative, and must be 0 on a non-COD job so a
+      // rider client can't poison the totals with a bogus amount.
+      if (
+        args.codCollectedMinor < 0 ||
+        (task.codAmountMinor === 0 && args.codCollectedMinor !== 0)
+      ) {
+        throw new GraphQLError("The collected cash amount isn't valid for this order.", {
+          extensions: { code: "validation_error" },
+        });
+      }
+
       // Validate the POD asset (if supplied) before we mark delivered.
       if (args.podMediaId) {
         const asset = await prisma.mediaAsset.findUnique({ where: { id: args.podMediaId } });
@@ -781,7 +801,14 @@ builder.mutationFields((t) => ({
       });
       return prisma.deliveryTask.update({
         where: { id: task.id },
-        data: { status: "delivered", ...(args.podMediaId ? { podMediaId: args.podMediaId } : {}) },
+        data: {
+          status: "delivered",
+          // Persist what the rider actually declared collecting so cash-in-hand and
+          // earnings reflect reality, not the expected order COD (#113). For non-COD
+          // orders codCollectedMinor arrives as 0, which is the correct stored value.
+          codCollectedMinor: args.codCollectedMinor,
+          ...(args.podMediaId ? { podMediaId: args.podMediaId } : {}),
+        },
       });
     },
   }),

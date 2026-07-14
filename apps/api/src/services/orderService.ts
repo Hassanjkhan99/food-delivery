@@ -36,7 +36,7 @@ import {
 } from "./loyaltyService.js";
 import { onRefereeOrderDelivered } from "./referralService.js";
 import { mockProvider } from "./payments/mockProvider.js";
-import { assertOrderVelocity, generatePickupPin } from "./fraudService.js";
+import { assertOrderVelocity, customerOrderLockKey, generatePickupPin } from "./fraudService.js";
 import { notifyOrderStatus } from "./notificationService.js";
 
 export type Actor = { userId: string | null; role: ActorRole };
@@ -102,9 +102,8 @@ export async function placeOrder(
     return existing;
   }
 
-  // Velocity limit (#25): a replay of the same idempotency key is handled above, so this
-  // only counts distinct orders — genuine scripted spam / cost-abuse, not double-taps.
-  await assertOrderVelocity(customerId);
+  // Velocity limit (#25) is enforced INSIDE the placement transaction, under a per-customer
+  // advisory lock, so the count-then-insert is atomic (see below / Codex #118 P2).
 
   // Pickup skips the radius check entirely (quoteCart already forces inRadius=true). (#54)
   const quote = await quoteCart(input, customerId);
@@ -191,6 +190,14 @@ export async function placeOrder(
 
   try {
     const order = await prisma.$transaction(async (tx) => {
+      // Per-customer placement lock: serialize all concurrent placements for this customer
+      // so the velocity count and the wallet balance re-read are both atomic against a
+      // burst of parallel checkouts (distinct idempotency keys slip past the replay guard).
+      // Held until commit; same primitive as the pickup-code lock (Codex #118 P2 / #116).
+      // Also shared with applyReferralCode so the referral "first order" check is atomic.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${customerOrderLockKey(customerId)})::bigint)`;
+      await assertOrderVelocity(customerId, tx);
+
       // Short 4-digit code the customer quotes at the counter to collect a pickup order.
       // Assigned inside the txn under a per-branch advisory lock so two concurrent pickups
       // at the same branch can't both read "free" and be handed the same code — the earlier
@@ -331,7 +338,11 @@ export async function placeOrder(
 
       // Wallet: debit prepaid → holding inside the same transaction as the order create.
       // Re-read the balance here so two concurrent orders can't both drain a wallet that
-      // only covers one (the serialized ledger writes make the check authoritative). (#55)
+      // only covers one (#55). The balance check + debit are only authoritative because the
+      // per-customer advisory lock at the top of this tx serializes concurrent wallet
+      // checkouts — the SUM aggregate itself runs at READ COMMITTED with no row lock, so
+      // without the lock both could observe the same pre-debit balance and overspend
+      // (Codex #116 P1).
       if (input.paymentMode === "wallet") {
         const balance = await walletBalance(tx, customerId);
         if (balance < created.grandTotalMinor) {

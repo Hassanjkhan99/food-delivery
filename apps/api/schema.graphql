@@ -564,7 +564,7 @@ type Mutation {
   submitRiderDoc(assetId: String!, kind: String!): RiderVerificationDoc!
   subscribeMembership(paymentMethodId: String!, planId: String!): Membership!
   suspendRestaurant(id: String!, reason: String!): Restaurant!
-  topUpWallet(amountMinor: Int!, paymentMethodId: String!): Wallet!
+  topUpWallet(amountMinor: Int!, idempotencyKey: String!, paymentMethodId: String!): Wallet!
   updateAddress(id: String!, input: UpdateAddressInput!): Address!
   updateBranchCommercials(
     branchId: String!

@@ -21,6 +21,7 @@ const topUpSchema = z.object({
     .min(MIN_TOPUP_MINOR, `Enter at least Rs ${MIN_TOPUP_MINOR / 100}.`)
     .max(MAX_TOPUP_MINOR, `You can top up at most Rs ${(MAX_TOPUP_MINOR / 100).toLocaleString()}.`),
   paymentMethodId: z.string().min(1, "Choose a payment method."),
+  idempotencyKey: z.string().min(8, "Missing idempotency key.").max(200),
 });
 
 // One ledger movement on the prepaid account, presented as a signed wallet entry.
@@ -87,10 +88,12 @@ builder.mutationFields((t) => ({
     args: {
       amountMinor: t.arg.int({ required: true }),
       paymentMethodId: t.arg.string({ required: true }),
+      // Stable per-attempt key so a retry / double-submit is idempotent (Codex #116).
+      idempotencyKey: t.arg.string({ required: true }),
     },
     resolve: async (_root, args, ctx) => {
       const customerId = ctx.userId!;
-      const { amountMinor, paymentMethodId } = topUpSchema.parse(args);
+      const { amountMinor, paymentMethodId, idempotencyKey } = topUpSchema.parse(args);
 
       const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
       if (!method || method.userId !== customerId)
@@ -98,17 +101,45 @@ builder.mutationFields((t) => ({
           extensions: { code: "payment_method_not_found" },
         });
 
+      // Claim the idempotency key BEFORE charging. The UNIQUE constraint is the race
+      // arbiter: a retry / double-submit loses here and returns the wallet unchanged
+      // instead of charging the card and crediting the wallet a second time (#116).
+      try {
+        await prisma.walletTopUp.create({
+          data: { idempotencyKey, userId: customerId, amountMinor, status: "pending" },
+        });
+      } catch (e) {
+        if ((e as { code?: string }).code === "P2002") {
+          // Same attempt already in-flight or completed — return the current wallet.
+          return loadWallet(customerId);
+        }
+        throw e;
+      }
+
       const result = await mockProvider.charge({
         token: method.providerToken,
+        // Reference is derived from the idempotency key so the provider side is
+        // deterministic across retries too.
+        reference: `topup_${idempotencyKey}`,
         amountMinor,
-        reference: `topup_${customerId}_${Date.now().toString(36)}`,
       });
-      if (!result.ok)
+      if (!result.ok) {
+        await prisma.walletTopUp.update({
+          where: { idempotencyKey },
+          data: { status: "failed" },
+        });
         throw new GraphQLError(result.declineReason, {
           extensions: { code: "payment_declined" },
         });
+      }
 
-      await prisma.$transaction((tx) => onWalletToppedUp(tx, customerId, amountMinor));
+      await prisma.$transaction(async (tx) => {
+        await onWalletToppedUp(tx, customerId, amountMinor);
+        await tx.walletTopUp.update({
+          where: { idempotencyKey },
+          data: { status: "completed", providerRef: result.providerRef },
+        });
+      });
       return loadWallet(customerId);
     },
   }),
