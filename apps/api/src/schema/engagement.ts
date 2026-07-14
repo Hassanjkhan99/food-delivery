@@ -9,13 +9,18 @@
 // carry a real deep-link and (where relevant) a real Rupee number from the customer's own
 // history — nothing invented.
 import { prisma } from "@fd/db";
-import {
-  LOYALTY_POINT_VALUE_MINOR,
-  LOYALTY_REDEEM_STEP,
-  formatRs,
-  loyaltyPointsToDiscountMinor,
-} from "@fd/shared";
+import { LOYALTY_REDEEM_STEP, formatRs, loyaltyPointsToDiscountMinor } from "@fd/shared";
+import { hasActiveMembership } from "../services/membershipService.js";
 import { builder } from "./builder.js";
+
+// Orders that don't count as a genuine "prior order" for first-order-only vouchers —
+// mirrors validateVoucher so the deal card never advertises a code the customer can't use.
+const NON_QUALIFYING_ORDER_STATUSES = ["rejected", "auto_expired", "cancelled"] as const;
+
+/** Format a percentage from basis points without rounding up (150 bps → "1.5%", 1000 → "10%"). */
+function formatPercent(valueBps: number): string {
+  return `${(valueBps / 100).toLocaleString("en-PK", { maximumFractionDigits: 2 })}%`;
+}
 
 // The wire shape. `kind`/`accent` are plain strings on the wire (the client maps them to
 // icons/colours) — deliberately not enums, so adding a future card kind never breaks the
@@ -79,12 +84,21 @@ export async function buildEngagementCards(
 ): Promise<EngagementCardShape[]> {
   const cards: EngagementCardShape[] = [];
 
-  // Pull the handful of rows we need in parallel. Everything here is already exposed via
-  // existing queries (availableVouchers / myOrders / loyaltyAccount / myReferral /
-  // myMembership) — we're only re-reading it, not adding new access.
-  const [voucher, deliveredOrders, loyalty, membership, referralCode] = await Promise.all([
-    // The soonest-to-expire active platform voucher the customer can still discover.
-    prisma.voucher.findFirst({
+  // Pull the rows we need in parallel. Everything here is already exposed via existing
+  // queries (availableVouchers / myOrders / loyaltyAccount / myReferral / myMembership) —
+  // we're only re-reading it, not adding new access.
+  const [
+    voucherCandidates,
+    lastDelivered,
+    savedAgg,
+    loyalty,
+    memberIsActive,
+    referralCode,
+    priorOrderCount,
+  ] = await Promise.all([
+    // Active platform vouchers within their window, soonest-to-expire first — we pick the
+    // first the customer can actually redeem (eligibility filtered below).
+    prisma.voucher.findMany({
       where: {
         active: true,
         scope: "platform",
@@ -93,29 +107,58 @@ export async function buildEngagementCards(
           { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
         ],
       },
-      // Expiring vouchers first (nulls last), then newest — mirrors the urgency the card conveys.
       orderBy: [{ endsAt: "asc" }, { createdAt: "desc" }],
+      take: 10,
     }),
-    // Delivered orders: newest first, enough to derive both the reorder target and the
-    // cumulative-savings recap.
-    prisma.order.findMany({
+    // Most recent delivered order → the reorder target.
+    prisma.order.findFirst({
       where: { customerId: userId, status: "delivered" },
       orderBy: { deliveredAt: "desc" },
-      take: 50,
       include: { branch: { include: { restaurant: true } } },
     }),
+    // Lifetime savings recap: sum across ALL delivered orders (not a truncated page).
+    prisma.order.aggregate({
+      where: { customerId: userId, status: "delivered" },
+      _sum: { discountMinor: true, loyaltyDiscountMinor: true },
+    }),
     prisma.loyaltyAccount.findUnique({ where: { userId } }),
-    prisma.subscription.findFirst({ where: { userId, status: "active" } }),
+    // Paid + unexpired only — mirrors membership benefit gating (no upsell to real members).
+    hasActiveMembership(userId),
     prisma.referralCode.findUnique({ where: { userId } }),
+    // "Genuine prior orders" for first-order-only voucher eligibility (matches validateVoucher).
+    prisma.order.count({
+      where: {
+        customerId: userId,
+        status: { notIn: [...NON_QUALIFYING_ORDER_STATUSES] },
+      },
+    }),
   ]);
 
-  // 1) DEAL — an active, discoverable platform voucher, framed with its real value.
+  // 1) DEAL — the first active platform voucher the customer can actually redeem. We
+  // filter out ones checkout would reject (budget-exhausted, first-order-only for a
+  // returning customer, per-user limit reached) so the rail never advertises a dead code.
+  const limitedIds = voucherCandidates.filter((v) => v.perUserLimit != null).map((v) => v.id);
+  const perUserUsed = new Map<string, number>();
+  if (limitedIds.length > 0) {
+    const grouped = await prisma.voucherRedemption.groupBy({
+      by: ["voucherId"],
+      where: { userId, voucherId: { in: limitedIds }, reversedAt: null },
+      _count: { _all: true },
+    });
+    for (const g of grouped) perUserUsed.set(g.voucherId, g._count._all);
+  }
+  const voucher = voucherCandidates.find((v) => {
+    const budgetLeft = v.totalBudgetMinor == null || v.usedBudgetMinor < v.totalBudgetMinor;
+    const firstOrderOk = !v.firstOrderOnly || priorOrderCount === 0;
+    const perUserOk = v.perUserLimit == null || (perUserUsed.get(v.id) ?? 0) < v.perUserLimit;
+    return budgetLeft && firstOrderOk && perUserOk;
+  });
   if (voucher) {
     const value =
       voucher.type === "free_delivery"
         ? "Free delivery"
         : voucher.type === "percentage"
-          ? `${Math.round(voucher.valueBps / 100)}% off`
+          ? `${formatPercent(voucher.valueBps)} off`
           : `${formatRs(voucher.valueMinor)} off`;
     const minOrder =
       voucher.minOrderMinor > 0 ? ` on orders over ${formatRs(voucher.minOrderMinor)}` : "";
@@ -123,18 +166,20 @@ export async function buildEngagementCards(
       id: `deal:${voucher.id}`,
       kind: "deal",
       title: `${value} with ${voucher.code}`,
-      body: voucher.description ?? `Tap to see today's offer${minOrder}.`,
+      body: voucher.description ?? `Tap to browse and apply this offer at checkout${minOrder}.`,
       accent: "red",
       ctaLabel: "View deal",
-      // Deep-link to the offers surface; the code is applied at checkout.
+      // Platform vouchers apply at checkout (which needs a cart), so there's no single
+      // deep-link that pre-applies the code — send the customer to discovery; the code is
+      // shown on the card. A dedicated offers surface / checkout prefill is a follow-up.
       href: "/search",
       expiresAt: voucher.endsAt,
       priority: PRIORITY.deal,
     });
   }
 
-  // 2) REORDER — the most recent restaurant the customer had delivered.
-  const lastDelivered = deliveredOrders[0];
+  // 2) REORDER — the most recent restaurant the customer had delivered. The home client
+  // additionally drops this card if the restaurant doesn't deliver to the current area.
   if (lastDelivered?.branch?.restaurant) {
     const r = lastDelivered.branch.restaurant;
     cards.push({
@@ -150,12 +195,10 @@ export async function buildEngagementCards(
     });
   }
 
-  // 3) SAVED — cumulative real savings (voucher + loyalty discounts) across delivered
-  // orders. Only shown once there's something worth celebrating.
-  const savedMinor = deliveredOrders.reduce(
-    (sum, o) => sum + o.discountMinor + o.loyaltyDiscountMinor,
-    0,
-  );
+  // 3) SAVED — cumulative real savings (voucher + loyalty discounts) across ALL delivered
+  // orders (DB aggregate, so it stays accurate past the query page). Shown once there's
+  // something worth celebrating.
+  const savedMinor = (savedAgg._sum.discountMinor ?? 0) + (savedAgg._sum.loyaltyDiscountMinor ?? 0);
   if (savedMinor > 0) {
     cards.push({
       id: "saved:lifetime",
@@ -189,8 +232,11 @@ export async function buildEngagementCards(
       priority: PRIORITY.reward,
     });
   } else if (points >= LOYALTY_REDEEM_STEP) {
-    // Already redeemable — nudge them to actually use it at checkout.
-    const value = formatRs(points * LOYALTY_POINT_VALUE_MINOR);
+    // Already redeemable — nudge them to use it at checkout. Value the STEP-ROUNDED points
+    // (checkout only redeems whole LOYALTY_REDEEM_STEP multiples), so we never overstate
+    // the discount (e.g. 150 pts → Rs 10 off, not Rs 15).
+    const redeemablePoints = Math.floor(points / LOYALTY_REDEEM_STEP) * LOYALTY_REDEEM_STEP;
+    const value = formatRs(loyaltyPointsToDiscountMinor(redeemablePoints));
     cards.push({
       id: "reward:redeemable",
       kind: "reward",
@@ -220,9 +266,10 @@ export async function buildEngagementCards(
     });
   }
 
-  // 6) MEMBERSHIP — upsell only for non-members. Deferred: quantifying "you'd have saved
-  // Rs X with Pro" (see follow-ups).
-  if (!membership) {
+  // 6) MEMBERSHIP — upsell only for genuine non-members (hasActiveMembership requires a
+  // paid, unexpired active row, so a lapsed / mid-charge slot still gets the prompt).
+  // Deferred: quantifying "you'd have saved Rs X with Pro" (see follow-ups).
+  if (!memberIsActive) {
     cards.push({
       id: "membership:upsell",
       kind: "membership",

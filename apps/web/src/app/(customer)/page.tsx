@@ -343,6 +343,19 @@ export default function HomePage() {
     return out;
   }, [reorderData, hits]);
 
+  // Engagement cards, minus any reorder card whose restaurant no longer delivers to the
+  // current area — same dead-end guard the reorder row applies. A reorder card deep-links
+  // to /r/<slug>; drop it unless that slug is in the deliverable feed. Other card kinds
+  // (deal/reward/referral/membership) don't target a specific restaurant, so they stay.
+  const engagementCards = useMemo(() => {
+    const deliverable = new Set(hits.map((h) => h.restaurant.slug));
+    return (engagementData?.engagementCards ?? []).filter((c) => {
+      if (c.kind !== "reorder") return true;
+      const m = /^\/r\/([^/?#]+)/.exec(c.href);
+      return m ? deliverable.has(m[1]) : true;
+    });
+  }, [engagementData, hits]);
+
   return (
     <main className="space-y-6">
       {/* Hero: warm peach card with a bold greeting, delivery address, a prominent search,
@@ -464,7 +477,7 @@ export default function HomePage() {
                   the rail hides itself when the server returns no cards. */}
               {loggedIn &&
                 (engagementData ? (
-                  <EngagementRail cards={engagementData.engagementCards} />
+                  <EngagementRail cards={engagementCards} />
                 ) : engagementFetching ? (
                   <EngagementRailSkeleton />
                 ) : null)}
