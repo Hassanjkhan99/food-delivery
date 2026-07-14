@@ -743,6 +743,18 @@ builder.mutationFields((t) => ({
           extensions: { code: "invalid_state" },
         });
 
+      // The declared COD is now trusted by cash-in-hand / earnings summaries, so validate it
+      // before storing (#113 follow-up): never negative, and must be 0 on a non-COD job so a
+      // rider client can't poison the totals with a bogus amount.
+      if (
+        args.codCollectedMinor < 0 ||
+        (task.codAmountMinor === 0 && args.codCollectedMinor !== 0)
+      ) {
+        throw new GraphQLError("The collected cash amount isn't valid for this order.", {
+          extensions: { code: "validation_error" },
+        });
+      }
+
       // Validate the POD asset (if supplied) before we mark delivered.
       if (args.podMediaId) {
         const asset = await prisma.mediaAsset.findUnique({ where: { id: args.podMediaId } });

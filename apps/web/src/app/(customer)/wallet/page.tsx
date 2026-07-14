@@ -76,13 +76,17 @@ export default function WalletPage() {
       paymentMethodId: selectedMethodId,
       idempotencyKey: idempotencyKey.current,
     });
-    // Rotate the key so the next deliberate top-up isn't deduped against this one
-    // (covers both a decline the user retries and a fresh successful top-up).
-    idempotencyKey.current = crypto.randomUUID();
     if (result.error) {
+      // A networkError means the response was lost — the server MAY already have charged
+      // and credited. Keep the SAME key so a retry dedupes server-side instead of charging
+      // twice. Only rotate on a definite server response (a GraphQL decline/validation),
+      // where the customer needs a fresh key to try again (#116).
+      if (!result.error.networkError) idempotencyKey.current = crypto.randomUUID();
       setError(friendlyMessage(parseGqlError(result.error, "We couldn't complete the top-up.")));
       return;
     }
+    // Success: rotate so the next deliberate top-up isn't deduped against this one.
+    idempotencyKey.current = crypto.randomUUID();
     refetch({ requestPolicy: "network-only" });
   }
 
