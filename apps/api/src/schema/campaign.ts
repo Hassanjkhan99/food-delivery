@@ -6,6 +6,7 @@
 // Customer: featuredBranches surfaces active featured_slot campaigns above organic results,
 // with an SLA guardrail so operationally poor restaurants can't buy top placement.
 import { prisma } from "@fd/db";
+import { isRestaurantOwner } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { accountBalance } from "../services/ledgerService.js";
@@ -57,9 +58,10 @@ async function assertNoActiveFeaturedSlot(restaurantId: string, exceptId?: strin
   }
 }
 
-async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
-  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("You don't have access to this restaurant.", {
+// #204: campaigns are a marketing surface — owner-only (staff see Orders + Today only).
+async function assertRestaurantOwner(ctx: AppContext, restaurantId: string) {
+  if (!isRestaurantOwner(ctx.roles, restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Only the restaurant owner can do this.", {
       extensions: { code: "forbidden" },
     });
   }
@@ -144,7 +146,7 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      await assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.campaign.findMany({
         ...query,
         where: { restaurantId: args.restaurantId },
@@ -158,7 +160,7 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      await assertRestaurantOwner(ctx, args.restaurantId);
       const r = await prisma.restaurant.findUniqueOrThrow({ where: { id: args.restaurantId } });
       return dailyRateFor(r.tier, "featured_slot");
     },
@@ -248,7 +250,7 @@ builder.mutationFields((t) => ({
       endsAt: t.arg({ type: "DateTime", required: false }),
     },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      await assertRestaurantOwner(ctx, args.restaurantId);
       if (!["featured_slot", "deal_badge"].includes(args.type)) {
         throw new GraphQLError("Please choose a valid campaign type.", {
           extensions: { code: "validation_error" },
@@ -294,7 +296,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("We couldn't find that campaign.", {
           extensions: { code: "not_found" },
         });
-      await assertRestaurantMember(ctx, c.restaurantId);
+      await assertRestaurantOwner(ctx, c.restaurantId);
       if (c.status !== "draft" && c.status !== "rejected") {
         throw new GraphQLError("Only draft or rejected campaigns can be submitted for approval.", {
           extensions: { code: "invalid_state" },
@@ -332,7 +334,7 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("We couldn't find that campaign.", {
           extensions: { code: "not_found" },
         });
-      await assertRestaurantMember(ctx, c.restaurantId);
+      await assertRestaurantOwner(ctx, c.restaurantId);
       return prisma.campaign.update({
         ...query,
         where: { id: args.id },

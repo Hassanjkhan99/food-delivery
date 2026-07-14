@@ -1,6 +1,7 @@
 // Uploads, menu source docs (physical-menu digitization), CSV import, layout,
 // theming, and post-delivery ratings.
 import { prisma } from "@fd/db";
+import { isRestaurantOwner } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { assetReadUrl, finalizeUpload, presignUpload } from "../services/uploads.js";
@@ -209,8 +210,9 @@ builder.mutationFields((t) => ({
       heroAssetId: t.arg.string({ required: false }),
     },
     resolve: async (_q, _root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
+      // #204: branding/theme is an owner-only settings surface (staff = Orders + Today only).
+      if (!isRestaurantOwner(ctx.roles, args.restaurantId) && !ctx.hasRole("admin")) {
+        throw new GraphQLError("Only the restaurant owner can do this.", {
           extensions: { code: "forbidden" },
         });
       }
