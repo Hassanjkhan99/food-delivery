@@ -12,7 +12,7 @@ const badgeVariants = cva(
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
         // Brand red pill (Promoted, urgent). Yellow accent pill (deals/offers) with
         // charcoal text for contrast, and its soft tint. See ui/THEME.md.
-        brand: "bg-kd-primary text-white [a]:hover:bg-kd-primary-hover",
+        brand: "bg-kd-primary text-kd-primary-fg [a]:hover:bg-kd-primary-hover",
         accent: "bg-kd-accent text-kd-fg [a]:hover:bg-kd-accent/80",
         "accent-soft": "bg-kd-accent-soft text-kd-warning",
         secondary: "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
