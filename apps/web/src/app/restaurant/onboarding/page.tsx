@@ -54,6 +54,11 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // The pin must actually move off the seeded default before it can be confirmed/submitted —
+  // otherwise an owner could tick the box while the branch still sits on the shared pilot
+  // coordinate, recreating the radius/ETA/dispatch bug this feature fixes (#200 Codex review).
+  const pinMoved = pin.lat !== DEFAULT_LOCATION.lat || pin.lng !== DEFAULT_LOCATION.lng;
+
   if (done) {
     return (
       <main className="mx-auto max-w-md py-16 text-center">
@@ -80,6 +85,10 @@ export default function OnboardingPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           setError(null);
+          if (!pinMoved) {
+            setError("Please move the map pin to your branch's real location before submitting.");
+            return;
+          }
           if (!pinConfirmed) {
             setError("Please place your branch pin on the map and confirm it.");
             return;
@@ -144,9 +153,13 @@ export default function OnboardingPage() {
               type="checkbox"
               className="mt-0.5"
               checked={pinConfirmed}
+              disabled={!pinMoved}
               onChange={(e) => setPinConfirmed(e.target.checked)}
             />
-            <span>This pin is my branch&apos;s real location.</span>
+            <span className={pinMoved ? undefined : "text-kd-fg-subtle"}>
+              This pin is my branch&apos;s real location.
+              {!pinMoved && " (Move the pin first.)"}
+            </span>
           </label>
         </div>
         <div className="grid grid-cols-3 gap-3">
@@ -179,7 +192,11 @@ export default function OnboardingPage() {
           </div>
         </div>
         {error && <p className="text-sm text-kd-danger">{error}</p>}
-        <Button type="submit" className="w-full" disabled={state.fetching || !pinConfirmed}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={state.fetching || !pinMoved || !pinConfirmed}
+        >
           {state.fetching ? "Submitting…" : "Submit for approval"}
         </Button>
       </form>
