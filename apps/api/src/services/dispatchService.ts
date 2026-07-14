@@ -160,10 +160,15 @@ export function scoreCandidate(cand: RiderCandidate, ctx: ScoreContext): ScoredC
   const diversionMeters = riderAt
     ? estimateDiversionMeters(riderAt, ctx.pickup, cand.committedDropoff)
     : Number.POSITIVE_INFINITY;
-  // Incremental delay estimate: the detour distance turned back into seconds.
-  const incrementalDelaySec = Number.isFinite(diversionMeters)
-    ? Math.round(diversionMeters / RIDER_SPEED_MPS)
-    : Number.POSITIVE_INFINITY;
+  // Incremental delay is the delay this new pickup adds to an ALREADY-committed customer.
+  // An idle rider (no committed dropoff) has no existing order to delay, so their
+  // incremental delay is 0 — otherwise the pickup-distance-derived diversion would push
+  // the best candidates past maxIncrementalDelaySec and wrongly reject them (Codex #126).
+  const incrementalDelaySec = !riderAt
+    ? Number.POSITIVE_INFINITY
+    : cand.committedDropoff
+      ? Math.round(diversionMeters / RIDER_SPEED_MPS)
+      : 0;
 
   const trust = clamp01(cand.rider.trustScore / 100);
   // Cash risk only applies to COD carried by SHARED riders below the trust threshold.
@@ -294,6 +299,12 @@ const DISPATCH_SPLIT_MEMO_PREFIX = "Shared dispatch";
 export async function postDispatchSplit(tx: Tx, input: DispatchSplitInput): Promise<string | null> {
   // Seller-owned rider → not a shared dispatch, nothing to split.
   if (input.lenderRestaurantId === null) return null;
+
+  // Serialize concurrent split posts for this order before the existence probe: without a
+  // lock two callers can both pass findFirst and double-post (LedgerEntry has no unique
+  // (orderId, memo) constraint). A per-order advisory lock makes the check-then-insert
+  // atomic — same primitive as the placement/pickup locks (Codex #126 P1).
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`dispatch-split:${input.orderId}`})::bigint)`;
 
   // Idempotency guard: bail if a shared-dispatch tx already exists for this order.
   const existing = await tx.ledgerEntry.findFirst({
