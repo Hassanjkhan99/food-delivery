@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "urql";
 import { graphql } from "@/graphql/generated";
-import { OTP_RATE_LIMIT_PER_HOUR } from "@fd/shared";
+import { OTP_RATE_LIMIT_PER_HOUR, PK_PHONE_MESSAGE, normalizePkPhone } from "@fd/shared";
 import { parseGqlError, friendlyMessage } from "@/lib/graphql-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,6 +150,11 @@ function LoginForm() {
   const [reqState, requestOtp] = useMutation(RequestOtpMutation);
   const [verState, verifyOtp] = useMutation(VerifyOtpMutation);
 
+  // Normalize forgiving input (03xx…, spaces/dashes) to canonical +92 for validity
+  // checks and for what we send to the server. null = not yet a valid PK mobile number.
+  const normalizedPhone = normalizePkPhone(phone);
+  const phoneValid = normalizedPhone !== null;
+
   // Resend countdown. Ticks once per second while > 0.
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -164,7 +169,9 @@ function LoginForm() {
 
   async function sendCode() {
     setError(null);
-    const result = await requestOtp({ phone });
+    // Send the canonical +92 form so local `03..` inputs work end-to-end. Fall back to
+    // the raw value if somehow called while invalid (the button guards against this).
+    const result = await requestOtp({ phone: normalizedPhone ?? phone });
     if (result.error) {
       const parsed = parseGqlError(result.error, "We couldn't send the code.");
       setError(
@@ -182,7 +189,10 @@ function LoginForm() {
 
   async function onRequest(e: React.FormEvent) {
     e.preventDefault();
+    if (!phoneValid) return;
     if (await sendCode()) {
+      // Pin the canonical form so the confirmation copy and the verify call both use +92.
+      if (normalizedPhone) setPhone(normalizedPhone);
       setCode("");
       setStep("code");
     }
@@ -256,15 +266,33 @@ function LoginForm() {
                 <Input
                   id="phone"
                   type="tel"
+                  inputMode="numeric"
                   autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+923001234567"
+                  onBlur={() => {
+                    // Tidy to canonical form on blur so the field stays forgiving while
+                    // typing but shows the number we'll actually use once it's valid.
+                    if (normalizedPhone) setPhone(normalizedPhone);
+                  }}
+                  placeholder="0310 2658153"
+                  aria-invalid={phone.trim() !== "" && phone !== "+92" && !phoneValid}
+                  aria-describedby="phone-hint"
                   className="mt-1"
                   autoFocus
                 />
+                <p id="phone-hint" className="mt-1 text-xs text-kd-fg-muted">
+                  {phone.trim() === "" || phone === "+92" || phoneValid
+                    ? "Pakistani mobile number, e.g. 0310 2658153."
+                    : PK_PHONE_MESSAGE}
+                </p>
               </div>
-              <Button type="submit" size="lg" className="w-full" disabled={reqState.fetching}>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={reqState.fetching || !phoneValid}
+              >
                 {reqState.fetching ? "Sending…" : "Send code"}
               </Button>
             </form>

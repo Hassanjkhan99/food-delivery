@@ -79,15 +79,15 @@ async function main() {
 
   // Users
   const mkUser = (phone: string, name: string) => prisma.user.create({ data: { phone, name } });
-  const admin = await mkUser("+920000000001", "Demo Admin");
-  const owner1 = await mkUser("+920000000002", "Owner Karachi Biryani");
-  const owner2 = await mkUser("+920000000003", "Owner Burger Theory");
-  const staff1 = await mkUser("+920000000004", "Counter Staff KBH");
-  const riderR = await mkUser("+920000000005", "Hamza (Restaurant Rider)");
-  const riderI = await mkUser("+920000000006", "Bilal (Independent Rider)");
-  const cust1 = await mkUser("+920000000007", "Ayesha Customer");
-  const cust2 = await mkUser("+920000000008", "Danish Customer");
-  const cust3 = await mkUser("+920000000009", "Fatima Customer");
+  const admin = await mkUser("+923000000001", "Demo Admin");
+  const owner1 = await mkUser("+923000000002", "Owner Karachi Biryani");
+  const owner2 = await mkUser("+923000000003", "Owner Burger Theory");
+  const staff1 = await mkUser("+923000000004", "Counter Staff KBH");
+  const riderR = await mkUser("+923000000005", "Hamza (Restaurant Rider)");
+  const riderI = await mkUser("+923000000006", "Bilal (Independent Rider)");
+  const cust1 = await mkUser("+923000000007", "Ayesha Customer");
+  const cust2 = await mkUser("+923000000008", "Danish Customer");
+  const cust3 = await mkUser("+923000000009", "Fatima Customer");
 
   const tax = await prisma.taxProfile.create({
     data: { name: "Punjab restaurant services 13%", rateBps: TAX_BPS, inclusive: false },
@@ -1173,15 +1173,15 @@ async function main() {
   ── Seed complete ─────────────────────────────────────────────
   Login (dev OTP is printed by the API console on request):
 
-    Admin              +920000000001
-    Owner (KBH, GB)    +920000000002
-    Owner (BT, LB)     +920000000003
-    Staff (KBH)        +920000000004
-    Rider (restaurant) +920000000005
-    Rider (independent)+920000000006
-    Customer (card)    +920000000007
-    Customer           +920000000008
-    Customer           +920000000009
+    Admin              +923000000001
+    Owner (KBH, GB)    +923000000002
+    Owner (BT, LB)     +923000000003
+    Staff (KBH)        +923000000004
+    Rider (restaurant) +923000000005
+    Rider (independent)+923000000006
+    Customer (card)    +923000000007
+    Customer           +923000000008
+    Customer           +923000000009
 
   Restaurants:
     karachi-biryani-house  small_business  tilt3d + parallax  (draft menu v2 pending)

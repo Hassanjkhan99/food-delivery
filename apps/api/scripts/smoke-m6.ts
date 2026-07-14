@@ -87,7 +87,7 @@ assert(Boolean(orderId), `customer placed ${placed.data?.placeOrder.code}`);
 
 // owner drives the board
 const owner = makeSession();
-await login(owner, "+920000000002");
+await login(owner, "+923000000002");
 
 const board = await owner<{ boardOrders: Array<{ id: string; status: string }> }>(
   `query B($b: String!) { boardOrders(branchId: $b) { id status } }`,

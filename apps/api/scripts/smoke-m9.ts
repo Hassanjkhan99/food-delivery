@@ -36,7 +36,7 @@ async function login(gql: ReturnType<typeof makeSession>, phone: string) {
 }
 
 const admin = makeSession();
-await login(admin, "+920000000001");
+await login(admin, "+923000000001");
 const anon = makeSession();
 
 // authz: anonymous blocked
