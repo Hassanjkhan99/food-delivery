@@ -35,7 +35,7 @@ async function login(gql: ReturnType<typeof makeSession>, phone: string) {
 }
 
 const owner = makeSession();
-await login(owner, "+920000000002");
+await login(owner, "+923000000002");
 
 const branchId = (
   await owner<{ branchBySlug: { id: string } }>(
@@ -137,7 +137,7 @@ assert(!lay.errors, "layoutJson updated on draft");
 
 // 6) rating: customer 0008 rates their delivered (unrated) order
 const cust = makeSession();
-await login(cust, "+920000000008");
+await login(cust, "+923000000008");
 const orders = await cust<{ myOrders: Array<{ id: string; status: string }> }>(
   `query { myOrders { id status } }`,
 );

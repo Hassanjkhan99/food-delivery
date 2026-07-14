@@ -106,7 +106,7 @@ assert(Boolean(branchId), "branch id resolved via myRestaurants", mine);
 // 2. Admin approves the restaurant
 // ---------------------------------------------------------------------------
 const admin = makeSession();
-await login(admin, "+920000000001");
+await login(admin, "+923000000001");
 const approved = await admin<{ approveRestaurant: { status: string } }>(
   `mutation A($id: String!) { approveRestaurant(id: $id) { status } }`,
   { id: restaurantId },

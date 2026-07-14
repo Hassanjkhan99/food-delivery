@@ -6,15 +6,15 @@
  * NOTE: phones/slugs must track the seed. If the seed changes, update this file.
  */
 export const SEED_USERS = {
-  admin: { phone: "+920000000001", name: "Demo Admin" },
-  ownerKarachiBiryani: { phone: "+920000000002", name: "Owner Karachi Biryani" },
-  ownerBurgerTheory: { phone: "+920000000003", name: "Owner Burger Theory" },
-  staffKbh: { phone: "+920000000004", name: "Counter Staff KBH" },
-  riderRestaurant: { phone: "+920000000005", name: "Hamza (Restaurant Rider)" },
-  riderIndependent: { phone: "+920000000006", name: "Bilal (Independent Rider)" },
-  customerCard: { phone: "+920000000007", name: "Ayesha Customer" },
-  customer2: { phone: "+920000000008", name: "Danish Customer" },
-  customer3: { phone: "+920000000009", name: "Fatima Customer" },
+  admin: { phone: "+923000000001", name: "Demo Admin" },
+  ownerKarachiBiryani: { phone: "+923000000002", name: "Owner Karachi Biryani" },
+  ownerBurgerTheory: { phone: "+923000000003", name: "Owner Burger Theory" },
+  staffKbh: { phone: "+923000000004", name: "Counter Staff KBH" },
+  riderRestaurant: { phone: "+923000000005", name: "Hamza (Restaurant Rider)" },
+  riderIndependent: { phone: "+923000000006", name: "Bilal (Independent Rider)" },
+  customerCard: { phone: "+923000000007", name: "Ayesha Customer" },
+  customer2: { phone: "+923000000008", name: "Danish Customer" },
+  customer3: { phone: "+923000000009", name: "Fatima Customer" },
 } as const;
 
 export type SeedUserKey = keyof typeof SEED_USERS;

@@ -37,7 +37,7 @@ async function login(gql: ReturnType<typeof makeSession>, phone: string) {
 }
 
 const owner = makeSession();
-await login(owner, "+920000000002");
+await login(owner, "+923000000002");
 const branchId = (
   await owner<{ branchBySlug: { id: string } }>(
     `query { branchBySlug(slug: "karachi-biryani-house") { id } }`,

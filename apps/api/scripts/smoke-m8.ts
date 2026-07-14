@@ -41,8 +41,8 @@ const owner = makeSession();
 const rider = makeSession();
 const custPhone = `+9233${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
 await login(customer, custPhone);
-await login(owner, "+920000000002");
-await login(rider, "+920000000005");
+await login(owner, "+923000000002");
+await login(rider, "+923000000005");
 
 // customer orders COD from KBH
 const menuQ = await customer<{
@@ -93,7 +93,7 @@ const riders = await owner<{ branchRiders: Array<{ id: string; user: { phone: st
   `query R($b: String!) { branchRiders(branchId: $b) { id user { phone } } }`,
   { b: branchId },
 );
-const hamza = riders.data!.branchRiders.find((r) => r.user.phone === "+920000000005")!;
+const hamza = riders.data!.branchRiders.find((r) => r.user.phone === "+923000000005")!;
 await owner(`mutation { assignRider(orderId: "${orderId}", riderId: "${hamza.id}") { status } }`);
 
 // rider goes online, sees the job
