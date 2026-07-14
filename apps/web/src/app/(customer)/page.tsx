@@ -19,6 +19,7 @@ import {
 } from "@/components/home/BrowseControls";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { OrderAgainRow, type ReorderTarget } from "@/components/home/OrderAgainRow";
+import { EngagementRail, EngagementRailSkeleton } from "@/components/home/EngagementRail";
 import {
   RestaurantCard,
   RestaurantMiniCard,
@@ -115,6 +116,25 @@ const OrderAgainQuery = graphql(`
   }
 `);
 
+// Gamified deal / reward / habit-loop cards (UX-15 / #134). A single read model composes
+// the signed-in customer's own loyalty / voucher / order / referral / membership state
+// into a ranked rail — no client-side reward logic.
+const EngagementCardsQuery = graphql(`
+  query EngagementCards {
+    engagementCards(limit: 5) {
+      id
+      kind
+      title
+      body
+      accent
+      ctaLabel
+      href
+      expiresAt
+      priority
+    }
+  }
+`);
+
 const JoinWaitlistMutation = graphql(`
   mutation JoinWaitlist($email: String!, $areaLabel: String, $lat: Float, $lng: Float) {
     joinWaitlist(email: $email, areaLabel: $areaLabel, lat: $lat, lng: $lng) {
@@ -167,6 +187,13 @@ export default function HomePage() {
   });
   const loggedIn = Boolean(viewerData?.viewer?.user?.id);
   const [{ data: reorderData }] = useQuery({ query: OrderAgainQuery, pause: !loggedIn });
+  // Engagement rail (#134): signed-in only — every card is personal. Cache-and-network so
+  // the rail reflects freshly earned points / new orders without a loading flash.
+  const [{ data: engagementData, fetching: engagementFetching }] = useQuery({
+    query: EngagementCardsQuery,
+    pause: !loggedIn,
+    requestPolicy: "cache-and-network",
+  });
 
   const [activeCuisine, setActiveCuisine] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -316,6 +343,19 @@ export default function HomePage() {
     return out;
   }, [reorderData, hits]);
 
+  // Engagement cards, minus any reorder card whose restaurant no longer delivers to the
+  // current area — same dead-end guard the reorder row applies. A reorder card deep-links
+  // to /r/<slug>; drop it unless that slug is in the deliverable feed. Other card kinds
+  // (deal/reward/referral/membership) don't target a specific restaurant, so they stay.
+  const engagementCards = useMemo(() => {
+    const deliverable = new Set(hits.map((h) => h.restaurant.slug));
+    return (engagementData?.engagementCards ?? []).filter((c) => {
+      if (c.kind !== "reorder") return true;
+      const m = /^\/r\/([^/?#]+)/.exec(c.href);
+      return m ? deliverable.has(m[1]) : true;
+    });
+  }, [engagementData, hits]);
+
   return (
     <main className="space-y-6">
       {/* Hero: warm peach card with a bold greeting, delivery address, a prominent search,
@@ -433,6 +473,14 @@ export default function HomePage() {
             <>
               {banners.length > 0 && <PromoCarousel banners={banners} />}
               <OrderAgainRow targets={reorderTargets} />
+              {/* Gamified deals / rewards / habit loops (#134). Skeleton on first fetch;
+                  the rail hides itself when the server returns no cards. */}
+              {loggedIn &&
+                (engagementData ? (
+                  <EngagementRail cards={engagementCards} />
+                ) : engagementFetching ? (
+                  <EngagementRailSkeleton />
+                ) : null)}
               {promoted.length > 0 && (
                 <section className="space-y-3">
                   <h2 className="text-kd-heading font-extrabold tracking-tight text-kd-fg">

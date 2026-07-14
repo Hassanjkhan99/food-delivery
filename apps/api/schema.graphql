@@ -289,6 +289,21 @@ type DeliveryTask {
   status: String!
 }
 
+"""
+A single ranked home-rail flashcard composed from the customer's own loyalty / voucher / order / referral / membership state. Read model only — never mutates.
+"""
+type EngagementCard {
+  accent: String!
+  body: String
+  ctaLabel: String!
+  expiresAt: DateTime
+  href: String!
+  id: ID!
+  kind: String!
+  priority: Int!
+  title: String!
+}
+
 type FeaturedPlacement {
   branch: Branch!
   campaignId: String!
@@ -728,6 +743,7 @@ type Query {
   dashboardStats: DashboardStats!
   draftMenu(branchId: String!): Menu!
   eimsInvoiceCsv(branchId: String!, from: DateTime, to: DateTime): String!
+  engagementCards(limit: Int): [EngagementCard!]!
   featuredBranches: [FeaturedPlacement!]!
   featuredSlotRate(restaurantId: String!): Int!
   giftCardByCode(code: String!): GiftCard
