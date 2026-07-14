@@ -4,11 +4,7 @@
 // dispute — notably COD cash_mismatch — can be triaged to resolution in the UI.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import {
-  TICKET_RESOLUTION_CODES,
-  ticketCategoryFilterValues,
-  isRestaurantOwner,
-} from "@fd/shared";
+import { TICKET_RESOLUTION_CODES, ticketCategoryFilterValues, isRestaurantOwner } from "@fd/shared";
 import { builder } from "./builder.js";
 
 async function audit(
