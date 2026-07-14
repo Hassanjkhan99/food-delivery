@@ -4,7 +4,7 @@ import { placeOrderInputSchema, quoteInputSchema } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { placeOrder, transition } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
-import { quoteCart, type QuoteResult } from "../services/quoteService.js";
+import { quoteCart, type DeliveryOption, type QuoteResult } from "../services/quoteService.js";
 import { builder } from "./builder.js";
 
 // ── input types ─────────────────────────────────────────────────────────────
@@ -35,6 +35,9 @@ const QuoteCartInput = builder.inputType("QuoteCartInput", {
     // "delivery" (default) | "pickup" — pickup zeroes the delivery fee (#54).
     fulfillmentMode: t.string({ required: false }),
     redeemPoints: t.int({ required: false }),
+    // Delivery service preference (#98): "standard" (default) | "scheduled". The server
+    // validates + prices this; unknown/unavailable keys fall back to standard.
+    deliveryOption: t.string({ required: false }),
   }),
 });
 
@@ -57,6 +60,9 @@ const PlaceOrderInputType = builder.inputType("PlaceOrderInput", {
     // Fulfillment (#54): "delivery" (default) | "pickup"; optional future slot ISO string.
     fulfillmentMode: t.string({ required: false }),
     scheduledFor: t.string({ required: false }),
+    // Selected delivery option (#98): "standard" (default) | "scheduled". Re-validated at
+    // placement via quoteCart; an unavailable key falls back to standard.
+    deliveryOption: t.string({ required: false }),
   }),
 });
 
@@ -121,6 +127,22 @@ QuoteLineType.implement({
   }),
 });
 
+// A single server-priced delivery choice for the checkout selector (#98). See
+// DeliveryOption in quoteService for field semantics.
+const DeliveryOptionType = builder.objectRef<DeliveryOption>("DeliveryOption");
+DeliveryOptionType.implement({
+  fields: (t) => ({
+    key: t.exposeString("key"),
+    label: t.exposeString("label"),
+    description: t.exposeString("description"),
+    priceMinor: t.exposeInt("priceMinor"),
+    etaMinutes: t.exposeInt("etaMinutes", { nullable: true }),
+    etaLabel: t.exposeString("etaLabel"),
+    available: t.exposeBoolean("available"),
+    recommended: t.exposeBoolean("recommended"),
+  }),
+});
+
 const QuoteType = builder.objectRef<QuoteResult>("Quote");
 QuoteType.implement({
   fields: (t) => ({
@@ -152,6 +174,12 @@ QuoteType.implement({
     meetsMinimum: t.exposeBoolean("meetsMinimum"),
     inRadius: t.exposeBoolean("inRadius"),
     distanceM: t.exposeInt("distanceM"),
+    // Delivery-option catalogue + the selected key (#98). Empty for pickup.
+    deliveryOptions: t.field({
+      type: [DeliveryOptionType],
+      resolve: (q) => q.deliveryOptions,
+    }),
+    deliveryOption: t.exposeString("deliveryOption"),
     lines: t.field({ type: [QuoteLineType], resolve: (q) => q.lines }),
   }),
 });
@@ -458,6 +486,7 @@ builder.mutationFields((t) => ({
           voucherCode: args.input.voucherCode ?? undefined,
           fulfillmentMode: args.input.fulfillmentMode ?? undefined,
           redeemPoints: args.input.redeemPoints ?? undefined,
+          deliveryOption: args.input.deliveryOption ?? undefined,
           lines: normalizeLines(args.input.lines),
         }),
         // Anonymous quotes still price the cart; voucher/loyalty redemption (#52/#57) and
@@ -485,6 +514,7 @@ builder.mutationFields((t) => ({
         voucherCode: args.input.voucherCode ?? undefined,
         fulfillmentMode: args.input.fulfillmentMode ?? undefined,
         scheduledFor: args.input.scheduledFor ?? undefined,
+        deliveryOption: args.input.deliveryOption ?? undefined,
         lines: normalizeLines(args.input.lines),
       });
       return placeOrder(ctx.userId!, input, args.idempotencyKey);

@@ -45,6 +45,31 @@ export type ResolvedLine = {
   }>;
 };
 
+// A single concrete, server-priced delivery choice the customer may pick at checkout
+// (#98, epic #97). This is the API SHAPE the richer modes (#99–#106) slot into later.
+// Every field is server-authoritative — the client never invents price or ETA.
+export type DeliveryOption = {
+  // Stable machine key: "standard" | "scheduled" (foundation set). More keys land with
+  // the variant issues. Sent back as `deliveryOption` on quote/placeOrder to pick it.
+  key: string;
+  // Customer-facing label ("Standard delivery", "Schedule for later").
+  label: string;
+  // One-line trade-off/eligibility copy shown under the label.
+  description: string;
+  // Delivery fee for THIS option in minor units (membership-aware). Flows into the total
+  // when selected. For the foundation set both options price identically to standard.
+  priceMinor: number;
+  // Coarse ETA in minutes, or null when it doesn't apply (e.g. a scheduled slot the
+  // customer picks themselves). etaLabel is the human string the UI shows.
+  etaMinutes: number | null;
+  etaLabel: string;
+  // Whether this option can currently be fulfilled/selected. Standard is available
+  // whenever delivery is; unavailable options are shown disabled, never hidden silently.
+  available: boolean;
+  // True for the option chosen by default (standard).
+  recommended: boolean;
+};
+
 export type QuoteResult = {
   branchId: string;
   subtotalMinor: number;
@@ -88,8 +113,23 @@ export type QuoteResult = {
   meetsMinimum: boolean;
   inRadius: boolean;
   distanceM: number;
+  // Concrete delivery choices for this cart/branch/address (#98). Empty for pickup (the
+  // pickup toggle is a separate fulfillment control, unchanged). The first entry is the
+  // default (standard). Server stays source of truth for every price + ETA here.
+  deliveryOptions: DeliveryOption[];
+  // The option key the caller requested (echoed, defaults to "standard"). The selected
+  // option's fee is already reflected in deliveryFeeMinor/grandTotalMinor above.
+  deliveryOption: string;
   lines: ResolvedLine[];
 };
+
+// Coarse delivery ETA in minutes: prep (default 20m + branch busy buffer) plus straight-
+// line ride time at ~20 km/h (distanceM / 333). Mirrors the marketplace search band so
+// the checkout ETA matches what the customer saw while browsing. (#98)
+const DEFAULT_PREP_MINUTES = 20;
+function estimateDeliveryEtaMinutes(distanceM: number, prepBufferMinutes: number): number {
+  return DEFAULT_PREP_MINUTES + prepBufferMinutes + Math.round(distanceM / 333);
+}
 
 // Compute the delivery fee after any active membership benefit. Free above the plan's
 // threshold; otherwise reduced by the plan's discount bps. customerId is optional — a
@@ -411,6 +451,43 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       loyaltyDiscountMinor,
   );
 
+  // Delivery-option catalogue (#98). Foundation set only — `standard` (today's delivery)
+  // and `scheduled` (reuses scheduledFor groundwork, same price). Priority/shared-route/
+  // wait-and-save/freelance (#99–#106) slot in here once their pricing + product calls
+  // land; deliberately NOT invented here. Empty for pickup (no rider leg to configure).
+  // Both foundation options price at the membership-aware deliveryFeeMinor — the point of
+  // this issue is the API shape + selector, so no new pricing is introduced.
+  const requestedOption = input.deliveryOption ?? "standard";
+  const etaMinutes = estimateDeliveryEtaMinutes(distanceM, branch.prepBufferMinutes);
+  const deliveryOptions: DeliveryOption[] = isPickup
+    ? []
+    : [
+        {
+          key: "standard",
+          label: "Standard delivery",
+          description: "Our regular delivery — best price.",
+          priceMinor: deliveryFeeMinor,
+          etaMinutes,
+          etaLabel: `${etaMinutes}–${etaMinutes + 10} min`,
+          available: inRadius,
+          recommended: true,
+        },
+        {
+          key: "scheduled",
+          label: "Schedule for later",
+          description: "Pick a future time — delivered around your slot.",
+          priceMinor: deliveryFeeMinor,
+          etaMinutes: null,
+          etaLabel: "You choose a time",
+          available: inRadius,
+          recommended: false,
+        },
+      ];
+  // Clamp to a real, available option so the client can never force an unknown/unfulfillable
+  // key. Falls back to standard (also the pickup case, where options is empty).
+  const selectedOption =
+    deliveryOptions.find((o) => o.key === requestedOption && o.available)?.key ?? "standard";
+
   return {
     branchId: branch.id,
     subtotalMinor: subtotal,
@@ -439,6 +516,8 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     meetsMinimum: subtotal >= branch.minOrderMinor,
     inRadius,
     distanceM,
+    deliveryOptions,
+    deliveryOption: selectedOption,
     lines,
   };
 }

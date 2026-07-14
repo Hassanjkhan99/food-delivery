@@ -274,6 +274,17 @@ type DeliveryOffer {
   taskId: String!
 }
 
+type DeliveryOption {
+  available: Boolean!
+  description: String!
+  etaLabel: String!
+  etaMinutes: Int
+  key: String!
+  label: String!
+  priceMinor: Int!
+  recommended: Boolean!
+}
+
 type DeliveryTask {
   acceptedAt: DateTime
   assignedAt: DateTime
@@ -719,6 +730,7 @@ input PlaceOrderInput {
   cutleryRequested: Boolean
   deliveryLat: Float!
   deliveryLng: Float!
+  deliveryOption: String
   fulfillmentMode: String
   lines: [CartLineInput!]!
   paymentMethodId: String
@@ -817,6 +829,8 @@ type Quote {
   baseDeliveryFeeMinor: Int!
   branchId: String!
   deliveryFeeMinor: Int!
+  deliveryOption: String!
+  deliveryOptions: [DeliveryOption!]!
   discountMinor: Int!
   distanceM: Int!
   grandTotalMinor: Int!
@@ -845,6 +859,7 @@ input QuoteCartInput {
   branchId: String!
   deliveryLat: Float!
   deliveryLng: Float!
+  deliveryOption: String
   fulfillmentMode: String
   lines: [CartLineInput!]!
   redeemPoints: Int
