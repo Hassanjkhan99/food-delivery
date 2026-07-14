@@ -4,7 +4,11 @@
 // dispute — notably COD cash_mismatch — can be triaged to resolution in the UI.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
-import { TICKET_RESOLUTION_CODES, ticketCategoryFilterValues } from "@fd/shared";
+import {
+  TICKET_RESOLUTION_CODES,
+  ticketCategoryFilterValues,
+  isRestaurantOwner,
+} from "@fd/shared";
 import { builder } from "./builder.js";
 
 async function audit(
@@ -191,8 +195,9 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: (query, _root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin"))
-        throw new GraphQLError("You don't have access to this restaurant.", {
+      // #204: the restaurant support inbox is an owner-only surface (staff = Orders + Today).
+      if (!isRestaurantOwner(ctx.roles, args.restaurantId) && !ctx.hasRole("admin"))
+        throw new GraphQLError("Only the restaurant owner can do this.", {
           extensions: { code: "forbidden" },
         });
       return prisma.supportTicket.findMany({

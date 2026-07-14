@@ -351,7 +351,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      // #204: KYC holds identity/bank docs — owner-only, never staff.
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.restaurantKyc.findUnique({
         ...query,
         where: { restaurantId: args.restaurantId },
@@ -524,11 +525,8 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (_root, args, ctx) => {
-      if (!ctx.restaurantIds.includes(args.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
-          extensions: { code: "forbidden" },
-        });
-      }
+      // #204: the payable balance is money data — owner-only (staff = Orders + Today).
+      assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.$transaction((tx) =>
         accountBalance(tx as never, `restaurant:${args.restaurantId}:payable`),
       );
@@ -582,7 +580,8 @@ builder.queryFields((t) => ({
       days: t.arg.int({ required: false }),
     },
     resolve: async (_root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      // #204: analytics is owner-only business intelligence.
+      await assertBranchOwner(ctx, args.branchId);
       const days = Math.min(Math.max(args.days ?? 30, 1), 365);
       const since = new Date(Date.now() - days * 24 * 60 * 60_000);
       const orders = await prisma.order.findMany({
@@ -742,7 +741,8 @@ builder.queryFields((t) => ({
       to: t.arg({ type: "DateTime", required: false }),
     },
     resolve: async (_root, args, ctx) => {
-      await assertBranchMember(ctx, args.branchId);
+      // #204: the eIMS statutory invoice export is money/settlement data — owner-only.
+      await assertBranchOwner(ctx, args.branchId);
       const orders = await prisma.order.findMany({
         where: {
           branchId: args.branchId,

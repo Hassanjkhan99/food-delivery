@@ -45,7 +45,7 @@ function useConsoleValue() {
     query: MyRestaurantsQuery,
     requestPolicy: "cache-and-network",
   });
-  const [{ data: viewerData }] = useQuery({
+  const [{ data: viewerData, fetching: viewerFetching }] = useQuery({
     query: ViewerRolesQuery,
     requestPolicy: "cache-and-network",
   });
@@ -69,7 +69,9 @@ function useConsoleValue() {
     branchId: branch?.id ?? null,
     setBranchId,
     isOwner,
-    fetching,
+    // #204: the owner-only page guard must wait for BOTH the restaurant AND the viewer-role
+    // queries — otherwise a legitimate owner is briefly !isOwner and gets bounced.
+    fetching: fetching || viewerFetching,
     refetch,
   };
 }

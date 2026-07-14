@@ -321,8 +321,9 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("We couldn't find that review.", {
           extensions: { code: "not_found" },
         });
-      if (!ctx.restaurantIds.includes(rating.restaurantId) && !ctx.hasRole("admin")) {
-        throw new GraphQLError("You don't have access to this restaurant.", {
+      // #204: replying to reviews is an owner-only surface (Reviews page is owner-only).
+      if (!isRestaurantOwner(ctx.roles, rating.restaurantId) && !ctx.hasRole("admin")) {
+        throw new GraphQLError("Only the restaurant owner can do this.", {
           extensions: { code: "forbidden" },
         });
       }

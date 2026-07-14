@@ -6,6 +6,7 @@
 // enable a SharedRiderPolicy (and not have the per-shift veto on) before its riders are lent.
 // The lender's own orders always win — enforced by the active-job ceiling in the scorer.
 import { prisma } from "@fd/db";
+import { isRestaurantOwner } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { transition } from "../services/orderService.js";
@@ -35,9 +36,11 @@ async function assertOrderBranchMember(ctx: AppContext, orderId: string) {
   return order;
 }
 
-async function assertRestaurantMember(ctx: AppContext, restaurantId: string) {
-  if (!ctx.restaurantIds.includes(restaurantId) && !ctx.hasRole("admin")) {
-    throw new GraphQLError("You don't have access to this restaurant.", {
+// #204: the shared-rider dispatch POLICY (read + write) is business config — owner-only.
+// (Per-order dispatch actions like offerTask/assignRider are separately member-gated.)
+async function assertRestaurantOwner(ctx: AppContext, restaurantId: string) {
+  if (!isRestaurantOwner(ctx.roles, restaurantId) && !ctx.hasRole("admin")) {
+    throw new GraphQLError("Only the restaurant owner can do this.", {
       extensions: { code: "forbidden" },
     });
   }
@@ -213,7 +216,7 @@ builder.queryFields((t) => ({
     authScopes: { restaurantMember: true },
     args: { restaurantId: t.arg.string({ required: true }) },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      await assertRestaurantOwner(ctx, args.restaurantId);
       return prisma.sharedRiderPolicy.findUnique({
         ...query,
         where: { restaurantId: args.restaurantId },
@@ -283,7 +286,7 @@ builder.mutationFields((t) => ({
       codTrustThreshold: t.arg.int({ required: false }),
     },
     resolve: async (query, _root, args, ctx) => {
-      await assertRestaurantMember(ctx, args.restaurantId);
+      await assertRestaurantOwner(ctx, args.restaurantId);
       const patch = {
         ...(args.sharingEnabled != null ? { sharingEnabled: args.sharingEnabled } : {}),
         ...(args.vetoActive != null ? { vetoActive: args.vetoActive } : {}),
