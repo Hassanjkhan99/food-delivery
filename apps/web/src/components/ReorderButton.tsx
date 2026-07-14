@@ -45,6 +45,9 @@ export function ReorderButton({
 
   const wouldReplace =
     existingLineCount > 0 && existingBranchId != null && existingBranchId !== source.branch.id;
+  // Block the reorder up front when the branch is closed by hours, rather than rebuilding
+  // the cart and routing to checkout only to fail at placement (#125).
+  const branchClosed = source.branch.isOpenNow === false;
 
   function run() {
     setError(null);
@@ -70,9 +73,16 @@ export function ReorderButton({
 
   return (
     <>
-      <Button type="button" size={size} variant={variant} className={className} onClick={onClick}>
+      <Button
+        type="button"
+        size={size}
+        variant={variant}
+        className={className}
+        onClick={onClick}
+        disabled={branchClosed}
+      >
         <RotateCcw className="h-4 w-4" />
-        {children ?? "Reorder"}
+        {branchClosed ? "Closed right now" : (children ?? "Reorder")}
       </Button>
       {error && <p className="mt-2 text-sm text-kd-danger">{error}</p>}
 

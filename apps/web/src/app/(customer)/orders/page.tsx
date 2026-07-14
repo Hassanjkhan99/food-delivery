@@ -20,6 +20,7 @@ const MyOrdersQuery = graphql(`
       placedAt
       branch {
         id
+        isOpenNow
         restaurant {
           name
           slug
@@ -90,6 +91,7 @@ export default function OrdersPage() {
                       id: o.branch.id,
                       slug: o.branch.restaurant.slug,
                       name: o.branch.restaurant.name,
+                      isOpenNow: o.branch.isOpenNow,
                     },
                     items: o.items.map((i) => ({
                       qty: i.qty,

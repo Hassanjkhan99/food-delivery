@@ -504,6 +504,11 @@ export default function CheckoutPage() {
               selectedId={selectedAddressId}
               onSelect={selectSavedAddress}
               onNew={startNewAddress}
+              loggedIn={loggedIn}
+              // Don't let the one-shot auto-pick overwrite an address the guest already
+              // typed before verifying via OTP (#125 review): only auto-select when the
+              // manual field is still empty.
+              autoSelect={addressText.trim().length === 0}
             />
 
             {selectedAddressId === null && (
