@@ -75,7 +75,8 @@ export async function loginAs(page: Page, user: SeedUserKey): Promise<string> {
 export async function loginViaUi(page: Page, user: SeedUserKey): Promise<void> {
   const { phone } = SEED_USERS[user];
   await page.goto("/login");
-  await page.getByPlaceholder("+923001234567").fill(phone);
+  // #148 changed the login phone placeholder to the friendlier local example.
+  await page.getByPlaceholder("0310 2658153").fill(phone);
   await page.getByRole("button", { name: /send code/i }).click();
 
   // Dev banner: "Dev mode — your code is 123456"
