@@ -53,6 +53,9 @@ const BoardQuery = graphql(`
       id
       riderType
       isOnline
+      # #118: whether this rider is barred from COD, so the picker can disable them for a
+      # COD order instead of letting assignRider fail with rider_cod_disabled.
+      codDisabled
       user {
         name
       }
@@ -341,6 +344,9 @@ export default function OrdersBoardPage() {
   const [acceptFor, setAcceptFor] = useState<BoardOrder | null>(null);
   const [rejectFor, setRejectFor] = useState<BoardOrder | null>(null);
   const [eightySixFor, setEightySixFor] = useState<BoardOrder | null>(null);
+  // Rider-assign error surfaced inline per order (#118): e.g. `rider_cod_disabled` when a
+  // COD-disabled rider slips through, keyed by order id so it shows under the right card.
+  const [assignError, setAssignError] = useState<Record<string, string>>({});
 
   // Live updates via SSE; a slow poll remains as a reconnect safety net.
   useSubscription(
@@ -645,7 +651,24 @@ export default function OrdersBoardPage() {
                       defaultValue=""
                       onChange={async (e) => {
                         if (e.target.value) {
-                          await assignRider({ orderId: o.id, riderId: e.target.value });
+                          const res = await assignRider({ orderId: o.id, riderId: e.target.value });
+                          // Surface the server guard (#118): a COD-disabled rider can't
+                          // take a COD order (code `rider_cod_disabled`). Show the message
+                          // and reset the picker rather than silently no-op.
+                          if (res.error) {
+                            setAssignError((m) => ({
+                              ...m,
+                              [o.id]: res.error?.graphQLErrors[0]?.message ?? "Couldn't assign.",
+                            }));
+                            e.target.value = "";
+                            return;
+                          }
+                          setAssignError((m) => {
+                            if (!(o.id in m)) return m;
+                            const rest = { ...m };
+                            delete rest[o.id];
+                            return rest;
+                          });
                           refresh();
                         }
                       }}
@@ -653,12 +676,21 @@ export default function OrdersBoardPage() {
                       <option value="" disabled>
                         Assign rider…
                       </option>
-                      {riders.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.user.name ?? "Rider"} {r.isOnline ? "●" : "○"}
-                        </option>
-                      ))}
+                      {riders.map((r) => {
+                        // #118: a COD-disabled rider can't take a COD order — disable and
+                        // label them in the picker so dispatch never tries the assign.
+                        const codBlocked = o.paymentMode === "cod" && r.codDisabled;
+                        return (
+                          <option key={r.id} value={r.id} disabled={codBlocked}>
+                            {r.user.name ?? "Rider"} {r.isOnline ? "●" : "○"}
+                            {codBlocked ? " · no COD" : ""}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {assignError[o.id] && (
+                      <p className="mt-1 text-xs text-kd-danger">{assignError[o.id]}</p>
+                    )}
                   </div>
                   {o.pickupPin && <PickupPin pin={o.pickupPin} />}
                 </OrderCard>

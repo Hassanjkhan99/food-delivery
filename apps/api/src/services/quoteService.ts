@@ -175,6 +175,14 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
   });
   const byId = new Map(items.map((i) => [i.id, i]));
 
+  // Timed-86 re-arm (#110): an item 86'd with an elapsed `unavailableUntil` is effectively
+  // available again. Mirror the marketplace read-time rule here so a customer who was shown a
+  // re-armed item (menu/search/deep-link) isn't rejected at quote/checkout with item_unavailable
+  // until someone manually toggles the flag. Applies to single items and combo components.
+  const now = new Date();
+  const menuItemAvailable = (i: { isAvailable: boolean; unavailableUntil: Date | null }): boolean =>
+    i.isAvailable || (i.unavailableUntil != null && i.unavailableUntil <= now);
+
   // Combos referenced in the cart (#53), resolved against the active menu with their
   // component items so availability can be validated at quote time.
   const comboIds = input.lines.map((l) => l.comboId).filter((id): id is string => Boolean(id));
@@ -202,7 +210,7 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
         throw new GraphQLError(`"${combo.name}" is currently unavailable.`, {
           extensions: { code: "item_unavailable" },
         });
-      const unavailable = combo.items.find((ci) => !ci.menuItem.isAvailable);
+      const unavailable = combo.items.find((ci) => !menuItemAvailable(ci.menuItem));
       if (unavailable) {
         throw new GraphQLError(
           `"${combo.name}" includes "${unavailable.menuItem.name}", which is currently unavailable.`,
@@ -234,7 +242,7 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       throw new GraphQLError("One of your items is no longer on the menu.", {
         extensions: { code: "item_unavailable" },
       });
-    if (!item.isAvailable)
+    if (!menuItemAvailable(item))
       throw new GraphQLError(`"${item.name}" is currently unavailable.`, {
         extensions: { code: "item_unavailable" },
       });

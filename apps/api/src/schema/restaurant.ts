@@ -122,6 +122,11 @@ builder.prismaObject("Rider", {
     trainingCompleted: t.exposeBoolean("trainingCompleted"),
     agreementAccepted: t.exposeBoolean("agreementAccepted"),
     sharedModeEnabled: t.exposeBoolean("sharedModeEnabled"),
+    // Whether this rider is barred from carrying COD orders (#118). Dispatchers need this
+    // on the roster so the order board can flag/disable a COD-disabled rider for a COD
+    // order before assignment fails with `rider_cod_disabled`. Operational (not identity)
+    // data, so — unlike verificationDocs — it's safe to expose to the restaurant roster.
+    codDisabled: t.exposeBoolean("codDisabled"),
     verifiedAt: t.field({ type: "DateTime", nullable: true, resolve: (r) => r.verifiedAt }),
     rejectionReason: t.exposeString("rejectionReason", { nullable: true }),
     user: t.relation("user"),
@@ -1530,10 +1535,33 @@ builder.mutationFields((t) => ({
             PKT_OFFSET_MS,
         );
       }
-      return prisma.menuItem.update({
+      const updated = await prisma.menuItem.update({
         where: { id: args.itemId },
         data: { isAvailable: args.available, unavailableUntil },
       });
+      // Twin propagation (#110): flip the SAME-NAME item in the branch's OTHER live menu
+      // version (draft <-> published) so an 86 survives a publish and re-appears in edits.
+      // Matched by name because publish deep-clones into fresh ids (see menuService). The
+      // no-twin case (no draft yet, or item not present in the other version) is a no-op.
+      const branchId = item.category.menu.branchId;
+      const otherStatus = item.category.menu.status === "draft" ? "published" : "draft";
+      const otherMenu = await prisma.menu.findFirst({
+        where: { branchId, status: otherStatus },
+        orderBy: { version: "desc" },
+      });
+      if (otherMenu) {
+        // Scope by category name too (#110 review): menu-item names aren't unique, so a
+        // name-only match would flip an unrelated same-name item in another category (e.g.
+        // "Fries" under two sections). Matching the twin category narrows to the real twin.
+        await prisma.menuItem.updateMany({
+          where: {
+            name: item.name,
+            category: { menuId: otherMenu.id, name: item.category.name },
+          },
+          data: { isAvailable: args.available, unavailableUntil },
+        });
+      }
+      return updated;
     },
   }),
 

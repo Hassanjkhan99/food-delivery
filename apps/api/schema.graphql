@@ -781,7 +781,7 @@ type Query {
   auditLogs(take: Int): [AuditLog!]!
   availableVouchers(restaurantId: String): [Voucher!]!
   boardOrders(branchId: String!, statuses: [String!]): [Order!]!
-  branchBySlug(slug: String!): Branch
+  branchBySlug(branchId: String, slug: String!): Branch
   branchRiders(branchId: String!): [Rider!]!
   branchUnavailableItems(branchId: String!): [MenuItem!]!
   browseBranches(
@@ -996,6 +996,7 @@ type RestaurantTheme {
 
 type Rider {
   agreementAccepted: Boolean!
+  codDisabled: Boolean!
   id: ID!
   isOnline: Boolean!
   rejectionReason: String

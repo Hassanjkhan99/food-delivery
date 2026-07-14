@@ -421,9 +421,11 @@ function DishRow({ hit }: { hit: DishHit }) {
   const r = hit.branch.restaurant;
   return (
     <li>
-      {/* Deep-link opens the exact item sheet on the restaurant page (?item=<id>). */}
+      {/* Deep-link opens the exact item sheet on the restaurant page (?item=<id>). Pass
+          the matched branch (#108) so a dish from a non-first branch of a multi-branch
+          restaurant opens that branch, not branchBySlug's first-approved default. */}
       <Link
-        href={`/r/${r.slug}?item=${encodeURIComponent(hit.item.id)}`}
+        href={`/r/${r.slug}?item=${encodeURIComponent(hit.item.id)}&branch=${encodeURIComponent(hit.branch.id)}`}
         className="flex items-center gap-3 rounded-2xl border border-kd-border bg-kd-surface p-2.5 transition-colors hover:bg-kd-surface-muted"
       >
         <RestaurantImage

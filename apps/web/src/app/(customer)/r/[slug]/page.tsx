@@ -37,8 +37,8 @@ import { CartBarSpacer, FloatingCartBar } from "./floating-cart-bar";
 import { useHeroCollapsed, useScrollSpy } from "./use-menu-scroll";
 
 const BranchQuery = graphql(`
-  query BranchDetail($slug: String!) {
-    branchBySlug(slug: $slug) {
+  query BranchDetail($slug: String!, $branchId: String) {
+    branchBySlug(slug: $slug, branchId: $branchId) {
       id
       name
       addressText
@@ -150,7 +150,15 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
   const searchParams = useSearchParams();
   const deepLinkItemId = searchParams.get("item");
   const editLineId = searchParams.get("edit");
-  const [{ data, fetching }] = useQuery({ query: BranchQuery, variables: { slug } });
+  // Branch-specific dish deep-links (#108): honor an optional ?branch=<id> so a dish hit
+  // from a non-first branch of a multi-branch restaurant loads that exact branch (and its
+  // menu), making the ?item= auto-open resolve. Absent → branchBySlug's first-approved
+  // branch (single-branch path unchanged).
+  const deepLinkBranchId = searchParams.get("branch");
+  const [{ data, fetching }] = useQuery({
+    query: BranchQuery,
+    variables: { slug, branchId: deepLinkBranchId },
+  });
   const reduced = useReducedMotion();
   const [openItem, setOpenItem] = useState<MenuItemForModal | null>(null);
   const [conflict, setConflict] = useState<ItemForCard | null>(null);

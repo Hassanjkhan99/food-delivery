@@ -6,6 +6,28 @@ import { z } from "zod";
 import { branchOpenNow } from "../services/branchHours.js";
 import { builder } from "./builder.js";
 
+// Timed-86 re-arm (#110): an item 86'd with an `unavailableUntil` in the past is treated
+// as available again at READ time (no background sweep in this MVP). Items 86'd with no
+// `unavailableUntil` (indefinite) stay unavailable. This Prisma filter is the OR-form of
+// that rule; keep it consistent across every marketplace menu-read site.
+function availableItemFilter(now = new Date()) {
+  return {
+    OR: [{ isAvailable: true }, { isAvailable: false, unavailableUntil: { not: null, lte: now } }],
+  };
+}
+
+// Timed-86 re-arm (#110), read-model form: is this item effectively available right now,
+// accounting for an elapsed `unavailableUntil`? Mirrors availableItemFilter for the
+// per-item MenuItem.isAvailable resolver so the customer UI (add-to-cart, deep-link
+// auto-open) sees a re-armed item as available before the next publish/toggle.
+function itemEffectivelyAvailable(
+  item: { isAvailable: boolean; unavailableUntil: Date | null },
+  now = new Date(),
+): boolean {
+  if (item.isAvailable) return true;
+  return item.unavailableUntil != null && item.unavailableUntil <= now;
+}
+
 builder.prismaObject("RestaurantTheme", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -243,7 +265,8 @@ builder.prismaObject("Branch", {
           ...query,
           where: {
             name: { in: topNames },
-            isAvailable: true,
+            // Timed-86 re-arm (#110): include items whose 86 window has elapsed.
+            ...availableItemFilter(),
             category: { menuId: branch.activeMenuId },
           },
         });
@@ -310,7 +333,10 @@ builder.prismaObject("MenuItem", {
           ? item.compareAtPriceMinor
           : null,
     }),
-    isAvailable: t.exposeBoolean("isAvailable"),
+    // Timed-86 re-arm (#110): report an item whose `unavailableUntil` has elapsed as
+    // available again at read time (mirrors availableItemFilter), so the customer menu,
+    // add-to-cart, and deep-link auto-open all see it as orderable before the next toggle.
+    isAvailable: t.boolean({ resolve: (item) => itemEffectivelyAvailable(item) }),
     // Timed 86 (#46): when this item is scheduled to come back. null when available or
     // 86'd indefinitely. Informational for the vendor board; not enforced server-side yet.
     unavailableUntil: t.field({
@@ -600,7 +626,8 @@ builder.queryFields((t) => ({
         // All available item prices for each active menu, to compute a per-branch median.
         prisma.menuItem.findMany({
           where: {
-            isAvailable: true,
+            // Timed-86 re-arm (#110): elapsed 86 windows count as available.
+            ...availableItemFilter(),
             category: { menuId: { in: menuIds } },
           },
           select: { priceMinor: true, category: { select: { menuId: true } } },
@@ -688,11 +715,21 @@ builder.queryFields((t) => ({
   branchBySlug: t.prismaField({
     type: "Branch",
     nullable: true,
-    args: { slug: t.arg.string({ required: true }) },
+    // Branch-specific dish deep-links (#108): an optional `branchId` selects a specific
+    // branch of a multi-branch restaurant (still scoped to the slug + approved), so a dish
+    // search hit from a non-first branch opens the right one. Omitted → first approved
+    // branch (unchanged single-branch path).
+    args: {
+      slug: t.arg.string({ required: true }),
+      branchId: t.arg.string({ required: false }),
+    },
     resolve: (query, _root, args) =>
       prisma.branch.findFirst({
         ...query,
-        where: { restaurant: { slug: args.slug, status: "approved" } },
+        where: {
+          ...(args.branchId ? { id: args.branchId } : {}),
+          restaurant: { slug: args.slug, status: "approved" },
+        },
       }),
   }),
 
@@ -775,7 +812,8 @@ builder.queryFields((t) => ({
         ? await prisma.menuItem.findMany({
             where: {
               name: { contains: q, mode: "insensitive" },
-              isAvailable: true,
+              // Timed-86 re-arm (#110): elapsed 86 windows count as available.
+              ...availableItemFilter(),
               category: { menuId: { in: menuIds } },
             },
             select: { id: true, category: { select: { menuId: true } } },
