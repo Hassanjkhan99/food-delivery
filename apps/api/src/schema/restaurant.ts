@@ -1550,8 +1550,14 @@ builder.mutationFields((t) => ({
         orderBy: { version: "desc" },
       });
       if (otherMenu) {
+        // Scope by category name too (#110 review): menu-item names aren't unique, so a
+        // name-only match would flip an unrelated same-name item in another category (e.g.
+        // "Fries" under two sections). Matching the twin category narrows to the real twin.
         await prisma.menuItem.updateMany({
-          where: { name: item.name, category: { menuId: otherMenu.id } },
+          where: {
+            name: item.name,
+            category: { menuId: otherMenu.id, name: item.category.name },
+          },
           data: { isAvailable: args.available, unavailableUntil },
         });
       }
