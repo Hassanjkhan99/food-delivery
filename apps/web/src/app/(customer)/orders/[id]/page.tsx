@@ -27,6 +27,7 @@ const OrderQuery = graphql(`
       fulfillmentMode
       pickupCode
       scheduledFor
+      scheduledPromotedAt
       subtotalMinor
       taxTotalMinor
       taxLabelSnapshot
@@ -266,13 +267,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <h1 className="text-2xl font-bold">{order.branch.restaurant.name}</h1>
           <p className="text-sm text-kd-fg-muted">{order.code}</p>
         </div>
-        {order.status === "pending_acceptance" && (
-          <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-right text-xs text-kd-warning">
-            Restaurant has
-            <br />
-            <Countdown deadline={order.acceptDeadlineAt as unknown as string} /> to accept
-          </div>
-        )}
+        {/* #199: a scheduled ("pre-order") not yet promoted to the kitchen carries a
+            placement-time placeholder acceptDeadlineAt (booking + 120s) that's already in the
+            past, so rendering the acceptance countdown would show "0:00 to accept" for hours or
+            days. Show the booked slot instead; the real countdown starts once the order is
+            promoted (scheduledPromotedAt set) at scheduledFor − leadTime. */}
+        {order.status === "pending_acceptance" &&
+          (order.scheduledFor && !order.scheduledPromotedAt ? (
+            <div className="rounded-lg bg-kd-surface-muted px-3 py-2 text-right text-xs text-kd-fg-muted">
+              Scheduled for
+              <br />
+              {new Date(order.scheduledFor as unknown as string).toLocaleString([], {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </div>
+          ) : (
+            <div className="rounded-lg bg-kd-warning-soft px-3 py-2 text-right text-xs text-kd-warning">
+              Restaurant has
+              <br />
+              <Countdown deadline={order.acceptDeadlineAt as unknown as string} /> to accept
+            </div>
+          ))}
       </div>
 
       {reconnecting && (

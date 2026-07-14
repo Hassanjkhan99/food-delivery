@@ -54,6 +54,12 @@ export async function promoteScheduledOrders(): Promise<number> {
   });
 
   let promoted = 0;
+  // Collect the customer-notification promises and await them before returning. On the
+  // serverless cron path (/api/cron/promote-scheduled) the invocation can be frozen the moment
+  // the route returns, so a fire-and-forget notify would be dropped even though the DB
+  // promotion already committed (Codex #220). notifyScheduledOrderPromoted swallows its own
+  // errors, so allSettled here is belt-and-braces.
+  const notifications: Promise<void>[] = [];
   for (const order of candidates) {
     if (!order.scheduledFor) continue; // narrow the type; the filter already guarantees it
     const leadMinutes = scheduledPromoteLeadMinutes(order.branch.prepBufferMinutes);
@@ -97,11 +103,13 @@ export async function promoteScheduledOrders(): Promise<number> {
       branchId: order.branchId,
       status: "pending_acceptance",
     });
-    void notifyScheduledOrderPromoted({
-      id: order.id,
-      customerId: order.customerId,
-      code: order.code,
-    });
+    notifications.push(
+      notifyScheduledOrderPromoted({
+        id: order.id,
+        customerId: order.customerId,
+        code: order.code,
+      }),
+    );
 
     logger.info(
       { orderId: order.id, branchId: order.branchId, leadMinutes },
@@ -110,6 +118,8 @@ export async function promoteScheduledOrders(): Promise<number> {
     promoted++;
   }
 
+  // Await the notification fan-out so a serverless invocation isn't frozen before it lands.
+  await Promise.allSettled(notifications);
   return promoted;
 }
 
