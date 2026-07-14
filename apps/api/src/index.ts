@@ -9,4 +9,5 @@ export { pubsub } from "./pubsub.js";
 export { handleLocalUploadPut, handleLocalFileGet } from "./services/storage/objectStore.js";
 export { sweepExpiredOrders } from "./jobs/expirePendingOrders.js";
 export { sweepExpiredOffers } from "./jobs/expireStaleOffers.js";
+export { promoteScheduledOrders } from "./jobs/promoteScheduledOrders.js";
 export { recomputeAllTrustScores } from "./services/riderTrustService.js";

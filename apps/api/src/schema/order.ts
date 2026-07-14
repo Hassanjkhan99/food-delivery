@@ -237,6 +237,14 @@ export const OrderType = builder.prismaObject("Order", {
       nullable: true,
       resolve: (o) => o.scheduledFor,
     }),
+    // When a scheduled/pre-order was auto-promoted into the kitchen's New lane (#199). Null
+    // until its prep window opens; the board uses it to move a pre-order out of the
+    // "Scheduled" lane and into "New" without losing the promised scheduledFor time.
+    scheduledPromotedAt: t.field({
+      type: "DateTime",
+      nullable: true,
+      resolve: (o) => o.scheduledPromotedAt,
+    }),
     subtotalMinor: t.exposeInt("subtotalMinor"),
     deliveryFeeMinor: t.exposeInt("deliveryFeeMinor"),
     taxTotalMinor: t.exposeInt("taxTotalMinor"),

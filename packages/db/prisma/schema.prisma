@@ -863,6 +863,13 @@ model Order {
   // acceptance-SLA-from-scheduledFor sweeper change is a follow-up, see orderService).
   fulfillmentMode       FulfillmentMode @default(delivery)
   scheduledFor          DateTime?   @db.Timestamptz()
+  // Auto-promotion of scheduled/pre-orders (#199). Set by the promotion sweeper the moment a
+  // scheduled order's prep window opens (scheduledFor − leadTime). Until then the order sits in
+  // the board's "Scheduled" prep-planning lane; once set it moves into the "New" lane and its
+  // acceptance SLA (acceptDeadlineAt) is refreshed to start from promotion, not from booking.
+  // Null on ordinary (non-scheduled) orders and on scheduled orders not yet due. The presence
+  // of this timestamp is the idempotency guard — the sweeper only promotes rows where it's null.
+  scheduledPromotedAt   DateTime?   @db.Timestamptz()
   pickupCode            String?
   acceptDeadlineAt      DateTime    @db.Timestamptz()
   prepEtaMinutes        Int?
@@ -889,6 +896,9 @@ model Order {
   @@index([branchId, status])
   @@index([customerId, placedAt])
   @@index([status, acceptDeadlineAt])
+  // Drives the scheduled-order promotion sweeper (#199): scan pending scheduled orders by
+  // their target time, mirroring the acceptDeadlineAt index the expiry sweeper leans on.
+  @@index([status, scheduledFor])
   @@map("orders")
 }
 

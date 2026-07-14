@@ -12,7 +12,17 @@ import { recordCancellation } from "../services/policyService.js";
 // serverless cron endpoint (collapsed web deploy) can drive it. Returns the count expired.
 export async function sweepExpiredOrders(): Promise<number> {
   const stale = await prisma.order.findMany({
-    where: { status: "pending_acceptance", acceptDeadlineAt: { lt: new Date() } },
+    where: {
+      status: "pending_acceptance",
+      acceptDeadlineAt: { lt: new Date() },
+      // #199: a not-yet-promoted scheduled ("pre-order") order carries the placement-time
+      // acceptDeadlineAt (now + 120s) purely as a placeholder — its acceptance SLA hasn't
+      // started yet. Excluding it here is essential: otherwise every pre-order would
+      // auto-expire ~2 minutes after booking, long before its prep window opens. Once the
+      // promotion sweeper stamps scheduledPromotedAt (and refreshes acceptDeadlineAt to start
+      // the real SLA), the order no longer matches this guard and expires normally on breach.
+      NOT: { AND: [{ scheduledFor: { not: null } }, { scheduledPromotedAt: null }] },
+    },
   });
   let expired = 0;
   for (const order of stale) {

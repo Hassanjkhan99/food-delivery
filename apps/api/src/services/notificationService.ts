@@ -95,6 +95,35 @@ export async function notifyOrderStatus(
   }
 }
 
+// Scheduled/pre-order promotion (#199). Not an order-status change (the order stays
+// pending_acceptance), so it doesn't belong in STATUS_COPY — it's a distinct "your pre-order
+// is now with the restaurant" beat. Same non-fatal contract as notifyOrderStatus.
+export async function notifyScheduledOrderPromoted(order: {
+  id: string;
+  customerId: string;
+  code: string;
+}): Promise<void> {
+  const title = "Your scheduled order is on its way to the kitchen";
+  const body = `We've sent your scheduled order to the restaurant to prepare for your slot. (${order.code})`;
+  const linkHref = `/orders/${order.id}`;
+  try {
+    await prisma.notification.create({
+      data: {
+        userId: order.customerId,
+        kind: "transactional",
+        title,
+        body,
+        linkHref,
+        orderId: order.id,
+      },
+    });
+    await publishUnread(order.customerId);
+    await dispatchNotification(order.customerId, { kind: "transactional", title, body, linkHref });
+  } catch (err) {
+    logger.error({ err, orderId: order.id }, "notifyScheduledOrderPromoted failed (non-fatal)");
+  }
+}
+
 export type PromoSegment = "all" | "new" | "lapsed";
 
 // Resolve a simple v1 segment to the set of customer userIds, honouring marketing
