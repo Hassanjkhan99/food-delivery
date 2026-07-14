@@ -57,6 +57,135 @@ DashboardStats.implement({
   }),
 });
 
+// ── Admin command center (#135) ────────────────────────────────────────────
+// A live-ops landing view composed entirely from existing domain data — no new
+// tables. It bundles three read models the dashboard renders together:
+//   • health   — marketplace pulse (orders/GMV/SLA + fleet & storefront supply)
+//   • money    — outstanding-cash / liability snapshot
+//   • attention — a prioritised decisions queue that deep-links into the existing
+//                 admin workflows (approvals, KYC, refunds, verification, …)
+// Kept as one query so the page issues a single round-trip and can bound-poll it.
+
+// Order statuses that count as "in flight" (open on the marketplace).
+const ACTIVE_ORDER_STATUSES = [
+  "pending_acceptance",
+  "accepted",
+  "preparing",
+  "ready_for_pickup",
+  "rider_assigned",
+  "reassigning",
+  "picked_up",
+  "out_for_delivery",
+] as const;
+
+// A pending order is "at SLA risk" once it's within this window of its accept deadline.
+const SLA_RISK_WINDOW_MS = 45_000;
+// A rider carrying a live task whose last GPS fix is older than this looks stalled.
+const STALE_LOCATION_MS = 5 * 60_000;
+
+const CommandCenterHealth = builder.objectRef<{
+  ordersToday: number;
+  gmvTodayMinor: number;
+  activeOrders: number;
+  acceptanceSlaPct: number;
+  avgAcceptanceSeconds: number | null;
+  cancellationRatePct: number;
+  ridersOnline: number;
+  ridersTotal: number;
+  restaurantsLive: number;
+  restaurantsTotal: number;
+  slaRiskOrders: number;
+}>("CommandCenterHealth");
+CommandCenterHealth.implement({
+  fields: (t) => ({
+    ordersToday: t.exposeInt("ordersToday"),
+    gmvTodayMinor: t.exposeInt("gmvTodayMinor"),
+    activeOrders: t.exposeInt("activeOrders"),
+    acceptanceSlaPct: t.exposeFloat("acceptanceSlaPct"),
+    avgAcceptanceSeconds: t.exposeFloat("avgAcceptanceSeconds", { nullable: true }),
+    cancellationRatePct: t.exposeFloat("cancellationRatePct"),
+    ridersOnline: t.exposeInt("ridersOnline"),
+    ridersTotal: t.exposeInt("ridersTotal"),
+    restaurantsLive: t.exposeInt("restaurantsLive"),
+    restaurantsTotal: t.exposeInt("restaurantsTotal"),
+    slaRiskOrders: t.exposeInt("slaRiskOrders"),
+  }),
+});
+
+const CommandCenterMoney = builder.objectRef<{
+  codOutstandingMinor: number;
+  refundLiabilityMinor: number;
+  pendingPayoutMinor: number;
+}>("CommandCenterMoney");
+CommandCenterMoney.implement({
+  fields: (t) => ({
+    codOutstandingMinor: t.exposeInt("codOutstandingMinor"),
+    refundLiabilityMinor: t.exposeInt("refundLiabilityMinor"),
+    pendingPayoutMinor: t.exposeInt("pendingPayoutMinor"),
+  }),
+});
+
+// One row in the "Attention needed" queue. `severity` drives colour (UX-13:
+// red = critical, yellow = warning). `href` deep-links to the existing workflow
+// that resolves it. Grouped counts (not per-entity rows) keep v1 cheap.
+const AttentionItem = builder.objectRef<{
+  key: string;
+  kind: string;
+  severity: string;
+  title: string;
+  detail: string;
+  count: number;
+  href: string;
+}>("AttentionItem");
+AttentionItem.implement({
+  fields: (t) => ({
+    key: t.exposeString("key"),
+    kind: t.exposeString("kind"),
+    severity: t.exposeString("severity"),
+    title: t.exposeString("title"),
+    detail: t.exposeString("detail"),
+    count: t.exposeInt("count"),
+    href: t.exposeString("href"),
+  }),
+});
+
+const CommandCenter = builder.objectRef<{
+  health: {
+    ordersToday: number;
+    gmvTodayMinor: number;
+    activeOrders: number;
+    acceptanceSlaPct: number;
+    avgAcceptanceSeconds: number | null;
+    cancellationRatePct: number;
+    ridersOnline: number;
+    ridersTotal: number;
+    restaurantsLive: number;
+    restaurantsTotal: number;
+    slaRiskOrders: number;
+  };
+  money: {
+    codOutstandingMinor: number;
+    refundLiabilityMinor: number;
+    pendingPayoutMinor: number;
+  };
+  attention: Array<{
+    key: string;
+    kind: string;
+    severity: string;
+    title: string;
+    detail: string;
+    count: number;
+    href: string;
+  }>;
+}>("CommandCenter");
+CommandCenter.implement({
+  fields: (t) => ({
+    health: t.field({ type: CommandCenterHealth, resolve: (c) => c.health }),
+    money: t.field({ type: CommandCenterMoney, resolve: (c) => c.money }),
+    attention: t.field({ type: [AttentionItem], resolve: (c) => c.attention }),
+  }),
+});
+
 builder.prismaObject("Refund", {
   fields: (t) => ({
     id: t.exposeID("id"),
@@ -206,6 +335,225 @@ builder.queryFields((t) => ({
         pendingApprovals,
         openTickets,
         pendingRefunds,
+      };
+    },
+  }),
+
+  // Admin command center (#135): health + money + prioritised decisions queue in
+  // one round-trip. Reuses the dashboardStats windows and existing approval
+  // queues; adds no schema. Bound-polled by the UI (no admin realtime topic yet).
+  commandCenter: t.field({
+    type: CommandCenter,
+    authScopes: { admin: true },
+    resolve: async () => {
+      const now = new Date();
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const [
+        today,
+        activeOrders,
+        pendingRestaurants,
+        campaignsPending,
+        riderVerifPending,
+        awaitingFirstResponse,
+        pendingRefunds,
+        refundLiability,
+        pendingPayouts,
+        ridersTotal,
+        ridersOnline,
+        restaurantsTotal,
+        restaurantsLive,
+        pendingAcceptanceOrders,
+        activeCodTasks,
+        liveTasks,
+      ] = await Promise.all([
+        prisma.order.findMany({
+          where: { placedAt: { gte: dayStart } },
+          select: {
+            status: true,
+            acceptedAt: true,
+            acceptDeadlineAt: true,
+            placedAt: true,
+            grandTotalMinor: true,
+          },
+        }),
+        prisma.order.count({ where: { status: { in: ACTIVE_ORDER_STATUSES as never } } }),
+        prisma.restaurant.count({ where: { status: "pending_approval" } }),
+        prisma.campaign.count({ where: { status: "pending_approval" } }),
+        prisma.rider.count({ where: { verificationStatus: "pending" } }),
+        prisma.supportTicket.count({
+          where: { status: { in: ["open", "in_progress"] }, firstRespondedAt: null },
+        }),
+        prisma.refund.count({ where: { status: "refund_pending" } }),
+        prisma.refund.aggregate({
+          where: { status: "refund_pending" },
+          _sum: { amountMinor: true },
+        }),
+        prisma.payout.aggregate({ where: { status: "pending" }, _sum: { amountMinor: true } }),
+        prisma.rider.count(),
+        prisma.riderAvailability.count({ where: { isOnline: true } }),
+        prisma.restaurant.count(),
+        prisma.restaurant.count({ where: { status: "approved" } }),
+        prisma.order.findMany({
+          where: { status: "pending_acceptance" },
+          select: { acceptDeadlineAt: true },
+        }),
+        // Undelivered COD tasks still carry cash the platform is owed.
+        prisma.deliveryTask.aggregate({
+          where: { status: { notIn: ["delivered", "failed"] as never } },
+          _sum: { codAmountMinor: true },
+        }),
+        // Live tasks a rider is carrying — used to flag stalled GPS.
+        prisma.deliveryTask.findMany({
+          where: {
+            riderId: { not: null },
+            status: { in: ["assigned", "arrived_pickup", "picked_up"] as never },
+          },
+          select: { riderId: true },
+        }),
+      ]);
+
+      const decided = today.filter(
+        (o) => o.acceptedAt || ["rejected", "auto_expired"].includes(o.status),
+      );
+      const acceptedInSla = decided.filter(
+        (o) => o.acceptedAt && o.acceptedAt <= o.acceptDeadlineAt,
+      );
+      const accepted = today.filter((o) => o.acceptedAt);
+      const avgAcceptanceSeconds = accepted.length
+        ? accepted.reduce(
+            (s, o) => s + (o.acceptedAt!.getTime() - o.placedAt.getTime()) / 1000,
+            0,
+          ) / accepted.length
+        : null;
+      const cancelled = today.filter((o) =>
+        ["cancelled", "rejected", "auto_expired"].includes(o.status),
+      );
+      const delivered = today.filter((o) => o.status === "delivered");
+
+      const slaRiskOrders = pendingAcceptanceOrders.filter(
+        (o) => o.acceptDeadlineAt.getTime() - now.getTime() <= SLA_RISK_WINDOW_MS,
+      ).length;
+
+      // Stalled riders: carrying a live task but no fresh GPS fix.
+      const riderIds = [...new Set(liveTasks.map((tk) => tk.riderId!))];
+      let stalledRiders = 0;
+      if (riderIds.length) {
+        const availability = await prisma.riderAvailability.findMany({
+          where: { riderId: { in: riderIds } },
+          select: { riderId: true, lastLocationAt: true },
+        });
+        const freshBy = new Map(availability.map((a) => [a.riderId, a.lastLocationAt]));
+        stalledRiders = riderIds.filter((id) => {
+          const last = freshBy.get(id);
+          return !last || now.getTime() - last.getTime() > STALE_LOCATION_MS;
+        }).length;
+      }
+
+      // Build the decisions queue. Only non-empty item types appear; the list is
+      // sorted critical→warning, then by count. `href` targets existing pages.
+      type Item = {
+        key: string;
+        kind: string;
+        severity: "critical" | "warning";
+        title: string;
+        detail: string;
+        count: number;
+        href: string;
+      };
+      const items: Item[] = [];
+      const push = (i: Item) => {
+        if (i.count > 0) items.push(i);
+      };
+
+      push({
+        key: "sla_risk_orders",
+        kind: "order",
+        severity: "critical",
+        count: slaRiskOrders,
+        title: "Orders near acceptance SLA",
+        detail: "Pending acceptance and about to breach the accept deadline.",
+        href: "/admin/tickets",
+      });
+      push({
+        key: "stalled_riders",
+        kind: "rider",
+        severity: "critical",
+        count: stalledRiders,
+        title: "Riders with a stale location",
+        detail: "Assigned to a live delivery but no GPS fix in the last 5 min.",
+        href: "/admin/riders",
+      });
+      push({
+        key: "refunds_pending",
+        kind: "refund",
+        severity: "critical",
+        count: pendingRefunds,
+        title: "Refunds awaiting decision",
+        detail: "Customer refunds pending approval in the workbench.",
+        href: "/admin/refunds",
+      });
+      push({
+        key: "tickets_first_response",
+        kind: "support",
+        severity: "warning",
+        count: awaitingFirstResponse,
+        title: "Tickets awaiting first response",
+        detail: "Open support tickets with no agent reply yet.",
+        href: "/admin/tickets",
+      });
+      push({
+        key: "rider_verifications",
+        kind: "rider",
+        severity: "warning",
+        count: riderVerifPending,
+        title: "Rider verifications pending",
+        detail: "Riders who submitted docs and are awaiting review.",
+        href: "/admin/riders",
+      });
+      push({
+        key: "restaurant_approvals",
+        kind: "restaurant",
+        severity: "warning",
+        count: pendingRestaurants,
+        title: "Restaurants pending approval",
+        detail: "New storefronts waiting to go live.",
+        href: "/admin/restaurants",
+      });
+      push({
+        key: "campaign_approvals",
+        kind: "campaign",
+        severity: "warning",
+        count: campaignsPending,
+        title: "Campaigns pending approval",
+        detail: "Promotions submitted and awaiting moderation.",
+        href: "/admin/campaigns",
+      });
+
+      const rank = { critical: 0, warning: 1 } as const;
+      items.sort((a, b) => rank[a.severity] - rank[b.severity] || b.count - a.count);
+
+      return {
+        health: {
+          ordersToday: today.length,
+          gmvTodayMinor: delivered.reduce((s, o) => s + o.grandTotalMinor, 0),
+          activeOrders,
+          acceptanceSlaPct: decided.length ? (acceptedInSla.length / decided.length) * 100 : 100,
+          avgAcceptanceSeconds,
+          cancellationRatePct: today.length ? (cancelled.length / today.length) * 100 : 0,
+          ridersOnline,
+          ridersTotal,
+          restaurantsLive,
+          restaurantsTotal,
+          slaRiskOrders,
+        },
+        money: {
+          codOutstandingMinor: activeCodTasks._sum.codAmountMinor ?? 0,
+          refundLiabilityMinor: refundLiability._sum.amountMinor ?? 0,
+          pendingPayoutMinor: pendingPayouts._sum.amountMinor ?? 0,
+        },
+        attention: items,
       };
     },
   }),
