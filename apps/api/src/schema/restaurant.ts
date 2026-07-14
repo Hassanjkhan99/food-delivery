@@ -1185,7 +1185,7 @@ builder.mutationFields((t) => ({
       branchId: t.arg.string({ required: true }),
       hours: t.arg({ type: [BranchHoursInput], required: true }),
     },
-    resolve: async (_q, _root, args, ctx) => {
+    resolve: async (query, _root, args, ctx) => {
       await assertBranchOwner(ctx, args.branchId);
       for (const h of args.hours) {
         if (h.dayOfWeek < 0 || h.dayOfWeek > 6)
@@ -1211,7 +1211,10 @@ builder.mutationFields((t) => ({
           });
         }
       });
-      return prisma.branch.findUniqueOrThrow({ where: { id: args.branchId } });
+      // #151: spread Pothos `query` so a client selecting `setBranchHours { hours }` gets a
+      // tracked Prisma delegate and the relation resolves (was erroring "Unable to find
+      // delegate for model Branch").
+      return prisma.branch.findUniqueOrThrow({ ...query, where: { id: args.branchId } });
     },
   }),
 
@@ -2132,7 +2135,7 @@ builder.mutationFields((t) => ({
       deliveryFeeMinor: t.arg.int({ required: true }),
       deliveryRadiusM: t.arg.int({ required: true }),
     },
-    resolve: async (_q, _root, args, ctx) => {
+    resolve: async (query, _root, args, ctx) => {
       const slugBase = args.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
@@ -2162,7 +2165,10 @@ builder.mutationFields((t) => ({
       await prisma.userRole.create({
         data: { userId: ctx.userId!, role: "restaurant_owner", restaurantId: restaurant.id },
       });
-      return restaurant;
+      // #151: re-read through Pothos `query` so a client selecting `submitOnboarding
+      // { branches }` gets a tracked Prisma delegate and the relation resolves (was erroring
+      // "Unable to find delegate for model Restaurant"). create() alone isn't query-tracked.
+      return prisma.restaurant.findUniqueOrThrow({ ...query, where: { id: restaurant.id } });
     },
   }),
 }));
