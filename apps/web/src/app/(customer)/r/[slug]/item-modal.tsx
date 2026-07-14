@@ -6,10 +6,13 @@ import { motion } from "framer-motion";
 import {
   DEFAULT_UNAVAILABILITY_PREFERENCE,
   UNAVAILABILITY_PREFERENCES,
+  displayPriceMinor,
   formatRs,
   type UnavailabilityPreference,
 } from "@fd/shared";
 import { useCart, type CartLine } from "@/lib/cart";
+import { usePriceDisplay } from "@/lib/price-display";
+import type { BranchTaxInfo } from "@/components/price/Price";
 import { ItemImage } from "@/components/media/ItemImage";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +61,7 @@ export function ItemModal({
   disabledLabel,
   edit,
   onClose,
+  taxInfo,
 }: {
   item: MenuItemForModal;
   branch: { id: string; slug: string; name: string };
@@ -68,6 +72,7 @@ export function ItemModal({
   disabledLabel?: string;
   edit?: EditContext;
   onClose: () => void;
+  taxInfo?: BranchTaxInfo | null;
 }) {
   const router = useRouter();
   const addLine = useCart((s) => s.addLine);
@@ -143,6 +148,14 @@ export function ItemModal({
   }, [item, selected]);
 
   const unitPrice = item.priceMinor + delta.amount;
+
+  // #146: adjust amounts for the customer's inclusive/before-tax preference (display only).
+  // The cart/quote always re-prices with the true stored amounts server-side.
+  const priceMode = usePriceDisplay((s) => s.mode);
+  const disp = (minor: number) =>
+    taxInfo && taxInfo.rateBps > 0
+      ? displayPriceMinor(minor, taxInfo.rateBps, taxInfo.inclusive, priceMode)
+      : minor;
 
   function submit(clearFirst = false) {
     // Hard guard: a closed/paused branch must never build a cart, even via a stale
@@ -260,7 +273,9 @@ export function ItemModal({
                           {o.name}
                         </span>
                         {o.priceDeltaMinor > 0 && (
-                          <span className="text-kd-fg-muted">+{formatRs(o.priceDeltaMinor)}</span>
+                          <span className="text-kd-fg-muted">
+                            +{formatRs(disp(o.priceDeltaMinor))}
+                          </span>
                         )}
                       </label>
                     );
@@ -345,7 +360,7 @@ export function ItemModal({
             >
               {!orderable && !edit
                 ? (disabledLabel ?? "Unavailable")
-                : `${edit ? "Update" : "Add"} ${qty} · ${formatRs(unitPrice * qty)}`}
+                : `${edit ? "Update" : "Add"} ${qty} · ${formatRs(disp(unitPrice * qty))}`}
             </Button>
           </div>
 

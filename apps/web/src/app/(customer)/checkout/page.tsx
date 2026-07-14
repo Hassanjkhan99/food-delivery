@@ -32,6 +32,9 @@ const QuoteMutation = graphql(`
       membershipDeliverySavingMinor
       membershipApplied
       taxTotalMinor
+      taxLabel
+      taxInclusive
+      taxResponsibility
       platformFeeMinor
       discountMinor
       voucherCode
@@ -761,10 +764,18 @@ export default function CheckoutPage() {
                 <span className="text-kd-fg-muted">Subtotal</span>
                 <span>{formatRs(quote.subtotalMinor)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-kd-fg-muted">Tax</span>
-                <span>{formatRs(quote.taxTotalMinor)}</span>
-              </div>
+              {quote.taxTotalMinor > 0 && (
+                <div className="flex justify-between">
+                  {/* #146: name the legal tax term + who charged it; never a generic
+                      "platform tax". The pre-tax base is the Subtotal line above, so tax is
+                      shown once and never added twice. */}
+                  <span className="text-kd-fg-muted">
+                    {quote.taxLabel}
+                    {quote.taxInclusive ? " (included)" : ""}
+                  </span>
+                  <span>{formatRs(quote.taxTotalMinor)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-kd-fg-muted">Delivery fee</span>
                 {isPickup ? (
@@ -815,7 +826,11 @@ export default function CheckoutPage() {
                 <span>{formatRs(quote.grandTotalMinor)}</span>
               </div>
               <p className="mt-2 text-xs text-kd-fg-subtle">
-                Billed by the restaurant. Receipt issued by the restaurant.
+                {quote.taxResponsibility === "platform_collecting_agent"
+                  ? `${quote.taxLabel} collected by the platform as agent for the restaurant. Receipt issued by the restaurant.`
+                  : quote.taxTotalMinor > 0
+                    ? `${quote.taxLabel} charged by the restaurant. Billed and receipted by the restaurant.`
+                    : "Billed by the restaurant. Receipt issued by the restaurant."}
               </p>
               {!quote.meetsMinimum && (
                 <p className="mt-2 text-xs font-medium text-kd-warning">

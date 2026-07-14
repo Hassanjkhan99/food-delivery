@@ -29,6 +29,9 @@ const OrderQuery = graphql(`
       scheduledFor
       subtotalMinor
       taxTotalMinor
+      taxLabelSnapshot
+      taxInclusiveSnapshot
+      taxResponsibilitySnapshot
       deliveryFeeMinor
       platformFeeMinor
       loyaltyPointsRedeemed
@@ -484,10 +487,14 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>Subtotal</span>
           <span>{formatRs(order.subtotalMinor)}</span>
         </div>
-        <div className="flex justify-between text-kd-fg-muted">
-          <span>Tax</span>
-          <span>{formatRs(order.taxTotalMinor)}</span>
-        </div>
+        {order.taxTotalMinor > 0 && (
+          <div className="flex justify-between text-kd-fg-muted">
+            {/* #146: receipt shows the frozen legal tax label + who charged it (snapshot
+                taken at placement). Falls back to a plain "Tax" for pre-#146 orders. */}
+            <span>{order.taxLabelSnapshot ?? "Tax"}</span>
+            <span>{formatRs(order.taxTotalMinor)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-kd-fg-muted">
           <span>{isPickup ? "Pickup" : "Delivery"}</span>
           <span>{isPickup ? "Free" : formatRs(order.deliveryFeeMinor)}</span>
@@ -508,6 +515,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <span>Total ({order.paymentMode === "cod" ? "cash on delivery" : "paid by card"})</span>
           <span>{formatRs(order.grandTotalMinor)}</span>
         </div>
+        {order.taxTotalMinor > 0 && (
+          <p className="mt-2 text-xs text-kd-fg-subtle">
+            {order.taxResponsibilitySnapshot === "platform_collecting_agent"
+              ? `${order.taxLabelSnapshot ?? "Tax"} collected by the platform as agent for the restaurant.`
+              : `${order.taxLabelSnapshot ?? "Tax"} charged by the restaurant. Billed and receipted by the restaurant.`}
+          </p>
+        )}
       </div>
 
       {/* Reorder — rebuild the cart from this order's items. Only offered once

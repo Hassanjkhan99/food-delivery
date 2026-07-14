@@ -2,6 +2,7 @@
 // modifier option ids, and quantities. Everything money is recomputed here.
 import { prisma } from "@fd/db";
 import {
+  allocateLineTax,
   applyBps,
   haversineMeters,
   resolveLoyaltyRedemption,
@@ -20,6 +21,11 @@ export type ResolvedLine = {
   qty: number;
   unitPriceMinor: number; // base + selected modifier deltas, or the combo bundle price
   lineTotalMinor: number;
+  // Immutable per-line tax breakdown (#146). taxableMinor = pre-tax base; taxMinor =
+  // allocated tax (Σ taxMinor across lines == taxTotalMinor exactly). lineTotalMinor stays
+  // the charged total: == taxableMinor+taxMinor when inclusive, == taxableMinor when exclusive.
+  taxableMinor: number;
+  taxMinor: number;
   notes?: string;
   // Customer's "if unavailable" preference (#39), snapshotted onto the order item.
   unavailabilityPreference: UnavailabilityPreference;
@@ -51,6 +57,15 @@ export type QuoteResult = {
   // Whether an active membership benefit (free/discounted delivery) was applied.
   membershipApplied: boolean;
   taxTotalMinor: number;
+  // Tax presentation contract (#146). The server is the source of truth; the client renders
+  // the breakdown and toggles inclusive/exclusive DISPLAY only — never re-derives tax.
+  // subtotalMinor is always the pre-tax taxable base; grandTotalMinor already accounts for
+  // tax (added on top when exclusive, already contained in menu prices when inclusive), so a
+  // client must never add taxTotalMinor to grandTotalMinor.
+  taxRateBps: number;
+  taxLabel: string;
+  taxInclusive: boolean;
+  taxResponsibility: string;
   platformFeeMinor: number;
   commissionMinor: number;
   commissionBps: number;
@@ -230,6 +245,8 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
         qty: line.qty,
         unitPriceMinor: combo.priceMinor,
         lineTotalMinor: combo.priceMinor * line.qty,
+        taxableMinor: 0, // filled by allocateLineTax after all lines are resolved
+        taxMinor: 0,
         notes: line.notes,
         unavailabilityPreference: line.unavailabilityPreference,
         modifiers: [],
@@ -290,6 +307,8 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
       qty: line.qty,
       unitPriceMinor: unit,
       lineTotalMinor: unit * line.qty,
+      taxableMinor: 0, // filled by allocateLineTax after all lines are resolved
+      taxMinor: 0,
       notes: line.notes,
       unavailabilityPreference: line.unavailabilityPreference,
       modifiers,
@@ -297,8 +316,24 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     };
   });
 
-  const subtotal = lines.reduce((s, l) => s + l.lineTotalMinor, 0);
-  const tax = applyBps(subtotal, branch.taxProfile.rateBps);
+  // Tax (#146). menu prices are entered/displayed inclusive or exclusive per the branch's
+  // TaxProfile. We allocate tax across the charged line totals so per-line snapshots sum
+  // EXACTLY to the order tax, then take the pre-tax base as the canonical `subtotal`. This
+  // keeps exclusive behaviour identical to before (base == line totals, tax added on top)
+  // while, for inclusive, backing the tax out of the menu price so it's never added twice.
+  const { rateBps, inclusive } = branch.taxProfile;
+  const lineTax = allocateLineTax(
+    lines.map((l) => l.lineTotalMinor),
+    rateBps,
+    inclusive,
+  );
+  lines.forEach((l, i) => {
+    const b = lineTax[i];
+    l.taxableMinor = b?.baseMinor ?? l.lineTotalMinor;
+    l.taxMinor = b?.taxMinor ?? 0;
+  });
+  const subtotal = lines.reduce((s, l) => s + l.taxableMinor, 0);
+  const tax = lines.reduce((s, l) => s + l.taxMinor, 0);
 
   const fee = await prisma.feeConfig.findFirst({ orderBy: { createdAt: "desc" } });
   if (!fee)
@@ -384,6 +419,10 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     membershipDeliverySavingMinor: baseDeliveryFeeMinor - deliveryFeeMinor,
     membershipApplied: applied,
     taxTotalMinor: tax,
+    taxRateBps: rateBps,
+    taxLabel: branch.taxProfile.label,
+    taxInclusive: inclusive,
+    taxResponsibility: branch.taxProfile.responsibility,
     platformFeeMinor: platformFee,
     commissionMinor: commission,
     commissionBps,

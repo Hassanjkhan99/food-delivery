@@ -7,7 +7,7 @@
 // server-computed (originalPriceMinor), so the saving can't be spoofed.
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
-import { formatRs } from "@fd/shared";
+import { Price, type BranchTaxInfo } from "@/components/price/Price";
 import { cardClasses } from "@/components/theme/theme";
 import { ItemImage } from "@/components/media/ItemImage";
 
@@ -39,12 +39,14 @@ export function ComboCard({
   accepting,
   onAdd,
   imageFallback,
+  taxInfo,
 }: {
   combo: ComboForCard;
   cardStyle: string;
   accepting: boolean;
   onAdd: (combo: ComboForCard) => void;
   imageFallback?: string | null;
+  taxInfo?: BranchTaxInfo | null;
 }) {
   const reduced = useReducedMotion();
   const disabled = !combo.isAvailable || !accepting;
@@ -84,13 +86,19 @@ export function ComboCard({
         </div>
         <span className="flex shrink-0 flex-col items-end">
           {off != null && (
-            <span className="text-xs text-kd-fg-subtle line-through">
-              {formatRs(combo.originalPriceMinor)}
-            </span>
+            <Price
+              minor={combo.originalPriceMinor}
+              taxInfo={taxInfo}
+              hint={false}
+              className="text-xs text-kd-fg-subtle line-through"
+            />
           )}
-          <span className="font-semibold" style={{ color: "var(--brand-primary)" }}>
-            {formatRs(combo.priceMinor)}
-          </span>
+          <Price
+            minor={combo.priceMinor}
+            taxInfo={taxInfo}
+            className="font-semibold"
+            style={{ color: "var(--brand-primary)" }}
+          />
         </span>
       </div>
       {!disabled && (
