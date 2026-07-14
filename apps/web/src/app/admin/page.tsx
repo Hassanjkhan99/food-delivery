@@ -88,6 +88,38 @@ export default function AdminCommandCenterPage() {
     );
   }
 
+  // If the query failed and we have no data at all, don't fall through to the
+  // healthy-defaults render (which would show "All clear" + zeros/100% and hide
+  // real approvals/refunds/escalations the dashboard couldn't load). Show a
+  // dedicated error state that makes the missing data explicit.
+  if (error && !cc) {
+    return (
+      <main className="max-w-5xl space-y-4">
+        <header>
+          <h1 className="text-xl font-bold">Command center</h1>
+        </header>
+        <div className="rounded-xl border border-kd-danger/40 bg-kd-danger-soft p-6 text-sm">
+          <p className="flex items-center gap-2 font-semibold text-kd-danger">
+            <AlertTriangle className="h-5 w-5" />
+            Couldn&apos;t load live ops data
+          </p>
+          <p className="mt-1 text-kd-fg-muted">
+            This is not an &ldquo;all clear&rdquo; — pending approvals, refunds, or escalations may
+            exist but couldn&apos;t be fetched. Check your session and the API, then retry.
+          </p>
+          <p className="mt-2 text-xs text-kd-fg-subtle">{error.message}</p>
+          <Button
+            className="mt-3"
+            size="sm"
+            onClick={() => refetch({ requestPolicy: "network-only" })}
+          >
+            Retry
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
   const h = cc?.health;
   const m = cc?.money;
   const attention = cc?.attention ?? [];
@@ -188,7 +220,7 @@ export default function AdminCommandCenterPage() {
           <HealthTile
             label="Restaurants live"
             value={`${h?.restaurantsLive ?? 0} / ${h?.restaurantsTotal ?? 0}`}
-            sub="approved / total"
+            sub="customer-visible / total"
           />
           <HealthTile
             label="Orders near SLA"

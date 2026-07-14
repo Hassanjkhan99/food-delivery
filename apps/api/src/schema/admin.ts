@@ -354,6 +354,7 @@ builder.queryFields((t) => ({
         today,
         activeOrders,
         pendingRestaurants,
+        kycSubmitted,
         campaignsPending,
         riderVerifPending,
         awaitingFirstResponse,
@@ -380,6 +381,9 @@ builder.queryFields((t) => ({
         }),
         prisma.order.count({ where: { status: { in: ACTIVE_ORDER_STATUSES as never } } }),
         prisma.restaurant.count({ where: { status: "pending_approval" } }),
+        // Submitted KYC awaiting review (#152) — an approved restaurant can still have a
+        // pending KYC (approved-before-review, or resubmission), which blocks payouts.
+        prisma.restaurantKyc.count({ where: { status: "submitted" } }),
         prisma.campaign.count({ where: { status: "pending_approval" } }),
         prisma.rider.count({ where: { verificationStatus: "pending" } }),
         prisma.supportTicket.count({
@@ -394,14 +398,28 @@ builder.queryFields((t) => ({
         prisma.rider.count(),
         prisma.riderAvailability.count({ where: { isOnline: true } }),
         prisma.restaurant.count(),
-        prisma.restaurant.count({ where: { status: "approved" } }),
+        // "Live" = customer-visible storefronts, matching the marketplace feed
+        // predicate (approved + a branch with a published activeMenuId). Approved-but-
+        // no-menu restaurants exist post-onboarding and aren't visible to customers.
+        prisma.restaurant.count({
+          where: { status: "approved", branches: { some: { activeMenuId: { not: null } } } },
+        }),
         prisma.order.findMany({
           where: { status: "pending_acceptance" },
           select: { acceptDeadlineAt: true },
         }),
-        // Undelivered COD tasks still carry cash the platform is owed.
+        // Undelivered COD tasks still carry cash the platform is owed. Scope to COD
+        // orders whose order is not terminally cancelled — an admin/restaurant cancel
+        // can terminate an order after its COD task is assigned without flipping the
+        // task to failed/delivered, and no rider should collect that cash anymore.
         prisma.deliveryTask.aggregate({
-          where: { status: { notIn: ["delivered", "failed"] as never } },
+          where: {
+            status: { notIn: ["delivered", "failed"] as never },
+            order: {
+              paymentMode: "cod",
+              status: { notIn: ["cancelled", "rejected", "auto_expired"] as never },
+            },
+          },
           _sum: { codAmountMinor: true },
         }),
         // Live tasks a rider is carrying — used to flag stalled GPS.
@@ -450,6 +468,23 @@ builder.queryFields((t) => ({
           return !last || now.getTime() - last.getTime() > STALE_LOCATION_MS;
         }).length;
       }
+
+      // Money awaiting settlement = requested-but-unpaid payouts (already parked in
+      // payout_clearing) PLUS un-requested positive payable balances (the payout
+      // candidates surfaced on /admin/payouts). Summing both is safe: requestPayout
+      // moves money out of payable into payout_clearing, so there's no double count.
+      const approvedRestaurants = await prisma.restaurant.findMany({
+        where: { status: "approved" },
+        select: { id: true },
+      });
+      let payableTotal = 0;
+      for (const r of approvedRestaurants) {
+        const balance = await prisma.$transaction((tx) =>
+          accountBalance(tx as never, `restaurant:${r.id}:payable`),
+        );
+        if (balance > 0) payableTotal += balance;
+      }
+      const pendingPayoutMinor = (pendingPayouts._sum.amountMinor ?? 0) + payableTotal;
 
       // Build the decisions queue. Only non-empty item types appear; the list is
       // sorted critical→warning, then by count. `href` targets existing pages.
@@ -522,6 +557,15 @@ builder.queryFields((t) => ({
         href: "/admin/restaurants",
       });
       push({
+        key: "kyc_submitted",
+        kind: "kyc",
+        severity: "warning",
+        count: kycSubmitted,
+        title: "KYC submissions awaiting review",
+        detail: "Restaurant identity/bank docs to review — blocks payouts until cleared.",
+        href: "/admin/kyc",
+      });
+      push({
         key: "campaign_approvals",
         kind: "campaign",
         severity: "warning",
@@ -551,7 +595,7 @@ builder.queryFields((t) => ({
         money: {
           codOutstandingMinor: activeCodTasks._sum.codAmountMinor ?? 0,
           refundLiabilityMinor: refundLiability._sum.amountMinor ?? 0,
-          pendingPayoutMinor: pendingPayouts._sum.amountMinor ?? 0,
+          pendingPayoutMinor,
         },
         attention: items,
       };
