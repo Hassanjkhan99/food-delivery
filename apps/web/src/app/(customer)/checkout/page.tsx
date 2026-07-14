@@ -44,6 +44,17 @@ const QuoteMutation = graphql(`
       loyaltyPointsBalance
       loyaltyPointsRedeemed
       loyaltyDiscountMinor
+      deliveryOption
+      deliveryOptions {
+        key
+        label
+        description
+        priceMinor
+        etaMinutes
+        etaLabel
+        available
+        recommended
+      }
     }
   }
 `);
@@ -129,6 +140,9 @@ export default function CheckoutPage() {
   // Optional scheduled slot as a datetime-local value ("" = ASAP). Sent to the API as
   // an ISO string; scheduling is groundwork (see PR notes) but the picker is wired.
   const [scheduledLocal, setScheduledLocal] = useState("");
+  // Selected delivery option (#98). "standard" is the default so an untouched checkout is
+  // unchanged; the server prices + validates the choice and echoes it back on the quote.
+  const [deliveryOption, setDeliveryOption] = useState<"standard" | "scheduled">("standard");
   const [paymentMode, setPaymentMode] = useState<"cod" | "card" | "wallet">("cod");
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   // Loyalty: when on, we ask the server to redeem the customer's full eligible balance.
@@ -278,6 +292,7 @@ export default function CheckoutPage() {
         voucherCode: voucherCode ?? undefined,
         fulfillmentMode,
         redeemPoints,
+        deliveryOption,
       },
     }).then((res) => {
       // Only mark the mode as quoted once this request's result lands.
@@ -293,6 +308,7 @@ export default function CheckoutPage() {
     voucherCode,
     fulfillmentMode,
     redeemPoints,
+    deliveryOption,
   ]);
 
   if (!branchId || lines.length === 0) {
@@ -366,7 +382,13 @@ export default function CheckoutPage() {
         cutleryRequested,
         voucherCode: voucherCode ?? undefined,
         fulfillmentMode,
-        scheduledFor: scheduledLocal ? new Date(scheduledLocal).toISOString() : undefined,
+        // Only send a scheduled slot when the customer actually chose the "scheduled"
+        // option and picked a time — a stale slot must never leak into a standard order.
+        scheduledFor:
+          deliveryOption === "scheduled" && scheduledLocal
+            ? new Date(scheduledLocal).toISOString()
+            : undefined,
+        deliveryOption,
       },
     });
     const order = result.data?.placeOrder;
@@ -552,6 +574,70 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {/* Delivery-option selector (#98). Server-authoritative list — each option's price
+            + ETA come from the quote, so the UI never invents either. Only shown for
+            delivery (pickup has no rider leg to configure). Default = standard, so an
+            untouched checkout is unchanged. */}
+        {!isPickup && quote && quote.deliveryOptions.length > 0 && (
+          <div className="rounded-xl border border-kd-border bg-kd-surface p-4">
+            <p className="mb-3 text-sm font-semibold">Delivery option</p>
+            <div className="space-y-2">
+              {quote.deliveryOptions.map((opt) => {
+                const selected = deliveryOption === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    disabled={!opt.available}
+                    aria-pressed={selected}
+                    onClick={() => setDeliveryOption(opt.key as "standard" | "scheduled")}
+                    className={`flex w-full items-start justify-between gap-3 rounded-lg border p-3 text-left transition ${
+                      selected
+                        ? "border-kd-primary bg-kd-primary-soft"
+                        : "border-kd-border hover:border-kd-fg-subtle"
+                    } ${opt.available ? "" : "cursor-not-allowed opacity-50"}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 text-sm font-medium text-kd-fg">
+                        {opt.label}
+                        {opt.recommended && (
+                          <span className="rounded bg-kd-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-kd-fg-muted">
+                            recommended
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-kd-fg-muted">
+                        {opt.description}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-kd-fg-subtle">{opt.etaLabel}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-medium text-kd-fg">
+                      {opt.priceMinor === 0 ? "Free" : formatRs(opt.priceMinor)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* When "Schedule for later" is picked, surface the slot picker inline. Empty
+                slot still means ASAP — scheduling itself is groundwork (#54). */}
+            {deliveryOption === "scheduled" && (
+              <div className="mt-3 border-t border-kd-border pt-3">
+                <Label htmlFor="schedule-slot">Preferred time</Label>
+                <Input
+                  id="schedule-slot"
+                  type="datetime-local"
+                  value={scheduledLocal}
+                  onChange={(e) => setScheduledLocal(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-kd-fg-subtle">
+                  Leave blank to order as soon as possible.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Contact phone is needed for both modes. */}
         <div>
           <Label htmlFor="phone">Contact phone</Label>
@@ -564,19 +650,6 @@ export default function CheckoutPage() {
             onChange={(e) => setContactPhone(e.target.value)}
             className="mt-1"
           />
-        </div>
-
-        {/* Optional scheduled slot (#54, groundwork). Empty = order now (ASAP). */}
-        <div>
-          <Label htmlFor="schedule">Schedule for later (optional)</Label>
-          <Input
-            id="schedule"
-            type="datetime-local"
-            value={scheduledLocal}
-            onChange={(e) => setScheduledLocal(e.target.value)}
-            className="mt-1"
-          />
-          <p className="mt-1 text-xs text-kd-fg-subtle">Leave blank to order now.</p>
         </div>
 
         <div>

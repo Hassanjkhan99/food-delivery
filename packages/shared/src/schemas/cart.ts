@@ -45,6 +45,13 @@ export const quoteInputSchema = z.object({
   // Fulfillment mode (#54). `pickup` zeroes the delivery fee and skips the radius
   // check; the coordinates are still required (they're used for the distance readout).
   fulfillmentMode: z.enum(["delivery", "pickup"]).default("delivery"),
+  // Delivery service preference (#98, epic #97). Foundation set only: `standard` is the
+  // existing delivery and MUST behave exactly as today; `scheduled` reuses the
+  // scheduledFor groundwork (no new pricing). The richer modes (#99–#106) slot in here
+  // later. The server is the source of truth for the option's price + ETA — this is only
+  // the customer's request, clamped/validated server-side. Defaults to `standard` so an
+  // untouched checkout is unchanged.
+  deliveryOption: z.enum(["standard", "scheduled"]).default("standard"),
   // Loyalty points the customer wants to redeem (FP-07). Server clamps this to the
   // balance + redemption rules and recomputes the discount; the client value is only a
   // request. 0 = redeem nothing.
