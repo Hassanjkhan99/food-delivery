@@ -6,12 +6,13 @@
 // "connect an OCR provider" status; nothing is called and nothing costs money.
 //
 // The extracted rows reuse the CSV import's CsvRow shape on purpose: a photo/PDF preview
-// feeds the exact same review UI + import pipeline as CSV, so a real provider that fills
-// in `extractRows` needs ZERO new UI or import code.
+// feeds the exact same review UI as CSV, and importMenuOcrToDraft merges rows through the
+// SAME mergeMenuRows helper the CSV importer uses — so a real provider that fills in
+// `extractRows` needs ZERO new UI and no separate import/merge code.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
 import { env } from "../env.js";
-import type { CsvRow } from "./menuImport.js";
+import { mergeMenuRows, type CsvRow } from "./menuImport.js";
 
 /** A finalized upload the provider should read (photo or PDF menu). */
 export type MenuOcrAsset = {
@@ -137,4 +138,28 @@ export async function previewMenuOcrAsset(userId: string, assetId: string): Prom
       driver: provider.name,
     };
   }
+}
+
+/**
+ * Import a photo/PDF menu into the draft (#177). Re-runs extraction (mirroring how CSV
+ * import re-parses its asset in importMenuCsv) and merges the valid rows through the SAME
+ * mergeMenuRows helper the CSV pipeline uses — so a real provider needs no separate import
+ * code. A non-"ok" status (not_configured / unsupported / failed) becomes a clear error
+ * instead of silently importing nothing; with the default "none" driver this always
+ * surfaces the "connect an OCR provider" guidance.
+ */
+export async function importMenuOcrToDraft(userId: string, branchId: string, assetId: string) {
+  const preview = await previewMenuOcrAsset(userId, assetId);
+  if (preview.status !== "ok")
+    throw new GraphQLError(preview.message, {
+      extensions: {
+        code: preview.status === "not_configured" ? "not_configured" : "validation_error",
+      },
+    });
+  const rows = preview.rows.filter((r) => !r.error);
+  if (rows.length === 0)
+    throw new GraphQLError("There are no valid menu items to import from this file.", {
+      extensions: { code: "validation_error" },
+    });
+  return mergeMenuRows(branchId, rows);
 }

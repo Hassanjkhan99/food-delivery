@@ -94,11 +94,15 @@ export async function parseMenuCsvAsset(userId: string, assetId: string): Promis
   });
 }
 
-/** Merge valid CSV rows into the draft: categories matched by name (case-insensitive). */
-export async function importMenuCsv(userId: string, branchId: string, assetId: string) {
-  const rows = (await parseMenuCsvAsset(userId, assetId)).filter((r) => !r.error);
+/**
+ * Merge already-validated rows into the branch's draft menu: categories matched by name
+ * (case-insensitive), items upserted within their category. Shared by CSV import and the
+ * OCR import path (#177) so both feed the exact same draft-merge logic. Callers pass only
+ * error-free rows (an empty list throws — nothing to import).
+ */
+export async function mergeMenuRows(branchId: string, rows: CsvRow[]) {
   if (rows.length === 0)
-    throw new GraphQLError("There are no valid rows to import in this file.", {
+    throw new GraphQLError("There are no valid rows to import.", {
       extensions: { code: "validation_error" },
     });
 
@@ -138,4 +142,10 @@ export async function importMenuCsv(userId: string, branchId: string, assetId: s
     }
   }
   return { created, updated, skipped: 0 };
+}
+
+/** Import a CSV asset into the draft: parse + validate the upload, then merge valid rows. */
+export async function importMenuCsv(userId: string, branchId: string, assetId: string) {
+  const rows = (await parseMenuCsvAsset(userId, assetId)).filter((r) => !r.error);
+  return mergeMenuRows(branchId, rows);
 }

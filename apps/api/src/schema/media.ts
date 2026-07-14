@@ -5,7 +5,11 @@ import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
 import { assetReadUrl, finalizeUpload, presignUpload } from "../services/uploads.js";
 import { importMenuCsv, parseMenuCsvAsset } from "../services/menuImport.js";
-import { previewMenuOcrAsset, type MenuOcrResult } from "../services/menuOcr.js";
+import {
+  previewMenuOcrAsset,
+  importMenuOcrToDraft,
+  type MenuOcrResult,
+} from "../services/menuOcr.js";
 import { ensureDraft } from "../services/menuService.js";
 import { builder } from "./builder.js";
 
@@ -192,6 +196,23 @@ builder.mutationFields((t) => ({
     resolve: async (_root, args, ctx) => {
       await assertBranchOwner(ctx, args.branchId);
       return previewMenuOcrAsset(ctx.userId!, args.assetId);
+    },
+  }),
+
+  // Import an OCR'd photo/PDF menu into the draft (#177). Owner-gated; re-runs extraction
+  // and merges valid rows through the same helper importMenuCsvToDraft uses, returning the
+  // same CsvImportResult. With MENU_OCR_DRIVER=none this errors with "connect an OCR
+  // provider" guidance instead of importing nothing.
+  importMenuOcrToDraft: t.field({
+    type: ImportResult,
+    authScopes: { restaurantMember: true },
+    args: {
+      branchId: t.arg.string({ required: true }),
+      assetId: t.arg.string({ required: true }),
+    },
+    resolve: async (_root, args, ctx) => {
+      await assertBranchOwner(ctx, args.branchId);
+      return importMenuOcrToDraft(ctx.userId!, args.branchId, args.assetId);
     },
   }),
 

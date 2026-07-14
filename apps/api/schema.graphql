@@ -474,6 +474,7 @@ type Mutation {
   finalizeUpload(assetId: String!): MediaAsset!
   generateSharedOffers(limit: Int, orderId: String!): [ScoredRiderCandidate!]!
   importMenuCsvToDraft(assetId: String!, branchId: String!): CsvImportResult!
+  importMenuOcrToDraft(assetId: String!, branchId: String!): CsvImportResult!
   inviteRider(branchId: String!, name: String!, phone: String!): Rider!
   inviteStaff(name: String, phone: String!, restaurantId: String!): StaffMember!
   issueGoodwillCredit(amountMinor: Int!, customerId: String!, reason: String!): Int!
