@@ -842,26 +842,31 @@ builder.mutationFields((t) => ({
           );
         }
 
-        // Refund the removed line's own subtotal + its proportional share of tax; scale the
-        // restaurant commission down so the platform doesn't over-collect. Delivery fee, the
-        // flat platform fee and any tip stay (the order still ships). NB: with a voucher /
+        // Refund the removed line's own PRE-TAX base + its tax, then scale commission down so
+        // the platform doesn't over-collect. Delivery fee, the flat platform fee and any tip
+        // stay (the order still ships). #146: use the immutable per-line tax snapshot —
+        // order.subtotalMinor is the pre-tax base in BOTH modes, so we must subtract the line's
+        // taxable base, not its (possibly tax-inclusive) lineTotalMinor, or a tax-inclusive
+        // order over-refunds and corrupts the remaining totals. taxableMinor/taxMinor are null
+        // on pre-#146 orders, where lineTotalMinor == the pre-tax contribution (tax was always
+        // exclusive), so fall back to that + a proportional tax share. NB: with a voucher /
         // loyalty discount applied this can slightly over-refund the discounted portion —
         // acceptable for v1; clamped to the order's grand total.
-        const removedSubtotal = item.lineTotalMinor;
         const oldSubtotal = order.subtotalMinor;
-        const share = oldSubtotal > 0 ? removedSubtotal / oldSubtotal : 0;
-        const removedTax = Math.round(order.taxTotalMinor * share);
+        const removedTaxable = item.taxableMinor ?? item.lineTotalMinor;
+        const share = oldSubtotal > 0 ? removedTaxable / oldSubtotal : 0;
+        const removedTax = item.taxMinor ?? Math.round(order.taxTotalMinor * share);
         const removedCommission = Math.round(order.commissionMinor * share);
         const refundMinor = Math.max(
           0,
-          Math.min(removedSubtotal + removedTax, order.grandTotalMinor),
+          Math.min(removedTaxable + removedTax, order.grandTotalMinor),
         );
 
         await tx.orderItem.delete({ where: { id: item.id } });
         await tx.order.update({
           where: { id: order.id },
           data: {
-            subtotalMinor: order.subtotalMinor - removedSubtotal,
+            subtotalMinor: order.subtotalMinor - removedTaxable,
             taxTotalMinor: order.taxTotalMinor - removedTax,
             commissionMinor: order.commissionMinor - removedCommission,
             grandTotalMinor: order.grandTotalMinor - refundMinor,
