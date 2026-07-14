@@ -241,9 +241,17 @@ export async function onOrderMoneyReversal(
   }
 
   if (order.paymentMode === "wallet") {
-    // The grand total is parked in wallet_holding; return it to the customer's prepaid
-    // balance. No provider call — the money never left the platform. (#55)
-    if (!order.payment || order.payment.status !== "captured") return;
+    // The grand total is parked in wallet_holding; return the still-held remainder to the
+    // customer's prepaid balance. No provider call — the money never left the platform (#55).
+    // Accept partially_refunded too (an item was removed pre-cancel, #111) and only refund
+    // what's left — amountMinor − already-refunded — so we don't over-credit or strand funds.
+    if (
+      !order.payment ||
+      (order.payment.status !== "captured" && order.payment.status !== "partially_refunded")
+    )
+      return;
+    const remaining = order.payment.amountMinor - order.payment.refundedMinor;
+    if (remaining <= 0) return;
     await tx.payment.update({
       where: { id: order.payment.id },
       data: { status: "refunded", refundedMinor: order.payment.amountMinor },
@@ -252,7 +260,7 @@ export async function onOrderMoneyReversal(
       data: {
         orderId: order.id,
         status: "refunded",
-        amountMinor: order.payment.amountMinor,
+        amountMinor: remaining,
         destination: "wallet",
         reason: `Automatic refund — order ${to}`,
         decidedAt: new Date(),
@@ -262,12 +270,12 @@ export async function onOrderMoneyReversal(
       tx,
       `Refund ${order.code} (${to}, wallet)`,
       [
-        { code: WALLET_HOLDING, ownerType: "platform", debit: order.payment.amountMinor },
+        { code: WALLET_HOLDING, ownerType: "platform", debit: remaining },
         {
           code: `customer:${order.customerId}:prepaid`,
           ownerType: "customer",
           ownerId: order.customerId,
-          credit: order.payment.amountMinor,
+          credit: remaining,
         },
       ],
       { orderId: order.id, refundId: refund.id },
@@ -276,12 +284,22 @@ export async function onOrderMoneyReversal(
   }
 
   // Card: refund the captured charge (in full, or the policy amount when given). (#30)
-  if (!order.payment || order.payment.status !== "captured" || !order.payment.providerRef) return;
+  // Accept partially_refunded too (item removed pre-cancel, #111).
+  if (
+    !order.payment ||
+    (order.payment.status !== "captured" && order.payment.status !== "partially_refunded") ||
+    !order.payment.providerRef
+  )
+    return;
 
-  // Clamp the policy amount into [0, captured]; default to a full refund.
+  // Only the un-refunded remainder is refundable. Clamp the policy amount into [0, remaining];
+  // default to refunding the whole remainder.
   const captured = order.payment.amountMinor;
+  const alreadyRefunded = order.payment.refundedMinor;
+  const remaining = captured - alreadyRefunded;
+  if (remaining <= 0) return;
   const amount =
-    refundMinor === undefined ? captured : Math.max(0, Math.min(refundMinor, captured));
+    refundMinor === undefined ? remaining : Math.max(0, Math.min(refundMinor, remaining));
 
   // A fully-forfeited refund (fee == total) collects the whole charge: no money moves
   // back to the customer, and the payment stays captured rather than flipping to refunded.
@@ -294,11 +312,12 @@ export async function onOrderMoneyReversal(
     reference: order.code,
   });
 
+  const totalRefunded = alreadyRefunded + amount;
   await tx.payment.update({
     where: { id: order.payment.id },
     data: {
-      status: amount >= captured ? "refunded" : "partially_refunded",
-      refundedMinor: amount,
+      status: totalRefunded >= captured ? "refunded" : "partially_refunded",
+      refundedMinor: totalRefunded,
     },
   });
 

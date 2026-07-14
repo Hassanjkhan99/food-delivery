@@ -811,6 +811,10 @@ builder.mutationFields((t) => ({
         "ready_for_pickup",
       ];
       const { branchId, status } = await prisma.$transaction(async (tx) => {
+        // Serialize concurrent removals on the same order so two staff clients can't both
+        // read items.length===2, both delete a different line, and empty the order while
+        // double-refunding (the last-item guard below reads a snapshot). (#111 review)
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`order-edit:${args.orderId}`})::bigint)`;
         const order = await tx.order.findUniqueOrThrow({
           where: { id: args.orderId },
           include: { payment: true, branch: true, items: true, deliveryTask: true },
