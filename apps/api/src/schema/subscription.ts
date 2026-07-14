@@ -2,8 +2,31 @@
 // live board, customer tracking, rider job feed. In-memory pubsub — single instance.
 import { prisma } from "@fd/db";
 import { GraphQLError } from "graphql";
+import type { AppContext } from "../context.js";
 import { pubsub, type OrderChangedPayload, type NotificationPayload } from "../pubsub.js";
 import { builder } from "./builder.js";
+
+// graphql-sse authorizes a subscription ONCE in `subscribe` and then streams pubsub
+// payloads without re-reading the session. So revoking a device that's currently on a live
+// order/rider/board page would keep pushing updates until it reconnects (Codex #112). This
+// wrapper re-checks the caller's session validity before delivering each event and ends the
+// stream the moment the session is revoked or expires. The DB check only runs when an event
+// is actually available, so idle streams cost nothing.
+async function isSessionLive(sessionId: string | null): Promise<boolean> {
+  if (!sessionId) return false;
+  const session = await prisma.session.findFirst({
+    where: { id: sessionId, revokedAt: null, expiresAt: { gte: new Date() } },
+    select: { id: true },
+  });
+  return Boolean(session);
+}
+
+async function* guardBySession<T>(ctx: AppContext, source: AsyncIterable<T>): AsyncGenerator<T> {
+  for await (const value of source) {
+    if (!(await isSessionLive(ctx.sessionId))) return;
+    yield value;
+  }
+}
 
 const OrderChangedType = builder.objectRef<OrderChangedPayload>("OrderChanged");
 OrderChangedType.implement({
@@ -39,7 +62,7 @@ builder.subscriptionType({
             extensions: { code: "forbidden" },
           });
         }
-        return pubsub.subscribe("branchOrders", args.branchId);
+        return guardBySession(ctx, pubsub.subscribe("branchOrders", args.branchId));
       },
       resolve: (payload: OrderChangedPayload) => payload,
     }),
@@ -65,7 +88,7 @@ builder.subscriptionType({
           throw new GraphQLError("You don't have permission to follow this order.", {
             extensions: { code: "forbidden" },
           });
-        return pubsub.subscribe("orderStatus", args.orderId);
+        return guardBySession(ctx, pubsub.subscribe("orderStatus", args.orderId));
       },
       resolve: (payload: OrderChangedPayload) => payload,
     }),
@@ -78,7 +101,7 @@ builder.subscriptionType({
           throw new GraphQLError("You need a rider profile to receive job offers.", {
             extensions: { code: "forbidden" },
           });
-        return pubsub.subscribe("riderJobs", ctx.riderId);
+        return guardBySession(ctx, pubsub.subscribe("riderJobs", ctx.riderId));
       },
       resolve: (payload: OrderChangedPayload) => payload,
     }),
@@ -92,7 +115,7 @@ builder.subscriptionType({
           throw new GraphQLError("Please sign in to receive notifications.", {
             extensions: { code: "unauthenticated" },
           });
-        return pubsub.subscribe("userNotifications", ctx.userId);
+        return guardBySession(ctx, pubsub.subscribe("userNotifications", ctx.userId));
       },
       resolve: (payload: NotificationPayload) => payload,
     }),
