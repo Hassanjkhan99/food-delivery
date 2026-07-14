@@ -127,10 +127,12 @@ export async function placeOrder(
   }
 
   const isPickup = input.fulfillmentMode === "pickup";
-  // Scheduled orders (#54): validate the slot is in the future. Groundwork only — the
-  // acceptance SLA still starts at placement (see acceptDeadlineAt below); shifting the
-  // 120s window to `scheduledFor − leadTime` and holding the order out of the board's
-  // "New" lane until then is the follow-up that makes scheduling fully functional.
+  // Scheduled orders (#54): validate the slot is in the future. The order is created in
+  // `pending_acceptance` with `scheduledFor` set but no `scheduledPromotedAt`, so the board
+  // holds it in the "Scheduled" prep-planning lane (out of "New", no alarm). The promotion
+  // sweeper (jobs/promoteScheduledOrders.ts, #199) then surfaces it in "New" at
+  // `scheduledFor − leadTime`, refreshing acceptDeadlineAt so the 120s acceptance SLA starts
+  // at promotion rather than at booking (the deadline set below is a placeholder until then).
   const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null;
   if (scheduledFor && scheduledFor.getTime() <= Date.now()) {
     throw new GraphQLError("Please choose a scheduled time in the future.", {

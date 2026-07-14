@@ -656,6 +656,7 @@ type Order {
   platformFeeMinor: Int!
   prepEtaMinutes: Int
   scheduledFor: DateTime
+  scheduledPromotedAt: DateTime
   status: String!
   subtotalMinor: Int!
   taxInclusiveSnapshot: Boolean

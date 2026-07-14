@@ -67,6 +67,12 @@ up the persistent API (see **Production unlock** below). Left unset, behaviour i
   ```
   every 1 minute. Reclaims delivery offers/tasks stuck in `offered` when a rider never
   responds (app closed), so the restaurant board isn't blocked on a dead offer.
+- **Scheduled-order promotion cron (#199).** Same treatment: point the pinger at
+  ```
+  https://<your-app>.vercel.app/api/cron/promote-scheduled?secret=<CRON_SECRET>
+  ```
+  every 1 minute. Promotes scheduled ("pre-order") orders into the kitchen's New lane at
+  `scheduledFor − leadTime` so staff accept them in time to hit the promised slot.
 
 ## Production unlock — persistent API + Redis + R2 (free-tier friendly)
 

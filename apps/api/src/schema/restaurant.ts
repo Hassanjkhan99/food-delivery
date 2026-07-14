@@ -6,7 +6,7 @@ import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { publishOrderChanged } from "../pubsub.js";
-import { formatRs, isRestaurantOwner } from "@fd/shared";
+import { ACCEPTANCE_SLA_SECONDS, formatRs, isRestaurantOwner, TERMINAL_STATUSES } from "@fd/shared";
 import { accountBalance, postLedgerTx, postItemRemovalRefund } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
@@ -381,17 +381,43 @@ builder.queryFields((t) => ({
     },
     resolve: async (query, _root, args, ctx) => {
       await assertBranchMember(ctx, args.branchId);
-      return prisma.order.findMany({
+      const statusFilter =
+        args.statuses && args.statuses.length > 0 ? { status: { in: args.statuses as never } } : {};
+
+      // The day-to-day board: the most recent 100 orders.
+      const recent = await prisma.order.findMany({
         ...query,
-        where: {
-          branchId: args.branchId,
-          ...(args.statuses && args.statuses.length > 0
-            ? { status: { in: args.statuses as never } }
-            : {}),
-        },
+        where: { branchId: args.branchId, ...statusFilter },
         orderBy: { placedAt: "desc" },
         take: 100,
       });
+
+      // #199 (Codex #220): a scheduled ("pre-order") booked well ahead is placed NOW but doesn't
+      // become actionable until scheduledFor − leadTime. At a busy branch, 100+ later orders can
+      // push it out of the recent-100 window by the time its prep slot arrives — so after
+      // promotion it would vanish from BOTH the Scheduled and New lanes and staff couldn't accept
+      // it. Always fetch active (non-terminal) scheduled orders for the branch, independent of
+      // placedAt, and merge them in. When the caller passed an explicit status filter we honour
+      // it; otherwise we scope to non-terminal so completed pre-orders don't resurface.
+      const scheduledActive = await prisma.order.findMany({
+        ...query,
+        where: {
+          branchId: args.branchId,
+          scheduledFor: { not: null },
+          ...(args.statuses && args.statuses.length > 0
+            ? { status: { in: args.statuses as never } }
+            : { status: { notIn: TERMINAL_STATUSES as never } }),
+        },
+        orderBy: { placedAt: "desc" },
+      });
+
+      // Merge + dedupe by id. Insertion order keeps the recent set (placedAt-desc) first, with
+      // any older active scheduled orders not already present appended — we can't re-sort here
+      // because `placedAt` isn't guaranteed to be in the Pothos selection. The client groups by
+      // status into lanes, so exact cross-lane ordering isn't load-bearing.
+      const byId = new Map<string, (typeof recent)[number]>();
+      for (const o of [...recent, ...scheduledActive]) byId.set(o.id, o);
+      return [...byId.values()];
     },
   }),
 
@@ -769,6 +795,32 @@ builder.mutationFields((t) => ({
     },
     resolve: async (_q, _root, args, ctx) => {
       await assertOrderBranchMember(ctx, args.id);
+      // #199: a scheduled ("pre-order") accepted from the Scheduled lane BEFORE the promotion
+      // sweeper runs still carries its placement-time placeholder acceptDeadlineAt (booking +
+      // 120s). transition() stamps acceptedAt = now, so for a slot booked more than 120s ahead
+      // the SLA/featured-placement guard (acceptedAt <= acceptDeadlineAt) would wrongly log an
+      // on-time early accept as late. Refresh the deadline (and stamp scheduledPromotedAt for
+      // consistency with the sweeper) before the transition so the acceptance counts as on-time.
+      const current = await prisma.order.findUnique({
+        where: { id: args.id },
+        select: { status: true, scheduledFor: true, scheduledPromotedAt: true },
+      });
+      if (
+        current?.status === "pending_acceptance" &&
+        current.scheduledFor &&
+        !current.scheduledPromotedAt
+      ) {
+        const now = new Date();
+        await prisma.order.updateMany({
+          // Guard on the placeholder still being unset so a concurrent promotion tick can't be
+          // clobbered; either writer sets an equivalent now-based deadline, so both are correct.
+          where: { id: args.id, status: "pending_acceptance", scheduledPromotedAt: null },
+          data: {
+            scheduledPromotedAt: now,
+            acceptDeadlineAt: new Date(now.getTime() + ACCEPTANCE_SLA_SECONDS * 1_000),
+          },
+        });
+      }
       await transition(args.id, "accepted", restaurantActor(ctx), {
         expectedFrom: "pending_acceptance",
       });

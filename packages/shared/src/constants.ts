@@ -1,6 +1,35 @@
 /** Policy timers from the kickoff report (product policy, not legal facts). */
 export const ACCEPTANCE_SLA_SECONDS = 120;
 export const EXPIRY_SWEEP_INTERVAL_MS = 5_000;
+
+/**
+ * Scheduled ("pre-order") auto-promotion (#199). A scheduled order is held in the board's
+ * "Scheduled" prep-planning lane until its prep window opens, then auto-promoted into the
+ * "New" lane so the kitchen accepts it in time to hit the promised slot.
+ *
+ * `promoteAt = scheduledFor − leadMinutes`, where the lead time is the base kitchen head-start
+ * plus the branch's live busy buffer (Branch.prepBufferMinutes, #46). Product policy — tune here.
+ */
+export const SCHEDULED_PROMOTE_BASE_LEAD_MINUTES = 30;
+/** How often the promotion sweeper scans for due scheduled orders (standalone API interval). */
+export const SCHEDULED_PROMOTE_SWEEP_INTERVAL_MS = 30_000;
+
+/**
+ * Minutes before `scheduledFor` at which a scheduled order should be promoted to the kitchen
+ * queue: a fixed base head-start plus the branch's current busy buffer. Pure so it can be unit
+ * tested and shared by the sweeper. `branchPrepBufferMinutes` defaults to 0 (normal load).
+ */
+export function scheduledPromoteLeadMinutes(branchPrepBufferMinutes = 0): number {
+  return SCHEDULED_PROMOTE_BASE_LEAD_MINUTES + Math.max(0, branchPrepBufferMinutes);
+}
+
+/**
+ * The instant a scheduled order should surface in the "New" lane: `scheduledFor − leadMinutes`.
+ * Pure (no clock read) so it's deterministic and unit-testable.
+ */
+export function computeScheduledPromoteAt(scheduledFor: Date, leadMinutes: number): Date {
+  return new Date(scheduledFor.getTime() - leadMinutes * 60_000);
+}
 export const OTP_TTL_SECONDS = 5 * 60;
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RATE_LIMIT_PER_HOUR = 5;

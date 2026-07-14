@@ -33,6 +33,7 @@ const BoardQuery = graphql(`
       fulfillmentMode
       pickupCode
       scheduledFor
+      scheduledPromotedAt
       grandTotalMinor
       customerNote
       cutleryRequested
@@ -174,6 +175,7 @@ type BoardOrder = {
   fulfillmentMode?: string | null;
   pickupCode?: string | null;
   scheduledFor?: unknown;
+  scheduledPromotedAt?: unknown;
   grandTotalMinor: number;
   customerName?: string | null;
   customerNote?: string | null;
@@ -366,12 +368,19 @@ export default function OrdersBoardPage() {
   const byStatus = (statuses: string[]) => orders.filter((o) => statuses.includes(o.status));
   // Scheduled orders get their own lane (#158): a pre-order (scheduledFor set) shouldn't
   // clutter the immediate queue or trip the new-order alarm — it's for prep planning. The
-  // card shows the target time; the restaurant accepts it when they start on it. (Auto-
-  // promoting to New at scheduledFor − leadTime is a noted follow-up in orderService.ts.)
+  // card shows the target time; the restaurant accepts it when they start on it.
+  //
+  // #199: once the promotion sweeper stamps `scheduledPromotedAt` (at scheduledFor − leadTime),
+  // the pre-order moves OUT of the Scheduled lane and INTO New — it now behaves like a live
+  // order (fresh 120s acceptance SLA, alarm sounds). We still keep its scheduledFor badge on the
+  // card so staff see the promised slot. So: Scheduled = not-yet-promoted pre-orders; New =
+  // everything else pending (immediate orders + promoted pre-orders).
   const scheduledOrders = orders.filter(
-    (o) => o.status === "pending_acceptance" && !!o.scheduledFor,
+    (o) => o.status === "pending_acceptance" && !!o.scheduledFor && !o.scheduledPromotedAt,
   );
-  const newOrders = byStatus(["pending_acceptance"]).filter((o) => !o.scheduledFor);
+  const newOrders = byStatus(["pending_acceptance"]).filter(
+    (o) => !o.scheduledFor || !!o.scheduledPromotedAt,
+  );
   const busyBuffer = branch?.prepBufferMinutes ?? 0;
 
   // New-order alarm — must run every render (hooks can't be conditional), so it lives

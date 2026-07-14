@@ -8,6 +8,7 @@ import { schema } from "./schema/index.js";
 import { maskError } from "./errors.js";
 import { startExpirySweeper } from "./jobs/expirePendingOrders.js";
 import { startOfferSweeper } from "./jobs/expireStaleOffers.js";
+import { startScheduledPromotionSweeper } from "./jobs/promoteScheduledOrders.js";
 import { startRiderTrustJob } from "./jobs/recomputeRiderTrust.js";
 
 const yoga = createYoga({
@@ -69,4 +70,5 @@ server.listen(env.apiPort, () => {
 
 startExpirySweeper();
 startOfferSweeper();
+startScheduledPromotionSweeper();
 startRiderTrustJob();
