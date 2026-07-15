@@ -21,6 +21,15 @@ function availability(hit: FeedHit): { closed: boolean; label: string | null } {
   return { closed: false, label: null };
 }
 
+/** Displayed ETA range, INCLUDING the branch's busy-mode prep buffer (#46). The browse
+ *  API's `etaMinutes` is the normal-conditions promise; folding the buffer in here keeps
+ *  the headline ETA from under-promising when the kitchen is slammed (the "Kitchen's busy"
+ *  chip then just explains the higher number). */
+function etaLabel(hit: FeedHit): string {
+  const lo = hit.etaMinutes + hit.prepBufferMinutes;
+  return `${lo}–${lo + 10} min`;
+}
+
 /** Favorite heart — visual affordance; persistence is a future feature (no backend yet),
  *  so this is an optimistic local toggle that doesn't navigate the card. */
 function FavoriteButton({ className }: { className?: string }) {
@@ -142,8 +151,10 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
 
         <FavoriteButton className="absolute right-3 top-3 z-20" />
 
-        {/* Bottom content well. Kept minimal when closed (name + area only). */}
-        <div className="absolute inset-x-0 bottom-0 z-10 space-y-2 p-4 text-white">
+        {/* Bottom content well. Kept minimal when closed (name + area only). z-0 (not z-10)
+            so the ToS-required Google attribution RestaurantImage paints at z-10 stays above
+            this layer on Google-photo cards (Codex #229). */}
+        <div className="absolute inset-x-0 bottom-0 z-0 space-y-2 p-4 text-white">
           {!avail.closed && (r.avgRating != null || r.isVerified) && (
             <div className="flex flex-wrap items-center gap-1.5">
               {r.avgRating != null && (
@@ -208,7 +219,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
 
               <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap text-sm tabular-nums text-white/90">
                 <span className="flex items-center gap-1 font-semibold">
-                  <Clock className="h-3.5 w-3.5" /> {hit.etaMinutes}–{hit.etaMinutes + 10} min
+                  <Clock className="h-3.5 w-3.5" /> {etaLabel(hit)}
                 </span>
                 <span className="text-white/50">·</span>
                 <span>{(hit.distanceM / 1000).toFixed(1)} km</span>
@@ -302,7 +313,7 @@ export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
             <span className="font-semibold text-kd-danger">{avail.label}</span>
           ) : (
             <>
-              {hit.etaMinutes}–{hit.etaMinutes + 10} min · Min {formatRs(hit.minOrderMinor)}
+              {etaLabel(hit)} · Min {formatRs(hit.minOrderMinor)}
             </>
           )}
         </p>
@@ -351,9 +362,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
       </div>
       <p className="mt-1.5 truncate text-sm font-medium text-kd-fg">{r.name}</p>
       <div className="flex items-center gap-1 truncate text-xs text-kd-fg-muted tabular-nums">
-        <span>
-          {hit.etaMinutes}–{hit.etaMinutes + 10} min
-        </span>
+        <span>{etaLabel(hit)}</span>
         {hit.prepBufferMinutes > 0 && !avail.closed && (
           <>
             <span className="text-kd-fg-subtle">·</span>

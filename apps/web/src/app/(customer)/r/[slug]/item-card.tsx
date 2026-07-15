@@ -46,12 +46,16 @@ export function canQuickAdd(item: ItemForCard): boolean {
 
 /** 86'd label for an unavailable item: "Back at {time}" when it's timed-86 (an
  *  unavailableUntil in the future), otherwise "Sold out". No now() comparison — the
- *  server has already re-armed anything whose time elapsed, so a set value is future. */
+ *  server has already re-armed anything whose time elapsed, so a set value is future.
+ *  Formatted in Pakistan time (the restaurant's clock): the API stores timed-86 as
+ *  end-of-day PKT, so a browser in another zone must not reinterpret it locally
+ *  (Codex #230 — a PKT-midnight value would otherwise read as e.g. 2:00 PM in US ET). */
 export function unavailableLabel(item: { unavailableUntil?: string | null }): string {
   if (!item.unavailableUntil) return "Sold out";
-  const back = new Date(item.unavailableUntil).toLocaleTimeString([], {
+  const back = new Date(item.unavailableUntil).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "Asia/Karachi",
   });
   return `Back at ${back}`;
 }
