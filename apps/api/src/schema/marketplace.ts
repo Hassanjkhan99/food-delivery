@@ -72,6 +72,18 @@ builder.prismaObject("Restaurant", {
     status: t.exposeString("status"),
     tier: t.exposeString("tier"),
     cuisineTags: t.exposeStringList("cuisineTags"),
+    // Public trust signal (customer list-view redesign): true once the restaurant's KYC
+    // has been admin-approved. Only the boolean is exposed here — the identity/bank
+    // documents behind it stay owner/admin-only (see restaurant.ts RestaurantKyc auth).
+    isVerified: t.boolean({
+      resolve: async (r) => {
+        const kyc = await prisma.restaurantKyc.findUnique({
+          where: { restaurantId: r.id },
+          select: { status: true },
+        });
+        return kyc?.status === "approved";
+      },
+    }),
     // Promoted deals (#22): the label of the restaurant's active in-window deal_badge
     // campaign, or null. Cards render this as a "deal" pill. Kept lightweight (one
     // findFirst) so it can be selected per-card without a dedicated query.
@@ -382,6 +394,9 @@ builder.prismaObject("MenuItem", {
       resolve: (i) => i.unavailableUntil,
     }),
     badges: t.exposeStringList("badges"),
+    // Dietary / allergen tags (customer list-view redesign). Curated keys (see
+    // DIETARY_TAGS in @fd/shared); the client maps each to a label + glyph chip.
+    dietaryTags: t.exposeStringList("dietaryTags"),
     // Image pipeline (#50): uploaded dish photo only. Google Places has no
     // per-dish imagery, so items skip tier 2 — null -> client typography fallback.
     imageUrl: t.string({

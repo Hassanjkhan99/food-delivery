@@ -604,6 +604,10 @@ model MenuItem {
   unavailableUntil DateTime? @db.Timestamptz()
   imageAssetId String?
   badges       String[] @default([])
+  // Dietary / allergen tags (customer list-view redesign): free-form but drawn from a
+  // curated set in app code (DIETARY_TAGS in @fd/shared) — halal, vegetarian, vegan,
+  // gluten-free, spice level, etc. Powers the item-row dietary chips and future filtering.
+  dietaryTags  String[] @default([])
   sortOrder    Int      @default(0)
 
   category   MenuCategory            @relation(fields: [categoryId], references: [id])

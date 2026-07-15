@@ -20,6 +20,7 @@ export function RestaurantImage({
   photo,
   name,
   tint,
+  accent,
   className,
   sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
   overlay,
@@ -29,6 +30,8 @@ export function RestaurantImage({
   name: string;
   /** Brand color to tint the fallback tile (falls back to a name-hashed hue). */
   tint?: string | null;
+  /** Optional brand accent — second stop of the tier-3 brand gradient (if distinct). */
+  accent?: string | null;
   className?: string;
   sizes?: string;
   /** On-cuisine placeholder photo shown when there's no real photo (else gradient tile). */
@@ -49,7 +52,7 @@ export function RestaurantImage({
   return (
     <div
       className={cn("relative overflow-hidden bg-kd-surface-muted", className)}
-      style={show || useFallback ? undefined : { background: fallbackGradient(name, tint) }}
+      style={show || useFallback ? undefined : { background: fallbackGradient(name, tint, accent) }}
     >
       {show ? (
         <Image

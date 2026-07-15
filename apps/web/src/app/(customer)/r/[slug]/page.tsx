@@ -82,6 +82,7 @@ const BranchQuery = graphql(`
         isAvailable
         unavailableUntil
         badges
+        dietaryTags
         imageUrl
         modifierGroups {
           id
@@ -130,6 +131,7 @@ const BranchQuery = graphql(`
             isAvailable
             unavailableUntil
             badges
+            dietaryTags
             imageUrl
             modifierGroups {
               id

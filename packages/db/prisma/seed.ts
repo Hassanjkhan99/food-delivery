@@ -368,7 +368,13 @@ async function main() {
   });
 
   // ── Menus ──────────────────────────────────────────────────────────────
-  type ItemDef = { name: string; desc?: string; price: number; badges?: string[] };
+  type ItemDef = {
+    name: string;
+    desc?: string;
+    price: number;
+    badges?: string[];
+    dietary?: string[];
+  };
   type CatDef = { name: string; desc?: string; mode?: string; items: ItemDef[] };
 
   async function mkMenu(
@@ -431,6 +437,7 @@ async function main() {
             description: item.desc,
             priceMinor: item.price,
             badges: item.badges ?? [],
+            dietaryTags: item.dietary ?? [],
             sortOrder: ii,
           },
         });
@@ -464,13 +471,15 @@ async function main() {
             desc: "Signature dum biryani",
             price: 45_000,
             badges: ["Bestseller"],
+            dietary: ["halal"],
           },
-          { name: "Beef Biryani", price: 55_000 },
+          { name: "Beef Biryani", price: 55_000, dietary: ["halal"] },
           {
             name: "Sindhi Biryani",
             desc: "Extra spicy, aloo included",
             price: 50_000,
             badges: ["Spicy"],
+            dietary: ["halal", "spicy"],
           },
         ],
       },
@@ -518,17 +527,18 @@ async function main() {
             desc: "Brown rice, greens, house dressing",
             price: 65_000,
             badges: ["Healthy"],
+            dietary: ["halal", "gluten_free"],
           },
-          { name: "Falafel Bowl", price: 55_000, badges: ["Veg"] },
-          { name: "Steak Bowl", price: 85_000 },
+          { name: "Falafel Bowl", price: 55_000, badges: ["Veg"], dietary: ["vegan"] },
+          { name: "Steak Bowl", price: 85_000, dietary: ["gluten_free"] },
         ],
       },
       {
         name: "Wraps",
         mode: "list",
         items: [
-          { name: "Chicken Caesar Wrap", price: 48_000 },
-          { name: "Halloumi Wrap", price: 52_000, badges: ["Veg"] },
+          { name: "Chicken Caesar Wrap", price: 48_000, dietary: ["halal"] },
+          { name: "Halloumi Wrap", price: 52_000, badges: ["Veg"], dietary: ["vegetarian"] },
         ],
       },
       {
@@ -639,6 +649,7 @@ async function main() {
             priceMinor: item.priceMinor,
             isAvailable: item.isAvailable,
             badges: item.badges,
+            dietaryTags: item.dietaryTags,
             sortOrder: item.sortOrder,
           },
         });

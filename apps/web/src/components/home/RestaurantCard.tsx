@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Clock, Flame, Heart, MapPin, Star, Tag } from "lucide-react";
+import { BadgeCheck, Clock, Flame, Heart, MapPin, Star, Tag } from "lucide-react";
 import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { restaurantCoverPlaceholder } from "@/components/media/placeholders";
@@ -121,6 +121,7 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             photo={hit.photo}
             name={r.name}
             tint={r.primaryColor}
+            accent={r.accentColor}
             fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
             className={cn(
               "h-full w-full transition-transform duration-300 group-hover:scale-[1.04]",
@@ -154,12 +155,22 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
             so the ToS-required Google attribution RestaurantImage paints at z-10 stays above
             this layer on Google-photo cards (Codex #229). */}
         <div className="absolute inset-x-0 bottom-0 z-0 space-y-2 p-4 text-white">
-          {!avail.closed && r.avgRating != null && (
-            <span className="kd-glass inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold text-white">
-              <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
-              {r.avgRating.toFixed(1)}
-              <span className="font-medium text-white/70">({r.ratingCount})</span>
-            </span>
+          {!avail.closed && (r.avgRating != null || r.isVerified) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {r.avgRating != null && (
+                <span className="kd-glass inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold text-white">
+                  <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
+                  {r.avgRating.toFixed(1)}
+                  <span className="font-medium text-white/70">({r.ratingCount})</span>
+                </span>
+              )}
+              {r.isVerified && (
+                <span className="kd-glass inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold text-white">
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </span>
+              )}
+            </div>
           )}
 
           <div className="flex items-center gap-2">
@@ -256,6 +267,7 @@ export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
         photo={hit.photo}
         name={r.name}
         tint={r.primaryColor}
+        accent={r.accentColor}
         fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
         className={cn("h-28 w-28 shrink-0 rounded-[16px]", avail.closed && "grayscale-[0.6]")}
         sizes="112px"
@@ -279,6 +291,9 @@ export function RestaurantRowCard({ hit }: { hit: FeedHit }) {
             <img src={r.logoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
           )}
           <span className="truncate">{r.name}</span>
+          {r.isVerified && (
+            <BadgeCheck className="h-4 w-4 shrink-0 text-kd-info" aria-label="Verified" />
+          )}
         </p>
         {r.avgRating != null && (
           <div className="mt-0.5 flex items-center gap-1 text-sm tabular-nums">
@@ -319,6 +334,7 @@ export function RestaurantMiniCard({ hit }: { hit: FeedHit }) {
           photo={hit.photo}
           name={r.name}
           tint={r.primaryColor}
+          accent={r.accentColor}
           fallbackSrc={restaurantCoverPlaceholder(r.cuisineTags)}
           className={cn("aspect-[16/10] w-44 rounded-2xl", avail.closed && "grayscale-[0.6]")}
           sizes="176px"

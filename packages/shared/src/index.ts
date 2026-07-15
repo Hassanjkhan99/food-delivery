@@ -1,5 +1,6 @@
 export * from "./constants";
 export * from "./cuisine";
+export * from "./dietary";
 export * from "./discovery";
 export * from "./hours";
 export * from "./money";

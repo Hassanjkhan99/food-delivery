@@ -449,6 +449,7 @@ type MenuItem {
   badges: [String!]!
   compareAtPriceMinor: Int
   description: String
+  dietaryTags: [String!]!
   id: ID!
   imageUrl: String
   isAvailable: Boolean!
@@ -920,6 +921,7 @@ type Restaurant {
   cuisineTags: [String!]!
   dealBadge: String
   id: ID!
+  isVerified: Boolean!
   name: String!
   ratingCount: Int!
   ratingDistribution: [Int!]!

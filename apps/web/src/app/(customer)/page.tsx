@@ -74,8 +74,10 @@ const HomeQuery = graphql(`
           ratingCount
           cuisineTags
           dealBadge
+          isVerified
           theme {
             primaryColor
+            accentColor
             logoUrl
           }
         }
@@ -244,8 +246,10 @@ export default function HomePage() {
           ratingCount: h.branch.restaurant.ratingCount,
           cuisineTags: h.branch.restaurant.cuisineTags ?? [],
           primaryColor: h.branch.restaurant.theme?.primaryColor ?? null,
+          accentColor: h.branch.restaurant.theme?.accentColor ?? null,
           logoUrl: h.branch.restaurant.theme?.logoUrl ?? null,
           dealBadge: h.branch.restaurant.dealBadge ?? null,
+          isVerified: h.branch.restaurant.isVerified,
         },
       })),
     [data],
