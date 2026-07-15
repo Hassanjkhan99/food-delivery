@@ -7,6 +7,7 @@
 // sibling of the card button (not nested) so we never emit an invalid button-in-button.
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus, SlidersHorizontal } from "lucide-react";
+import { dietaryTag } from "@fd/shared";
 import { cardClasses } from "@/components/theme/theme";
 import { TiltCard } from "@/components/theme/TiltCard";
 import { ItemImage } from "@/components/media/ItemImage";
@@ -20,6 +21,8 @@ export type ItemForCard = MenuItemForModal & {
   // here on an unavailable item is always still in the future → drives "Back at {time}".
   unavailableUntil?: string | null;
   badges: string[];
+  // Curated dietary/allergen keys (see DIETARY_TAGS in @fd/shared) → small glyph chips.
+  dietaryTags: string[];
   imageUrl?: string | null;
   // Item-level offer (#53): original "was" price. Server only sends it when it's a real
   // discount (> priceMinor), so we can render the strike-through + % badge unconditionally.
@@ -121,18 +124,35 @@ export function ItemCard({
         {!compact && item.description && (
           <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{item.description}</p>
         )}
-        {/* Customization signal (#46 modifiers): required-to-order vs optional add-ons. */}
-        {hint && (
-          <span
-            className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              hint === "required"
-                ? "bg-kd-warning-soft text-kd-warning-soft-fg"
-                : "bg-kd-info-soft text-kd-info"
-            }`}
-          >
-            <SlidersHorizontal className="h-2.5 w-2.5" />
-            {hint === "required" ? "Customize · Required" : "Add-ons available"}
-          </span>
+        {/* Dietary/allergen chips + customization signal. Hidden in compact mode (no room). */}
+        {!compact && (item.dietaryTags.length > 0 || hint) && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {item.dietaryTags.map((key) => {
+              const tag = dietaryTag(key);
+              if (!tag) return null;
+              return (
+                <span
+                  key={key}
+                  className="inline-flex items-center gap-1 rounded-full bg-kd-success-soft px-2 py-0.5 text-[10px] font-semibold text-kd-success"
+                >
+                  <span aria-hidden>{tag.icon}</span>
+                  {tag.label}
+                </span>
+              );
+            })}
+            {hint && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  hint === "required"
+                    ? "bg-kd-warning-soft text-kd-warning-soft-fg"
+                    : "bg-kd-info-soft text-kd-info"
+                }`}
+              >
+                <SlidersHorizontal className="h-2.5 w-2.5" />
+                {hint === "required" ? "Customize · Required" : "Add-ons available"}
+              </span>
+            )}
+          </div>
         )}
       </div>
       <span className="flex shrink-0 flex-col items-end">

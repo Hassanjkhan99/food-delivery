@@ -33,10 +33,14 @@ export type FeedHit = {
     ratingCount: number;
     cuisineTags: string[];
     primaryColor?: string | null;
+    // Theme accent — second stop of the brand-gradient tier-3 hero (brand-through-glass).
+    accentColor?: string | null;
     // Uploaded brand logo (theme.logoUrl); small glass badge beside the name when present.
     logoUrl?: string | null;
     // Promoted deals (#22): label of an active deal_badge campaign, else null.
     dealBadge?: string | null;
+    // KYC-approved trust marker (public boolean; no PII). Renders a "Verified" glass chip.
+    isVerified?: boolean;
   };
   // True when this hit is shown via a paid featured-slot placement (#22).
   promoted?: boolean;
