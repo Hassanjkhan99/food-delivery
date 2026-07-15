@@ -7,6 +7,7 @@
 // server-computed (originalPriceMinor), so the saving can't be spoofed.
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { formatRs } from "@fd/shared";
 import { Price, type BranchTaxInfo } from "@/components/price/Price";
 import { cardClasses } from "@/components/theme/theme";
 import { ItemImage } from "@/components/media/ItemImage";
@@ -51,6 +52,7 @@ export function ComboCard({
   const reduced = useReducedMotion();
   const disabled = !combo.isAvailable || !accepting;
   const off = comboPercentOff(combo);
+  const saveMinor = combo.originalPriceMinor - combo.priceMinor;
   // "Burger ×1, Fries ×1, Drink ×1" — the frozen component list, guarded for empties.
   const contents = (combo.items ?? [])
     .map((ci) => `${ci.menuItem?.name ?? "Item"}${ci.qty > 1 ? ` ×${ci.qty}` : ""}`)
@@ -81,7 +83,9 @@ export function ComboCard({
           )}
           {contents && <p className="mt-1 line-clamp-2 text-xs text-kd-fg-subtle">{contents}</p>}
           {!combo.isAvailable && (
-            <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>
+            <p className="mt-1 text-xs font-medium text-kd-danger">
+              Unavailable — items 86&rsquo;d
+            </p>
           )}
         </div>
         <span className="flex shrink-0 flex-col items-end">
@@ -99,6 +103,11 @@ export function ComboCard({
             className="font-semibold"
             style={{ color: "var(--brand-primary)" }}
           />
+          {saveMinor > 0 && (
+            <span className="mt-0.5 whitespace-nowrap text-[11px] font-bold text-kd-success">
+              Save {formatRs(saveMinor)}
+            </span>
+          )}
         </span>
       </div>
       {!disabled && (

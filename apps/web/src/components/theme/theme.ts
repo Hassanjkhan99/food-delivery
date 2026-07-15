@@ -47,8 +47,10 @@ export function themeVars(theme: ThemeShape): React.CSSProperties {
 export function cardClasses(cardStyle: string): string {
   switch (cardStyle) {
     case "glass":
-      // Glass is an intentional decorative treatment — keep the translucent white.
-      return "border border-white/30 bg-white/40 backdrop-blur-md shadow-sm";
+      // Glass is an intentional decorative treatment. Uses the shared liquid-glass
+      // recipe (kd-glass-sheet: translucent fill + blur/saturate + light border and
+      // an inset specular highlight) so a glass-themed menu matches the customer feed.
+      return "kd-glass-sheet shadow-sm";
     case "tilt3d":
       return "border border-kd-border bg-kd-surface shadow-md";
     default:

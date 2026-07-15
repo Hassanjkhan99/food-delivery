@@ -80,6 +80,7 @@ const BranchQuery = graphql(`
         priceMinor
         compareAtPriceMinor
         isAvailable
+        unavailableUntil
         badges
         imageUrl
         modifierGroups {
@@ -127,6 +128,7 @@ const BranchQuery = graphql(`
             priceMinor
             compareAtPriceMinor
             isAvailable
+            unavailableUntil
             badges
             imageUrl
             modifierGroups {
