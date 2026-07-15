@@ -6,7 +6,7 @@
 // one-tap "+" quick-add; everything else opens the full modifier sheet. The "+" is a
 // sibling of the card button (not nested) so we never emit an invalid button-in-button.
 import { motion, useReducedMotion } from "framer-motion";
-import { Plus } from "lucide-react";
+import { Plus, SlidersHorizontal } from "lucide-react";
 import { cardClasses } from "@/components/theme/theme";
 import { TiltCard } from "@/components/theme/TiltCard";
 import { ItemImage } from "@/components/media/ItemImage";
@@ -15,6 +15,10 @@ import type { MenuItemForModal } from "./item-modal";
 
 export type ItemForCard = MenuItemForModal & {
   isAvailable: boolean;
+  // Timed-86 (#46/#110): when a currently-unavailable item is scheduled to come back.
+  // The server re-arms items whose time has elapsed at read time, so a non-null value
+  // here on an unavailable item is always still in the future → drives "Back at {time}".
+  unavailableUntil?: string | null;
   badges: string[];
   imageUrl?: string | null;
   // Item-level offer (#53): original "was" price. Server only sends it when it's a real
@@ -35,6 +39,30 @@ export function percentOff(item: {
 /** No modifier group forces a choice → we can add straight to the cart. */
 export function canQuickAdd(item: ItemForCard): boolean {
   return item.modifierGroups.every((g) => g.minSelect === 0);
+}
+
+/** 86'd label for an unavailable item: "Back at {time}" when it's timed-86 (an
+ *  unavailableUntil in the future), otherwise "Sold out". No now() comparison — the
+ *  server has already re-armed anything whose time elapsed, so a set value is future.
+ *  Formatted in Pakistan time (the restaurant's clock): the API stores timed-86 as
+ *  end-of-day PKT, so a browser in another zone must not reinterpret it locally
+ *  (Codex #230 — a PKT-midnight value would otherwise read as e.g. 2:00 PM in US ET). */
+export function unavailableLabel(item: { unavailableUntil?: string | null }): string {
+  if (!item.unavailableUntil) return "Sold out";
+  const back = new Date(item.unavailableUntil).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Karachi",
+  });
+  return `Back at ${back}`;
+}
+
+/** Customization signal for the card: an item with a min-select group must be
+ *  customized to order (amber "Required"); one with only optional groups just has
+ *  add-ons (info). null → no modifiers, no pill. */
+export function modifierHint(item: ItemForCard): "required" | "optional" | null {
+  if (item.modifierGroups.length === 0) return null;
+  return item.modifierGroups.some((g) => g.minSelect >= 1) ? "required" : "optional";
 }
 
 export function ItemCard({
@@ -62,6 +90,7 @@ export function ItemCard({
   const showQuickAdd = !disabled && canQuickAdd(item);
   const tilt = cardStyle === "tilt3d" && !compact;
   const off = percentOff(item);
+  const hint = modifierHint(item);
 
   const inner = (
     <>
@@ -96,8 +125,18 @@ export function ItemCard({
         {!compact && item.description && (
           <p className="mt-1 line-clamp-2 text-sm text-kd-fg-muted">{item.description}</p>
         )}
-        {!item.isAvailable && (
-          <p className="mt-1 text-xs font-medium text-kd-danger">Unavailable</p>
+        {/* Customization signal (#46 modifiers): required-to-order vs optional add-ons. */}
+        {hint && (
+          <span
+            className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              hint === "required"
+                ? "bg-kd-warning-soft text-kd-warning-soft-fg"
+                : "bg-kd-info-soft text-kd-info"
+            }`}
+          >
+            <SlidersHorizontal className="h-2.5 w-2.5" />
+            {hint === "required" ? "Customize · Required" : "Add-ons available"}
+          </span>
         )}
       </div>
       <span className="flex shrink-0 flex-col items-end">
@@ -158,6 +197,18 @@ export function ItemCard({
         >
           <Plus className="h-5 w-5" strokeWidth={3} />
         </button>
+      )}
+      {/* 86'd items: a pill in the add-button slot (full opacity over the dimmed card) —
+          "Back at {time}" when timed-86, otherwise "Sold out". Branch-closed items aren't
+          "sold out", so this is gated on the item's own availability, not `disabled`. */}
+      {!item.isAvailable && (
+        <span
+          className={`absolute z-10 whitespace-nowrap rounded-full bg-kd-surface px-2.5 py-1 text-[11px] font-bold text-kd-fg-muted shadow-md ring-1 ring-kd-border ${
+            compact ? "right-3 top-1/2 -translate-y-1/2" : "bottom-2 right-2"
+          }`}
+        >
+          {unavailableLabel(item)}
+        </span>
       )}
     </div>
   );
