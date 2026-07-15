@@ -8,7 +8,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { formatRs } from "@fd/shared";
-import { Price, type BranchTaxInfo } from "@/components/price/Price";
+import { Price, useDisplayPrice, type BranchTaxInfo } from "@/components/price/Price";
 import { cardClasses } from "@/components/theme/theme";
 import { ItemImage } from "@/components/media/ItemImage";
 
@@ -52,7 +52,12 @@ export function ComboCard({
   const reduced = useReducedMotion();
   const disabled = !combo.isAvailable || !accepting;
   const off = comboPercentOff(combo);
-  const saveMinor = combo.originalPriceMinor - combo.priceMinor;
+  // Compute the saving from the SAME tax-adjusted amounts the two Price rows render
+  // (Codex #230): otherwise, in inclusive display mode on an exclusive-tax branch, the
+  // "Save Rs X" wouldn't match the strike-through and bundle prices shown above it.
+  const { minor: shownOriginal } = useDisplayPrice(combo.originalPriceMinor, taxInfo);
+  const { minor: shownPrice } = useDisplayPrice(combo.priceMinor, taxInfo);
+  const saveMinor = shownOriginal - shownPrice;
   // "Burger ×1, Fries ×1, Drink ×1" — the frozen component list, guarded for empties.
   const contents = (combo.items ?? [])
     .map((ci) => `${ci.menuItem?.name ?? "Item"}${ci.qty > 1 ? ` ×${ci.qty}` : ""}`)
