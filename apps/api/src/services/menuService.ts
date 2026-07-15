@@ -97,6 +97,9 @@ export async function cloneMenu(
             isAvailable: item.isAvailable,
             imageAssetId: item.imageAssetId,
             badges: item.badges,
+            // Copy dietary/allergen tags on clone (Codex #231) — else draft-create or
+            // publish would silently reset them to [] and the customer chips vanish.
+            dietaryTags: item.dietaryTags,
             sortOrder: item.sortOrder,
           },
         });
