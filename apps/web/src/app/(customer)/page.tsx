@@ -53,11 +53,13 @@ const HomeQuery = graphql(`
       priceBand
       branch {
         id
+        addressText
         minOrderMinor
         deliveryFeeMinor
         isAcceptingOrders
         isOpenNow
         opensAtLabel
+        prepBufferMinutes
         photo {
           url
           source
@@ -74,6 +76,7 @@ const HomeQuery = graphql(`
           dealBadge
           theme {
             primaryColor
+            logoUrl
           }
         }
       }
@@ -229,6 +232,8 @@ export default function HomePage() {
         isAcceptingOrders: h.branch.isAcceptingOrders,
         isOpenNow: h.branch.isOpenNow,
         opensAtLabel: h.branch.opensAtLabel ?? null,
+        addressText: h.branch.addressText,
+        prepBufferMinutes: h.branch.prepBufferMinutes,
         photo: h.branch.photo ?? null,
         restaurant: {
           id: h.branch.restaurant.id,
@@ -239,6 +244,7 @@ export default function HomePage() {
           ratingCount: h.branch.restaurant.ratingCount,
           cuisineTags: h.branch.restaurant.cuisineTags ?? [],
           primaryColor: h.branch.restaurant.theme?.primaryColor ?? null,
+          logoUrl: h.branch.restaurant.theme?.logoUrl ?? null,
           dealBadge: h.branch.restaurant.dealBadge ?? null,
         },
       })),

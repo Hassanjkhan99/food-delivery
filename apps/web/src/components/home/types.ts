@@ -18,6 +18,11 @@ export type FeedHit = {
   isAcceptingOrders: boolean;
   isOpenNow: boolean;
   opensAtLabel: string | null;
+  // Neighborhood/area line shown under the name (liquid-glass redesign). Branch address.
+  addressText: string;
+  // Busy mode (#46): extra prep minutes while the kitchen is slammed. > 0 surfaces an
+  // amber "Kitchen's busy" chip and is already folded into the server ETA quote.
+  prepBufferMinutes: number;
   photo: FeedPhoto;
   restaurant: {
     id: string;
@@ -28,6 +33,8 @@ export type FeedHit = {
     ratingCount: number;
     cuisineTags: string[];
     primaryColor?: string | null;
+    // Uploaded brand logo (theme.logoUrl); small glass badge beside the name when present.
+    logoUrl?: string | null;
     // Promoted deals (#22): label of an active deal_badge campaign, else null.
     dealBadge?: string | null;
   };
