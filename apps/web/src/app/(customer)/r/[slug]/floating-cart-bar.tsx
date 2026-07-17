@@ -9,6 +9,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
 import { formatRs } from "@fd/shared";
 import { cartSubtotal, useCart } from "@/lib/cart";
+import { useDisplayPrice, type BranchTaxInfo } from "@/components/price/Price";
 
 /** Shows the bar for *this* branch's cart only. */
 function useCartBarVisible(branchId: string) {
@@ -25,12 +26,19 @@ export function CartBarSpacer({ branchId }: { branchId: string }) {
   return useCartBarVisible(branchId) ? <div aria-hidden className="h-24" /> : null;
 }
 
-export function FloatingCartBar({ branchId }: { branchId: string }) {
+export function FloatingCartBar({
+  branchId,
+  taxInfo,
+}: {
+  branchId: string;
+  taxInfo?: BranchTaxInfo | null;
+}) {
   const reduced = useReducedMotion();
   const lines = useCart((s) => s.lines);
   const show = useCartBarVisible(branchId);
   const count = lines.reduce((n, l) => n + l.qty, 0);
-  const subtotal = cartSubtotal(lines);
+  // Honor the inclusive/before-tax display preference so the bar matches the menu (#227).
+  const { minor: subtotal } = useDisplayPrice(cartSubtotal(lines), taxInfo);
 
   return (
     <AnimatePresence>

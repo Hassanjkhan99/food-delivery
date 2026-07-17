@@ -309,7 +309,23 @@ builder.prismaObject("Branch", {
           .sort((a, b) => b[1] - a[1])
           .slice(0, limit)
           .map(([name]) => name);
-        if (topNames.length === 0) return [];
+        // New-market fallback (#233): a branch with no delivered orders in the last 30d
+        // has no popularity signal yet. Rather than return nothing — which drops the
+        // branch out of the swipe deck and any Popular-gated surface — feature its
+        // available menu items by menu order so the branch still has something to show.
+        if (topNames.length === 0) {
+          return prisma.menuItem.findMany({
+            ...query,
+            where: {
+              ...availableItemFilter(),
+              category: { menuId: branch.activeMenuId },
+            },
+            // Item sortOrder restarts per category, so order by category first to make
+            // cross-category ties deterministic (mirrors the menu's own top-to-bottom order).
+            orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+            take: limit,
+          });
+        }
         const items = await prisma.menuItem.findMany({
           ...query,
           where: {
