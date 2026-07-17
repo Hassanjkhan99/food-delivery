@@ -2,20 +2,38 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useQuery } from "urql";
 import { Pencil, Tag, Trash2, UtensilsCrossed, X } from "lucide-react";
 import {
   DEFAULT_UNAVAILABILITY_PREFERENCE,
   formatRs,
   unavailabilityPreferenceLabel,
 } from "@fd/shared";
+import { graphql } from "@/graphql/generated";
 import { cartSubtotal, useCart, useCartExtras } from "@/lib/cart";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { PriceDisplayToggle, useDisplayPrice } from "@/components/price/Price";
 
 // Preset tip chips in minor units (Rs 0 / 50 / 100).
 const TIP_PRESETS = [0, 5000, 10000] as const;
+
+// Just the branch tax context, so the cart estimate can honor the inclusive/before-tax
+// display preference the customer set on the menu (#227, a #146 follow-up).
+const BranchTaxQuery = graphql(`
+  query CartBranchTax($slug: String!, $branchId: String) {
+    branchBySlug(slug: $slug, branchId: $branchId) {
+      id
+      taxInfo {
+        rateBps
+        inclusive
+        label
+      }
+    }
+  }
+`);
 
 export default function CartPage() {
   const { branchId, branchName, branchSlug, lines, removeLine, setQty } = useCart();
@@ -24,6 +42,18 @@ export default function CartPage() {
   // Local promo field text. The applied code lives in the cart-extras store and is
   // carried to checkout, where the server validates eligibility and re-prices (#52).
   const [promoInput, setPromoInput] = useState(voucherCode ?? "");
+
+  const [{ data: taxData }] = useQuery({
+    query: BranchTaxQuery,
+    variables: { slug: branchSlug ?? "", branchId },
+    pause: !branchSlug,
+  });
+  const taxInfo = taxData?.branchBySlug?.taxInfo ?? null;
+
+  // Tax-aware display estimate (presentation only — the server computes the payable total).
+  // Tax is a flat rate, so applying it to the subtotal matches summing per-line displays.
+  const subtotal = cartSubtotal(lines);
+  const { minor: subtotalShown, hint: taxHint } = useDisplayPrice(subtotal, taxInfo);
 
   // Whether the current tip matches a preset (else it's a custom amount).
   const isPreset = (TIP_PRESETS as readonly number[]).includes(tipAmount);
@@ -39,8 +69,6 @@ export default function CartPage() {
       </main>
     );
   }
-
-  const subtotal = cartSubtotal(lines);
 
   return (
     <main className="mx-auto max-w-lg">
@@ -213,9 +241,18 @@ export default function CartPage() {
       <Separator className="my-6" />
 
       <div className="space-y-1 text-sm">
+        {taxInfo && taxInfo.rateBps > 0 && (
+          <div className="mb-2 flex items-center justify-end gap-2 text-xs text-kd-fg-muted">
+            <span>Show prices</span>
+            <PriceDisplayToggle />
+          </div>
+        )}
         <div className="flex justify-between">
-          <span className="text-kd-fg-muted">Subtotal (estimate)</span>
-          <span>{formatRs(subtotal)}</span>
+          <span className="text-kd-fg-muted">
+            Subtotal (estimate)
+            {taxHint ? <span className="ml-1 text-kd-fg-subtle">{taxHint}</span> : null}
+          </span>
+          <span>{formatRs(subtotalShown)}</span>
         </div>
         {tipAmount > 0 && (
           <div className="flex justify-between">
@@ -225,10 +262,10 @@ export default function CartPage() {
         )}
         <div className="flex justify-between pt-1 font-semibold text-kd-fg">
           <span>Estimated total</span>
-          <span>{formatRs(subtotal + tipAmount)}</span>
+          <span>{formatRs(subtotalShown + tipAmount)}</span>
         </div>
         <p className="text-xs text-kd-fg-subtle">
-          Tax, delivery and platform fee are computed at checkout.
+          Delivery and platform fee are computed at checkout.
         </p>
       </div>
 

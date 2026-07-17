@@ -609,7 +609,7 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
       )}
 
       <CartBarSpacer branchId={branch.id} />
-      <FloatingCartBar branchId={branch.id} />
+      <FloatingCartBar branchId={branch.id} taxInfo={branch.taxInfo} />
 
       {/* Edit-from-cart (URL param) takes precedence over a plain card open. */}
       {editTarget ? (
