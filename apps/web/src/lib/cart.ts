@@ -69,6 +69,10 @@ export const useCart = create<CartState>()(
         if (s.branchId && s.branchId !== branch.id && s.lines.length > 0) {
           return "branch_conflict";
         }
+        // Switching (or starting) the cart's branch drops any promo carried over from a
+        // previous branch — a restaurant-scoped code would otherwise ride along and be
+        // rejected for the new branch at checkout (#52).
+        if (s.branchId !== branch.id) useCartExtras.getState().setVoucherCode(null);
         // Per-line duplicate merge: an identical config bumps qty instead of
         // creating a new line (#39).
         const dupe = s.lines.find((l) => sameConfig(line, l));
@@ -106,18 +110,26 @@ export const useCart = create<CartState>()(
               ),
           };
         }),
-      removeLine: (lineId) =>
-        set((s) => {
-          const lines = s.lines.filter((l) => l.lineId !== lineId);
-          return lines.length === 0
-            ? { lines, branchId: null, branchSlug: null, branchName: null }
-            : { lines };
-        }),
+      removeLine: (lineId) => {
+        const lines = get().lines.filter((l) => l.lineId !== lineId);
+        if (lines.length > 0) {
+          set({ lines });
+          return;
+        }
+        set({ lines, branchId: null, branchSlug: null, branchName: null });
+        // Emptying the cart also drops the promo so it can't reattach to a
+        // different branch's cart later (#52).
+        useCartExtras.getState().setVoucherCode(null);
+      },
       setQty: (lineId, qty) =>
         set((s) => ({
           lines: s.lines.map((l) => (l.lineId === lineId ? { ...l, qty: Math.max(1, qty) } : l)),
         })),
-      clear: () => set({ branchId: null, branchSlug: null, branchName: null, lines: [] }),
+      clear: () => {
+        set({ branchId: null, branchSlug: null, branchName: null, lines: [] });
+        // A restaurant-scoped promo doesn't survive a cart reset / branch switch (#52).
+        useCartExtras.getState().setVoucherCode(null);
+      },
     }),
     { name: "fd-cart" },
   ),

@@ -134,6 +134,12 @@ export default function AdminVouchersPage() {
   async function submit() {
     setMessage(null);
     const type = form.type;
+    // updateVoucher is a full replace (active defaults to true when omitted), so we must
+    // send active — but read the freshest value from the live list rather than the snapshot
+    // taken when editing began, so a row toggled while the form was open isn't reverted.
+    const activeToSend = editingId
+      ? (vouchers.find((v) => v.id === editingId)?.active ?? form.active)
+      : form.active;
     const input = {
       code: form.code,
       description: form.description.trim() || undefined,
@@ -152,7 +158,7 @@ export default function AdminVouchersPage() {
       restaurantId: form.restaurantId || undefined,
       startsAt: form.startsAt || undefined,
       endsAt: form.endsAt || undefined,
-      active: form.active,
+      active: activeToSend,
     };
     if (editingId) {
       const r = await update({ id: editingId, input });
@@ -326,6 +332,9 @@ export default function AdminVouchersPage() {
                 <Button
                   variant={v.active ? "outline" : "default"}
                   size="sm"
+                  // Locked while this row is open in the edit form: saving the form writes
+                  // active, so a mid-edit toggle here would just be overwritten.
+                  disabled={editingId === v.id}
                   onClick={async () => {
                     await setActive({ id: v.id, active: !v.active });
                     refetch({ requestPolicy: "network-only" });

@@ -323,6 +323,10 @@ export default function CheckoutPage() {
     fulfillmentMode,
     redeemPoints,
     deliveryOption,
+    // Requote once a guest completes OTP: quoteCart skips voucher validation with no
+    // user, so a code carried in from the cart would otherwise show "applied" with an
+    // undiscounted total until placeOrder reprices it (#52).
+    loggedIn,
   ]);
 
   if (!branchId || lines.length === 0) {
