@@ -27,7 +27,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParallaxHero } from "@/components/theme/ParallaxHero";
 import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
-import { useCart } from "@/lib/cart";
+import { useCart, useCartExtras } from "@/lib/cart";
 import { ItemModal, type EditContext, type MenuItemForModal } from "./item-modal";
 import { itemImagePlaceholder } from "@/components/media/placeholders";
 import { ItemCard, percentOff, type ItemForCard } from "./item-card";
@@ -185,6 +185,10 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
 
   const addLine = useCart((s) => s.addLine);
   const clearCart = useCart((s) => s.clear);
+  // Delivery|Pickup preference (#54). Chosen here and carried into /checkout via the
+  // cart-extras store; pickup waives the delivery fee (server re-prices at quote time).
+  const fulfillmentMode = useCartExtras((s) => s.fulfillmentMode);
+  const setFulfillmentMode = useCartExtras((s) => s.setFulfillmentMode);
   const { ref: heroSentinel, collapsed } = useHeroCollapsed<HTMLDivElement>();
 
   const branch = data?.branchBySlug;
@@ -439,8 +443,31 @@ function RestaurantPage({ params }: { params: Promise<{ slug: string }> }) {
             <span className="flex items-center gap-1">
               <Timer className="h-4 w-4" /> Min {formatRs(branch.minOrderMinor)}
             </span>
-            <span>Delivery {formatRs(branch.deliveryFeeMinor)}</span>
+            <span>
+              {fulfillmentMode === "pickup"
+                ? "Pickup · no delivery fee"
+                : `Delivery ${formatRs(branch.deliveryFeeMinor)}`}
+            </span>
             {!orderable && <Badge variant="destructive">{closedLabel}</Badge>}
+          </div>
+          {/* Delivery|Pickup toggle (#54). Persists to the cart-extras store so the
+              choice is pre-selected at checkout. Pickup waives the delivery fee. */}
+          <div className="mt-3 inline-flex gap-1 rounded-xl border border-kd-border bg-kd-surface p-1 shadow-sm">
+            {(["delivery", "pickup"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setFulfillmentMode(mode)}
+                aria-pressed={fulfillmentMode === mode}
+                className={`rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition ${
+                  fulfillmentMode === mode
+                    ? "bg-kd-primary text-kd-primary-fg"
+                    : "text-kd-fg-muted hover:text-kd-fg"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
           </div>
         </div>
       </ParallaxHero>

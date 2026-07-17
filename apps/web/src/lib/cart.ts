@@ -126,17 +126,29 @@ export const useCart = create<CartState>()(
 export const cartSubtotal = (lines: CartLine[]) =>
   lines.reduce((s, l) => s + l.unitPriceMinor * l.qty, 0);
 
-// ── Cart extras (tip + cutlery) ─────────────────────────────────────────────
+// ── Cart extras (tip + cutlery + fulfillment + promo) ───────────────────────
 // Persisted separately from the item cart (`fd-cart`) so they survive navigation
 // to /checkout, where the checkout page reads this store and threads
 // tipAmount + cutleryRequested into quoteCart(QuoteCartInput) and
 // placeOrder(PlaceOrderInput). The API folds tip into grandTotalMinor
 // (untaxed/uncommissioned); cutleryRequested defaults true.
+//
+// fulfillmentMode (#54) and voucherCode (#52) also live here so a choice made
+// earlier in the funnel (Delivery|Pickup toggle on the restaurant page, promo
+// code entered on the cart page) carries into /checkout. The server is still the
+// source of truth: it re-validates the voucher and re-prices for the mode at
+// quote/placeOrder time. Both are cleared by reset() on order success.
+export type FulfillmentMode = "delivery" | "pickup";
+
 type CartExtras = {
   tipAmount: number; // minor units (paisa)
   cutleryRequested: boolean;
+  fulfillmentMode: FulfillmentMode;
+  voucherCode: string | null; // the applied promo code, or null when none
   setTip: (minor: number) => void;
   setCutlery: (on: boolean) => void;
+  setFulfillmentMode: (mode: FulfillmentMode) => void;
+  setVoucherCode: (code: string | null) => void;
   reset: () => void;
 };
 
@@ -145,9 +157,23 @@ export const useCartExtras = create<CartExtras>()(
     (set) => ({
       tipAmount: 0,
       cutleryRequested: true,
+      fulfillmentMode: "delivery",
+      voucherCode: null,
       setTip: (minor) => set({ tipAmount: Math.max(0, Math.round(minor)) }),
       setCutlery: (on) => set({ cutleryRequested: on }),
-      reset: () => set({ tipAmount: 0, cutleryRequested: true }),
+      setFulfillmentMode: (mode) => set({ fulfillmentMode: mode }),
+      // Normalize to a non-empty upper-cased code, or null to clear.
+      setVoucherCode: (code) => {
+        const trimmed = code?.trim().toUpperCase();
+        set({ voucherCode: trimmed ? trimmed : null });
+      },
+      reset: () =>
+        set({
+          tipAmount: 0,
+          cutleryRequested: true,
+          fulfillmentMode: "delivery",
+          voucherCode: null,
+        }),
     }),
     { name: "fd-cart-extras" },
   ),

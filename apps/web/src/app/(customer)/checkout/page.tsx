@@ -132,14 +132,24 @@ export default function CheckoutPage() {
   // Tip + cutlery collected on the cart page (persisted in `fd-cart-extras`).
   // The API already accepts both: tipAmount folds into the quote's grandTotal
   // (untaxed, uncommissioned) and cutleryRequested rides along on placeOrder.
-  const { tipAmount, cutleryRequested, reset: resetExtras } = useCartExtras();
+  // Tip + cutlery plus the fulfillment mode (#54) and applied promo code (#52)
+  // carried from earlier in the funnel (restaurant-page pickup toggle, cart-page
+  // promo field). All persisted in `fd-cart-extras`; the server re-validates both.
+  const {
+    tipAmount,
+    cutleryRequested,
+    fulfillmentMode,
+    voucherCode,
+    setFulfillmentMode,
+    setVoucherCode,
+    reset: resetExtras,
+  } = useCartExtras();
   const loc = useDeliveryLocation();
 
   const [addressText, setAddressText] = useState("");
   const [contactPhone, setContactPhone] = useState("+92");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [fulfillmentMode, setFulfillmentMode] = useState<"delivery" | "pickup">("delivery");
   // Optional scheduled slot as a datetime-local value ("" = ASAP). Sent to the API as
   // an ISO string; scheduling is groundwork (see PR notes) but the picker is wired.
   const [scheduledLocal, setScheduledLocal] = useState("");
@@ -152,10 +162,11 @@ export default function CheckoutPage() {
   // The server clamps to balance + rules and returns what was actually applied (FP-07).
   const [useLoyalty, setUseLoyalty] = useState(false);
 
-  // Promo code (#52). `voucherInput` is the field text; `voucherCode` is the applied
-  // code sent to the server (only set on "Apply" so typing doesn't re-quote every keystroke).
-  const [voucherInput, setVoucherInput] = useState("");
-  const [voucherCode, setVoucherCode] = useState<string | null>(null);
+  // Promo code (#52). `voucherInput` is the field text; the applied `voucherCode`
+  // lives in the cart-extras store (set on "Apply", or carried in from the cart
+  // page) so typing doesn't re-quote every keystroke. Seed the field with any code
+  // already carried in from the cart so it's visible and editable.
+  const [voucherInput, setVoucherInput] = useState(voucherCode ?? "");
 
   // Saved-address book state. selectedAddressId is null while entering a new
   // address; saveNewAddress persists a fresh manual entry back to the book.

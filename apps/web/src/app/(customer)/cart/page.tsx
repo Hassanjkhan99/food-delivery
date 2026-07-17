@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, UtensilsCrossed } from "lucide-react";
+import { Pencil, Tag, Trash2, UtensilsCrossed, X } from "lucide-react";
 import {
   DEFAULT_UNAVAILABILITY_PREFERENCE,
   formatRs,
@@ -18,7 +19,11 @@ const TIP_PRESETS = [0, 5000, 10000] as const;
 
 export default function CartPage() {
   const { branchId, branchName, branchSlug, lines, removeLine, setQty } = useCart();
-  const { tipAmount, cutleryRequested, setTip, setCutlery } = useCartExtras();
+  const { tipAmount, cutleryRequested, voucherCode, setTip, setCutlery, setVoucherCode } =
+    useCartExtras();
+  // Local promo field text. The applied code lives in the cart-extras store and is
+  // carried to checkout, where the server validates eligibility and re-prices (#52).
+  const [promoInput, setPromoInput] = useState(voucherCode ?? "");
 
   // Whether the current tip matches a preset (else it's a custom amount).
   const isPreset = (TIP_PRESETS as readonly number[]).includes(tipAmount);
@@ -161,6 +166,49 @@ export default function CartPage() {
           className="h-5 w-5 shrink-0 accent-kd-primary"
         />
       </label>
+
+      {/* Promo code (#52). Applied here as a passthrough — the server validates
+          eligibility and computes the real discount at checkout. */}
+      <div className="mt-3 rounded-xl border border-kd-border bg-kd-surface p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold text-kd-fg">
+          <Tag className="h-4 w-4 text-kd-fg-muted" /> Promo code
+        </p>
+        {voucherCode ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-kd-primary/10 px-3 py-2">
+            <span className="text-sm font-medium text-kd-fg">
+              <span className="font-semibold">{voucherCode}</span> will apply at checkout
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Remove promo code"
+              onClick={() => {
+                setVoucherCode(null);
+                setPromoInput("");
+              }}
+            >
+              <X className="h-4 w-4 text-kd-fg-subtle" />
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-3 flex gap-2">
+            <Input
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+              placeholder="e.g. WELCOME50"
+              className="uppercase"
+              aria-label="Promo code"
+            />
+            <Button
+              variant="outline"
+              disabled={!promoInput.trim()}
+              onClick={() => setVoucherCode(promoInput)}
+            >
+              Apply
+            </Button>
+          </div>
+        )}
+      </div>
 
       <Separator className="my-6" />
 
