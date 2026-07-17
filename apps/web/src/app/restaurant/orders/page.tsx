@@ -17,7 +17,7 @@ import { useConsole } from "../useConsole";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bell, BellOff, Printer, Ban } from "lucide-react";
+import { Bell, BellOff, Printer, Ban, PauseCircle, PlayCircle } from "lucide-react";
 import { useOrderAlarm } from "./useOrderAlarm";
 import { AcceptSheet, RejectSheet } from "./OrderDialogs";
 import { EightySixSheet, type EightySixTarget } from "./EightySixSheet";
@@ -109,6 +109,15 @@ const SetBusyModeMutation = graphql(`
     setBusyMode(branchId: $branchId, bufferMinutes: $bufferMinutes) {
       id
       prepBufferMinutes
+    }
+  }
+`);
+// Pause/resume order intake from the staff board (#228) — previously owner-only in Settings.
+const SetAcceptingMutation = graphql(`
+  mutation BoardSetAccepting($branchId: String!, $accepting: Boolean!) {
+    setAcceptingOrders(branchId: $branchId, accepting: $accepting) {
+      id
+      isAcceptingOrders
     }
   }
 `);
@@ -339,6 +348,7 @@ export default function OrdersBoardPage() {
   const [, markReady] = useMutation(MarkReadyMutation);
   const [, assignRider] = useMutation(AssignRiderMutation);
   const [, setBusyMode] = useMutation(SetBusyModeMutation);
+  const [, setAccepting] = useMutation(SetAcceptingMutation);
   const [, set86] = useMutation(Set86Mutation);
   const [, markCollected] = useMutation(MarkCollectedMutation);
 
@@ -426,6 +436,12 @@ export default function OrdersBoardPage() {
     refetchConsole({ requestPolicy: "network-only" });
     refresh();
   };
+  const toggleAccepting = async () => {
+    if (!branch) return;
+    await setAccepting({ branchId: branch.id, accepting: !branch.isAcceptingOrders });
+    // isAcceptingOrders lives on the console branch, not the board query.
+    refetchConsole({ requestPolicy: "network-only" });
+  };
 
   return (
     <main>
@@ -441,8 +457,30 @@ export default function OrdersBoardPage() {
             {alarm.soundOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
             {alarm.soundOn ? "Alarm on" : "Muted"}
           </Button>
-          {!branch?.isAcceptingOrders && (
+          {branch && !branch.isAcceptingOrders && (
             <Badge variant="destructive">Paused — not accepting orders</Badge>
+          )}
+          {branch && (
+            <Button
+              size="sm"
+              variant={branch.isAcceptingOrders ? "outline" : "default"}
+              onClick={toggleAccepting}
+              title={
+                branch.isAcceptingOrders
+                  ? "Stop accepting new orders"
+                  : "Resume accepting new orders"
+              }
+            >
+              {branch.isAcceptingOrders ? (
+                <>
+                  <PauseCircle className="h-4 w-4" /> Pause orders
+                </>
+              ) : (
+                <>
+                  <PlayCircle className="h-4 w-4" /> Resume orders
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>
