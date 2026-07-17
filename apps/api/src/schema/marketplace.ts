@@ -320,7 +320,9 @@ builder.prismaObject("Branch", {
               ...availableItemFilter(),
               category: { menuId: branch.activeMenuId },
             },
-            orderBy: { sortOrder: "asc" },
+            // Item sortOrder restarts per category, so order by category first to make
+            // cross-category ties deterministic (mirrors the menu's own top-to-bottom order).
+            orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
             take: limit,
           });
         }

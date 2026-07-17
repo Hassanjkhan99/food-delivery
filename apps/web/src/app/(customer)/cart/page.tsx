@@ -6,16 +6,18 @@ import { useQuery } from "urql";
 import { Pencil, Tag, Trash2, UtensilsCrossed, X } from "lucide-react";
 import {
   DEFAULT_UNAVAILABILITY_PREFERENCE,
+  displayPriceMinor,
   formatRs,
   unavailabilityPreferenceLabel,
 } from "@fd/shared";
 import { graphql } from "@/graphql/generated";
 import { cartSubtotal, useCart, useCartExtras } from "@/lib/cart";
+import { usePriceDisplay } from "@/lib/price-display";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { PriceDisplayToggle, useDisplayPrice } from "@/components/price/Price";
+import { PriceDisplayToggle } from "@/components/price/Price";
 
 // Preset tip chips in minor units (Rs 0 / 50 / 100).
 const TIP_PRESETS = [0, 5000, 10000] as const;
@@ -49,11 +51,16 @@ export default function CartPage() {
     pause: !branchSlug,
   });
   const taxInfo = taxData?.branchBySlug?.taxInfo ?? null;
+  const priceMode = usePriceDisplay((s) => s.mode);
+  const taxed = !!taxInfo && taxInfo.rateBps > 0;
 
   // Tax-aware display estimate (presentation only — the server computes the payable total).
-  // Tax is a flat rate, so applying it to the subtotal matches summing per-line displays.
+  // Applied per-line AND to the subtotal from the same mode so rows and totals agree.
+  const showMinor = (minor: number) =>
+    taxed ? displayPriceMinor(minor, taxInfo.rateBps, taxInfo.inclusive, priceMode) : minor;
+  const taxHint = taxed ? (priceMode === "inclusive" ? "incl. tax" : "+ tax") : null;
   const subtotal = cartSubtotal(lines);
-  const { minor: subtotalShown, hint: taxHint } = useDisplayPrice(subtotal, taxInfo);
+  const subtotalShown = showMinor(subtotal);
 
   // Whether the current tip matches a preset (else it's a custom amount).
   const isPreset = (TIP_PRESETS as readonly number[]).includes(tipAmount);
@@ -127,7 +134,9 @@ export default function CartPage() {
                 </Button>
               </div>
             </div>
-            <span className="shrink-0 font-semibold">{formatRs(l.unitPriceMinor * l.qty)}</span>
+            <span className="shrink-0 font-semibold">
+              {formatRs(showMinor(l.unitPriceMinor * l.qty))}
+            </span>
           </div>
         ))}
       </div>
@@ -265,7 +274,9 @@ export default function CartPage() {
           <span>{formatRs(subtotalShown + tipAmount)}</span>
         </div>
         <p className="text-xs text-kd-fg-subtle">
-          Delivery and platform fee are computed at checkout.
+          {taxed && priceMode === "inclusive"
+            ? "Delivery and platform fee are computed at checkout."
+            : "Tax, delivery and platform fee are computed at checkout."}
         </p>
       </div>
 
