@@ -12,8 +12,9 @@ import { ItemImage } from "@/components/media/ItemImage";
 import { itemImagePlaceholder } from "@/components/media/placeholders";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { usePriceDisplay } from "@/lib/price-display";
 import { cn } from "@/lib/utils";
-import type { SwipeMenuItem } from "./types";
+import { displayMinor, type SwipeMenuItem, type SwipeTaxInfo } from "./types";
 
 export type QuickAddResult = {
   modifierOptionIds: string[];
@@ -24,23 +25,32 @@ export type QuickAddResult = {
 export function QuickAddSheet({
   item,
   cuisineTags,
+  taxInfo,
   onClose,
   onConfirm,
 }: {
   item: SwipeMenuItem | null;
   cuisineTags: string[];
+  taxInfo: SwipeTaxInfo;
   onClose: () => void;
   onConfirm: (result: QuickAddResult) => void;
 }) {
+  const priceMode = usePriceDisplay((s) => s.mode);
+  const disp = (minor: number) => formatRs(displayMinor(minor, taxInfo, priceMode));
+
   const [selected, setSelected] = useState<Record<string, string[]>>({});
-  // Re-seed defaults (first option per required group) whenever a new dish opens. Adjusting
-  // state during render (not an effect) per the "storing information from previous renders"
-  // pattern — avoids the extra commit + cascading-render lint error a useEffect would trigger.
+  // Re-seed defaults (first AVAILABLE option per required group) whenever a new dish opens.
+  // Seeding an unavailable option would pass validation here but quoteCart rejects it at
+  // checkout, stranding the cart (Codex P1) — so an all-unavailable required group is left
+  // unseeded, keeping the group invalid and the confirm button disabled. Adjusting state
+  // during render (not an effect) per the "storing info from previous renders" pattern —
+  // avoids the cascading-render lint error a useEffect would trigger.
   const [seededFor, setSeededFor] = useState<string | null>(null);
   if (item && item.id !== seededFor) {
     const seed: Record<string, string[]> = {};
     for (const g of item.modifierGroups) {
-      if (g.minSelect > 0 && g.options[0]) seed[g.id] = [g.options[0].id];
+      const first = g.options.find((o) => o.isAvailable);
+      if (g.minSelect > 0 && first) seed[g.id] = [first.id];
     }
     setSelected(seed);
     setSeededFor(item.id);
@@ -167,7 +177,7 @@ export function QuickAddSheet({
                             <span className="flex-1 text-sm font-medium text-kd-fg">{o.name}</span>
                             {o.priceDeltaMinor > 0 && (
                               <span className="text-sm font-semibold tabular-nums text-kd-fg-muted">
-                                + {formatRs(o.priceDeltaMinor)}
+                                + {disp(o.priceDeltaMinor)}
                               </span>
                             )}
                           </button>
@@ -194,7 +204,7 @@ export function QuickAddSheet({
               >
                 <span>Add to cart</span>
                 <span className="rounded-full bg-white/20 px-2.5 py-1 text-sm tabular-nums">
-                  {formatRs(total)}
+                  {disp(total)}
                 </span>
               </Button>
             </div>

@@ -9,9 +9,10 @@ import { formatRs } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { restaurantCoverPlaceholder, itemImagePlaceholder } from "@/components/media/placeholders";
 import { ItemImage } from "@/components/media/ItemImage";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { swipeAvailability, type SwipeHit } from "./types";
+import { usePriceDisplay } from "@/lib/price-display";
+import { displayMinor, swipeAvailability, type SwipeHit } from "./types";
 
 export function DetailsSheet({
   hit,
@@ -22,6 +23,9 @@ export function DetailsSheet({
   onClose: () => void;
   onAdd: () => void;
 }) {
+  const priceMode = usePriceDisplay((s) => s.mode);
+  const disp = (minor: number) => formatRs(displayMinor(minor, hit?.taxInfo ?? null, priceMode));
+
   const r = hit?.restaurant;
   const featured = hit?.popularItems[0];
   const avail = hit ? swipeAvailability(hit) : null;
@@ -39,7 +43,11 @@ export function DetailsSheet({
               className="h-40 w-full flex-none rounded-t-3xl"
             />
             <div className="flex-1 overflow-y-auto px-5 pb-6 pt-4">
-              <h2 className="text-xl font-bold tracking-tight text-kd-fg">{r.name}</h2>
+              {/* The visible name IS the dialog's accessible title, so a screen reader
+                  announces the sheet by restaurant (Codex P2). */}
+              <SheetTitle render={<h2 className="text-xl font-bold tracking-tight text-kd-fg" />}>
+                {r.name}
+              </SheetTitle>
               <div className="mt-1.5 flex items-center gap-2 text-sm tabular-nums text-kd-fg-muted">
                 <span className="flex items-center gap-1 font-bold text-kd-fg">
                   <Star className="h-3.5 w-3.5 fill-kd-accent text-kd-accent" />
@@ -77,7 +85,7 @@ export function DetailsSheet({
                       {item.name}
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-kd-fg-muted">
-                      {formatRs(item.priceMinor)}
+                      {disp(item.priceMinor)}
                     </span>
                   </div>
                 ))}
@@ -92,7 +100,7 @@ export function DetailsSheet({
                 >
                   {avail.closed
                     ? avail.label
-                    : `Add ${featured.name} · ${formatRs(featured.priceMinor)}`}
+                    : `Add ${featured.name} · ${disp(featured.priceMinor)}`}
                 </Button>
               )}
             </div>

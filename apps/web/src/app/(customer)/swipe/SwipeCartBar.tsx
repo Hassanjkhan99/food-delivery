@@ -7,12 +7,14 @@
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ShoppingBag } from "lucide-react";
-import { formatRs } from "@fd/shared";
+import { formatRs, splitTax } from "@fd/shared";
 import { cartSubtotal, useCart } from "@/lib/cart";
-import type { SwipeHit } from "./types";
+import { usePriceDisplay } from "@/lib/price-display";
+import { displayMinor, type SwipeHit } from "./types";
 
 export function SwipeCartBar({ hits }: { hits: SwipeHit[] }) {
   const reduced = useReducedMotion();
+  const priceMode = usePriceDisplay((s) => s.mode);
   const lines = useCart((s) => s.lines);
   const branchId = useCart((s) => s.branchId);
   const branchName = useCart((s) => s.branchName);
@@ -20,15 +22,29 @@ export function SwipeCartBar({ hits }: { hits: SwipeHit[] }) {
   const hit = hits.find((h) => h.branchId === branchId);
 
   const subtotal = cartSubtotal(lines);
-  const min = hit?.minOrderMinor ?? 0;
-  const fee = hit?.deliveryFeeMinor ?? 0;
-  const met = subtotal >= min;
-  const pct = min > 0 ? Math.min(1, subtotal / min) : 1;
-  const label = met
-    ? fee === 0
-      ? "Free delivery included 🛵"
-      : "Minimum reached — ready to checkout"
-    : `Add ${formatRs(min - subtotal)} to reach the minimum order`;
+  const subtotalLabel = formatRs(displayMinor(subtotal, hit?.taxInfo ?? null, priceMode));
+
+  // Minimum-order progress is only meaningful when the cart branch is in the current result
+  // set — otherwise we don't know its fee/min/tax and must not paint a (false) "free
+  // delivery / minimum reached" claim (Codex P2). quoteCart compares the PRE-TAX subtotal
+  // against minOrderMinor, so back tax out of a tax-inclusive estimate first, or the bar can
+  // announce the minimum met while checkout still reports it unmet (Codex P2).
+  let progress: { pct: number; met: boolean; label: string } | null = null;
+  if (hit) {
+    const min = hit.minOrderMinor;
+    const compareSubtotal =
+      hit.taxInfo?.inclusive && hit.taxInfo.rateBps > 0
+        ? splitTax(subtotal, hit.taxInfo.rateBps, true).baseMinor
+        : subtotal;
+    const met = compareSubtotal >= min;
+    const pct = min > 0 ? Math.min(1, compareSubtotal / min) : 1;
+    const label = met
+      ? hit.deliveryFeeMinor === 0
+        ? "Free delivery included 🛵"
+        : "Minimum reached — ready to checkout"
+      : `Add ${formatRs(min - compareSubtotal)} to reach the minimum order`;
+    progress = { pct, met, label };
+  }
 
   return (
     <AnimatePresence>
@@ -55,21 +71,25 @@ export function SwipeCartBar({ hits }: { hits: SwipeHit[] }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-white">{branchName}</p>
-                <p className="truncate text-xs text-white/60">{label}</p>
+                <p className="truncate text-xs text-white/60">
+                  {progress ? progress.label : "Tap to view your cart"}
+                </p>
               </div>
               <span className="text-base font-extrabold tabular-nums text-white">
-                {formatRs(subtotal)}
+                {subtotalLabel}
               </span>
             </div>
-            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full transition-[width] duration-400"
-                style={{
-                  width: `${pct * 100}%`,
-                  backgroundColor: met ? "var(--kd-success)" : "var(--kd-accent)",
-                }}
-              />
-            </div>
+            {progress && (
+              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full transition-[width] duration-400"
+                  style={{
+                    width: `${progress.pct * 100}%`,
+                    backgroundColor: progress.met ? "var(--kd-success)" : "var(--kd-accent)",
+                  }}
+                />
+              </div>
+            )}
           </Link>
         </motion.div>
       )}

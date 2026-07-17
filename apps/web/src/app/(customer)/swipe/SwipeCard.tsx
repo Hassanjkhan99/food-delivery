@@ -17,8 +17,9 @@ import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { restaurantCoverPlaceholder, itemImagePlaceholder } from "@/components/media/placeholders";
 import { ItemImage } from "@/components/media/ItemImage";
+import { usePriceDisplay } from "@/lib/price-display";
 import { cn } from "@/lib/utils";
-import { swipeAvailability, type SwipeHit } from "./types";
+import { displayMinor, swipeAvailability, type SwipeHit } from "./types";
 
 export type SwipeCardHandle = {
   /** Animate the card off-screen in `dir`, then resolve. Parent commits the add/skip after. */
@@ -51,34 +52,35 @@ export const SwipeCard = forwardRef<
   const [scope, animate] = useAnimate();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+  const opacity = useMotionValue(1);
   const rotate = useTransform(x, [-220, 220], [-16, 16]);
   const addOpacity = useTransform(x, [15, 100], [0, 1]);
   const skipOpacity = useTransform(x, [-100, -15], [1, 0]);
   const upOpacity = useTransform(y, [-100, -15], [1, 0]);
 
   useImperativeHandle(ref, () => ({
+    // Animate the bound motion values (not the DOM element): framer's element-form
+    // animate() never resolves when the same transform channels are already driven by
+    // motion values in `style`, so the awaiting caller would hang. `rotate` follows `x`
+    // via the transform above, so tilting it comes for free.
     async flyOff(dir) {
       const dx = dir === "right" ? 650 : -650;
-      await animate(
-        scope.current,
-        { x: dx, y: y.get(), rotate: dir === "right" ? 20 : -20, opacity: 0 },
-        { duration: 0.3, ease: "easeOut" },
-      );
+      await Promise.all([
+        animate(x, dx, { duration: 0.3, ease: "easeOut" }),
+        animate(opacity, 0, { duration: 0.3, ease: "easeOut" }),
+      ]);
     },
     reset() {
-      x.set(0);
       y.set(0);
-      void animate(
-        scope.current,
-        { x: 0, y: 0, rotate: 0, opacity: 1 },
-        {
-          type: "spring",
-          stiffness: 300,
-          damping: 30,
-        },
-      );
+      opacity.set(1);
+      animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
     },
   }));
+
+  const priceMode = usePriceDisplay((s) => s.mode);
+  // Dish prices shown in the customer's tax-display mode so they agree with the menu page
+  // and the server-priced checkout (#146). Fees/thresholds below stay raw.
+  const disp = (minor: number) => formatRs(displayMinor(minor, hit.taxInfo, priceMode));
 
   const r = hit.restaurant;
   const avail = swipeAvailability(hit);
@@ -98,6 +100,7 @@ export const SwipeCard = forwardRef<
         x: top ? x : 0,
         y: top ? y : d.y,
         rotate: top ? rotate : d.rotate,
+        opacity: top ? opacity : 1,
         scale: top ? 1 : d.scale,
         zIndex: 30 - depth * 10,
         cursor: top ? "grab" : "default",
@@ -118,11 +121,8 @@ export const SwipeCard = forwardRef<
         const isUp =
           info.offset.y < -SWIPE_THRESHOLD && Math.abs(info.offset.y) > Math.abs(info.offset.x);
         if (isUp) {
-          void animate(
-            scope.current,
-            { x: 0, y: 0 },
-            { type: "spring", stiffness: 300, damping: 30 },
-          );
+          void animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+          void animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
           onSwipeUp();
           return;
         }
@@ -134,11 +134,8 @@ export const SwipeCard = forwardRef<
           onSwipeLeft();
           return;
         }
-        void animate(
-          scope.current,
-          { x: 0, y: 0 },
-          { type: "spring", stiffness: 300, damping: 30 },
-        );
+        void animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+        void animate(y, 0, { type: "spring", stiffness: 300, damping: 30 });
       }}
     >
       <div
@@ -252,7 +249,7 @@ export const SwipeCard = forwardRef<
                   <p className="truncate text-sm font-bold text-white">{featured.name}</p>
                 </div>
                 <span className="text-sm font-extrabold tabular-nums text-white">
-                  {formatRs(featured.priceMinor)}
+                  {disp(featured.priceMinor)}
                 </span>
               </div>
             )}
@@ -334,7 +331,7 @@ export const SwipeCard = forwardRef<
                 />
                 <span className="flex-1 truncate text-sm font-medium text-kd-fg">{item.name}</span>
                 <span className="text-sm font-semibold tabular-nums text-kd-fg-muted">
-                  {formatRs(item.priceMinor)}
+                  {disp(item.priceMinor)}
                 </span>
               </div>
             ))}

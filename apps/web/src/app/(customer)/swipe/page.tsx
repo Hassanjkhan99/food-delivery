@@ -38,6 +38,10 @@ const SwipeDeckQuery = graphql(`
         isAcceptingOrders
         isOpenNow
         opensAtLabel
+        taxInfo {
+          rateBps
+          inclusive
+        }
         photo {
           url
           source
@@ -122,6 +126,9 @@ export default function SwipePage() {
         isOpenNow: b.branch.isOpenNow,
         opensAtLabel: b.branch.opensAtLabel ?? null,
         photo: b.branch.photo ?? null,
+        taxInfo: b.branch.taxInfo
+          ? { rateBps: b.branch.taxInfo.rateBps, inclusive: b.branch.taxInfo.inclusive }
+          : null,
         restaurant: {
           id: b.branch.restaurant.id,
           name: b.branch.restaurant.name,
@@ -141,6 +148,9 @@ export default function SwipePage() {
   const [modifierTarget, setModifierTarget] = useState<{
     hit: SwipeHit;
     item: SwipeMenuItem;
+    // True when reached via the conflict "start new cart" path: the existing cart is
+    // cleared only when this add actually commits (Codex P1).
+    replace?: boolean;
   } | null>(null);
   const [detailsHit, setDetailsHit] = useState<SwipeHit | null>(null);
   const [conflict, setConflict] = useState<{ hit: SwipeHit; item: SwipeMenuItem } | null>(null);
@@ -151,6 +161,11 @@ export default function SwipePage() {
   const toastTimer = useRef<number | undefined>(undefined);
   const confettiTimer = useRef<number | undefined>(undefined);
   const confettiSeq = useRef(0);
+  // Guards against a second gesture (double-tap, or a drag mid-animation) landing while a
+  // card is still flying off — otherwise two invocations each await the animation and both
+  // call advance()/addLine, skipping a card or adding the same dish twice. Set for the whole
+  // fly-off → commit → advance window; sheet-open paths don't set it (they don't advance).
+  const busyRef = useRef(false);
   useEffect(
     () => () => {
       window.clearTimeout(toastTimer.current);
@@ -194,35 +209,55 @@ export default function SwipePage() {
     setFlippedId(null);
   }
 
+  // Cap the wait on a card's fly-off so the deck can never wedge on a stalled animation:
+  // framer-motion drives the fly-off with requestAnimationFrame, which the browser pauses
+  // while the tab is backgrounded — so `.finished` won't resolve until the tab is visible
+  // again. Race it against a short timeout so the add/skip still commits promptly.
+  const settleFlyOff = (p: Promise<void> | undefined) =>
+    Promise.race([p ?? Promise.resolve(), new Promise((r) => setTimeout(r, 400))]);
+
+  // clearFirst replaces a different-restaurant cart (the conflict "start new cart" path):
+  // we clear immediately BEFORE addLine so the confirmed replacement lands, rather than at
+  // the point the dialog is confirmed — that way dismissing the modifier sheet afterwards
+  // leaves the original cart intact (Codex P1).
   async function commitAdd(
     hit: SwipeHit,
     item: SwipeMenuItem,
     modifierOptionIds: string[],
     modifierNames: string[],
     unitPriceMinor: number,
+    clearFirst = false,
   ) {
-    await topCardRef.current?.flyOff("right");
-    const result = addLine(
-      { id: hit.branchId, slug: hit.branchSlug, name: hit.restaurant.name },
-      {
-        menuItemId: item.id,
-        name: item.name,
-        qty: 1,
-        unitPriceMinor,
-        modifierOptionIds,
-        modifierNames,
-      },
-    );
-    if (result === "branch_conflict") {
-      flash("Couldn't add — your cart has another restaurant's items.");
-    } else {
-      fireConfetti();
-      flash(`Added · ${item.name}`);
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await settleFlyOff(topCardRef.current?.flyOff("right"));
+      if (clearFirst) clearCart();
+      const result = addLine(
+        { id: hit.branchId, slug: hit.branchSlug, name: hit.restaurant.name },
+        {
+          menuItemId: item.id,
+          name: item.name,
+          qty: 1,
+          unitPriceMinor,
+          modifierOptionIds,
+          modifierNames,
+        },
+      );
+      if (result === "branch_conflict") {
+        flash("Couldn't add — your cart has another restaurant's items.");
+      } else {
+        fireConfetti();
+        flash(`Added · ${item.name}`);
+      }
+      advance();
+    } finally {
+      busyRef.current = false;
     }
-    advance();
   }
 
   function attemptAdd(hit: SwipeHit) {
+    if (busyRef.current) return;
     const item = hit.popularItems[0];
     const closed = !hit.isOpenNow || !hit.isAcceptingOrders;
     if (closed || !item) {
@@ -249,8 +284,14 @@ export default function SwipePage() {
   }
 
   async function skip() {
-    await topCardRef.current?.flyOff("left");
-    advance();
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      await settleFlyOff(topCardRef.current?.flyOff("left"));
+      advance();
+    } finally {
+      busyRef.current = false;
+    }
   }
 
   const top = hits[idx];
@@ -261,7 +302,16 @@ export default function SwipePage() {
     <div className="-mx-4 -my-6 min-h-[calc(100vh-72px)] bg-gradient-to-b from-kd-surface-muted to-kd-bg sm:-mx-6 lg:-mx-12">
       <div className="mx-auto max-w-md px-4 py-4">
         {screen === "gate" ? (
-          <LocationGate onStart={() => setScreen("deck")} />
+          <LocationGate
+            onStart={() => {
+              // Restarting from the gate is an explicit "change location" — reset the deck
+              // so a preserved idx can't skip the first cards of the new result set, or drop
+              // straight into the exhausted state when it's shorter (Codex P2).
+              setIdx(0);
+              setFlippedId(null);
+              setScreen("deck");
+            }}
+          />
         ) : (
           <>
             {/* header */}
@@ -419,6 +469,7 @@ export default function SwipePage() {
       <QuickAddSheet
         item={modifierTarget?.item ?? null}
         cuisineTags={modifierTarget?.hit.restaurant.cuisineTags ?? []}
+        taxInfo={modifierTarget?.hit.taxInfo ?? null}
         onClose={() => setModifierTarget(null)}
         onConfirm={(result: QuickAddResult) => {
           const target = modifierTarget;
@@ -430,6 +481,7 @@ export default function SwipePage() {
             result.modifierOptionIds,
             result.modifierNames,
             result.unitPriceMinor,
+            target.replace,
           );
         }}
       />
@@ -451,11 +503,12 @@ export default function SwipePage() {
           const target = conflict;
           setConflict(null);
           if (!target) return;
-          clearCart();
+          // Defer the clear: modifier dishes open the sheet with replace intent so the old
+          // cart survives if the sheet is dismissed; no-modifier dishes clear-and-add now.
           if (target.item.modifierGroups.length > 0) {
-            setModifierTarget(target);
+            setModifierTarget({ ...target, replace: true });
           } else {
-            void commitAdd(target.hit, target.item, [], [], target.item.priceMinor);
+            void commitAdd(target.hit, target.item, [], [], target.item.priceMinor, true);
           }
         }}
         onCancel={() => setConflict(null)}
