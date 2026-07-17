@@ -29,6 +29,9 @@ const VouchersQuery = graphql(`
       remainingBudgetMinor
       usedCount
       active
+      restaurantId
+      startsAt
+      endsAt
     }
   }
 `);
@@ -36,6 +39,14 @@ const VouchersQuery = graphql(`
 const CreateVoucherMutation = graphql(`
   mutation AdminCreateVoucher($input: VoucherInput!) {
     createVoucher(input: $input) {
+      id
+    }
+  }
+`);
+
+const UpdateVoucherMutation = graphql(`
+  mutation AdminUpdateVoucher($id: String!, $input: VoucherInput!) {
+    updateVoucher(id: $id, input: $input) {
       id
     }
   }
@@ -52,7 +63,10 @@ const SetActiveMutation = graphql(`
 
 type Type = "percentage" | "fixed" | "free_delivery";
 
-// A single blank form; the value input's meaning depends on `type`.
+// A single form, reused for create and edit; the value input's meaning depends on
+// `type`. `scope`, `restaurantId`, `startsAt`, `endsAt` and `active` aren't editable
+// fields here but are carried through unchanged on edit because updateVoucher does a
+// full replace — omitting them would null out an existing window/restaurant scope.
 const BLANK = {
   code: "",
   description: "",
@@ -64,6 +78,12 @@ const BLANK = {
   perUserLimit: "1",
   totalBudget: "", // Rs
   firstOrderOnly: true,
+  // passthrough (edit only)
+  scope: "platform",
+  restaurantId: "" as string | null,
+  startsAt: null as string | null,
+  endsAt: null as string | null,
+  active: true,
 };
 
 export default function AdminVouchersPage() {
@@ -72,20 +92,59 @@ export default function AdminVouchersPage() {
     requestPolicy: "cache-and-network",
   });
   const [, create] = useMutation(CreateVoucherMutation);
+  const [, update] = useMutation(UpdateVoucherMutation);
   const [, setActive] = useMutation(SetActiveMutation);
   const [form, setForm] = useState(BLANK);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const vouchers = data?.vouchers ?? [];
   const rsToMinor = (v: string) => (v.trim() === "" ? undefined : Math.round(Number(v) * 100));
+  const minorToRs = (m: number | null | undefined) => (m == null ? "" : String(m / 100));
+
+  function resetForm() {
+    setForm(BLANK);
+    setEditingId(null);
+  }
+
+  // Load an existing voucher into the form for editing (minor→Rs, bps→percent).
+  function startEdit(v: (typeof vouchers)[number]) {
+    setEditingId(v.id);
+    setMessage(null);
+    setForm({
+      code: v.code,
+      description: v.description ?? "",
+      type: v.type as Type,
+      funder: v.funder,
+      value: v.type === "percentage" ? String(v.valueBps / 100) : minorToRs(v.valueMinor),
+      maxDiscount: minorToRs(v.maxDiscountMinor),
+      minOrder: minorToRs(v.minOrderMinor),
+      perUserLimit: v.perUserLimit == null ? "" : String(v.perUserLimit),
+      totalBudget: minorToRs(v.totalBudgetMinor),
+      firstOrderOnly: v.firstOrderOnly,
+      scope: v.scope,
+      restaurantId: v.restaurantId ?? null,
+      startsAt: v.startsAt ?? null,
+      endsAt: v.endsAt ?? null,
+      active: v.active,
+    });
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function submit() {
     setMessage(null);
     const type = form.type;
+    // updateVoucher is a full replace (active defaults to true when omitted), so we must
+    // send active — but read the freshest value from the live list rather than the snapshot
+    // taken when editing began, so a row toggled while the form was open isn't reverted.
+    const activeToSend = editingId
+      ? (vouchers.find((v) => v.id === editingId)?.active ?? form.active)
+      : form.active;
     const input = {
       code: form.code,
       description: form.description.trim() || undefined,
       type,
+      scope: form.scope || undefined,
       funder: form.funder,
       // percentage → valueBps (1% = 100 bps); fixed → valueMinor; free_delivery → neither.
       valueBps: type === "percentage" ? Math.round(Number(form.value || 0) * 100) : undefined,
@@ -95,14 +154,28 @@ export default function AdminVouchersPage() {
       perUserLimit: form.perUserLimit.trim() === "" ? undefined : Number(form.perUserLimit),
       totalBudgetMinor: rsToMinor(form.totalBudget),
       firstOrderOnly: form.firstOrderOnly,
+      // Carried through unchanged so a full-replace update preserves them.
+      restaurantId: form.restaurantId || undefined,
+      startsAt: form.startsAt || undefined,
+      endsAt: form.endsAt || undefined,
+      active: activeToSend,
     };
-    const r = await create({ input });
-    if (r.error) {
-      setMessage(r.error.graphQLErrors[0]?.message ?? "Create failed");
-      return;
+    if (editingId) {
+      const r = await update({ id: editingId, input });
+      if (r.error) {
+        setMessage(r.error.graphQLErrors[0]?.message ?? "Update failed");
+        return;
+      }
+      setMessage(`Saved ${form.code.toUpperCase()}.`);
+    } else {
+      const r = await create({ input });
+      if (r.error) {
+        setMessage(r.error.graphQLErrors[0]?.message ?? "Create failed");
+        return;
+      }
+      setMessage(`Created ${form.code.toUpperCase()}.`);
     }
-    setMessage(`Created ${form.code.toUpperCase()}.`);
-    setForm(BLANK);
+    resetForm();
     refetch({ requestPolicy: "network-only" });
   }
 
@@ -115,7 +188,7 @@ export default function AdminVouchersPage() {
       </p>
 
       <div className="mb-8 space-y-4 rounded-2xl border border-kd-border bg-kd-surface p-4 text-sm">
-        <p className="font-semibold">New voucher</p>
+        <p className="font-semibold">{editingId ? `Edit ${form.code}` : "New voucher"}</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Code</Label>
@@ -204,10 +277,22 @@ export default function AdminVouchersPage() {
           />
           First order only
         </label>
+        {editingId && form.scope === "restaurant" && (
+          <p className="text-xs text-kd-fg-subtle">
+            Restaurant-scoped voucher — scope and active window are preserved as set.
+          </p>
+        )}
         {message && <p className="text-kd-fg-muted">{message}</p>}
-        <Button className="w-full" disabled={!form.code.trim()} onClick={submit}>
-          Create voucher
-        </Button>
+        <div className="flex gap-2">
+          <Button className="flex-1" disabled={!form.code.trim()} onClick={submit}>
+            {editingId ? "Save changes" : "Create voucher"}
+          </Button>
+          {editingId && (
+            <Button variant="outline" onClick={resetForm}>
+              Cancel
+            </Button>
+          )}
+        </div>
       </div>
 
       <h2 className="mb-2 text-sm font-semibold">All vouchers</h2>
@@ -240,16 +325,24 @@ export default function AdminVouchersPage() {
                   {v.firstOrderOnly ? " · first-order" : ""}
                 </p>
               </div>
-              <Button
-                variant={v.active ? "outline" : "default"}
-                size="sm"
-                onClick={async () => {
-                  await setActive({ id: v.id, active: !v.active });
-                  refetch({ requestPolicy: "network-only" });
-                }}
-              >
-                {v.active ? "Deactivate" : "Activate"}
-              </Button>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="ghost" size="sm" onClick={() => startEdit(v)}>
+                  Edit
+                </Button>
+                <Button
+                  variant={v.active ? "outline" : "default"}
+                  size="sm"
+                  // Locked while this row is open in the edit form: saving the form writes
+                  // active, so a mid-edit toggle here would just be overwritten.
+                  disabled={editingId === v.id}
+                  onClick={async () => {
+                    await setActive({ id: v.id, active: !v.active });
+                    refetch({ requestPolicy: "network-only" });
+                  }}
+                >
+                  {v.active ? "Deactivate" : "Activate"}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
