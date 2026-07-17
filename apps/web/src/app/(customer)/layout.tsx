@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "urql";
-import { Search, ShoppingBag, User } from "lucide-react";
+import { Search, ShoppingBag, Sparkles, User } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { useCart } from "@/lib/cart";
 import { useI18n } from "@/i18n/provider";
@@ -48,6 +48,14 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
               className="rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
             >
               <Search className="h-[22px] w-[22px]" strokeWidth={1.75} aria-hidden />
+            </Link>
+            <Link
+              href="/swipe"
+              aria-label="Swipe to discover restaurants"
+              className="flex items-center gap-1 rounded text-kd-fg-muted hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary focus-visible:ring-offset-2"
+            >
+              <Sparkles className="h-[22px] w-[22px]" strokeWidth={1.75} aria-hidden />
+              <span className="hidden sm:inline">Swipe</span>
             </Link>
             <Link
               href="/orders"

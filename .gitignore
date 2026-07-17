@@ -23,3 +23,6 @@ blob-report/
 
 # Claude Code agent worktrees (never commit)
 .claude/worktrees/
+
+# Claude Designer handoff bundles (local design reference, not product code)
+khaanado-swipe-to-order-flow/
