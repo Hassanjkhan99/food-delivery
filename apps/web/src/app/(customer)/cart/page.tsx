@@ -18,20 +18,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { PriceDisplayToggle } from "@/components/price/Price";
+import { ItemImage } from "@/components/media/ItemImage";
 
 // Preset tip chips in minor units (Rs 0 / 50 / 100).
 const TIP_PRESETS = [0, 5000, 10000] as const;
 
-// Just the branch tax context, so the cart estimate can honor the inclusive/before-tax
-// display preference the customer set on the menu (#227, a #146 follow-up).
-const BranchTaxQuery = graphql(`
-  query CartBranchTax($slug: String!, $branchId: String) {
+// Branch context for the cart: tax (so the estimate honors the inclusive/before-tax
+// display preference — #227/#146), the minimum-order threshold for the progress nudge,
+// and popular items for the "Popular with your order" upsell rail (#40).
+const BranchCartQuery = graphql(`
+  query CartBranch($slug: String!, $branchId: String) {
     branchBySlug(slug: $slug, branchId: $branchId) {
       id
+      minOrderMinor
       taxInfo {
         rateBps
         inclusive
         label
+      }
+      popularItems(limit: 6) {
+        id
+        name
+        priceMinor
+        imageUrl
       }
     }
   }
@@ -45,12 +54,13 @@ export default function CartPage() {
   // carried to checkout, where the server validates eligibility and re-prices (#52).
   const [promoInput, setPromoInput] = useState(voucherCode ?? "");
 
-  const [{ data: taxData }] = useQuery({
-    query: BranchTaxQuery,
+  const [{ data: branchData }] = useQuery({
+    query: BranchCartQuery,
     variables: { slug: branchSlug ?? "", branchId },
     pause: !branchSlug,
   });
-  const taxInfo = taxData?.branchBySlug?.taxInfo ?? null;
+  const branch = branchData?.branchBySlug ?? null;
+  const taxInfo = branch?.taxInfo ?? null;
   const priceMode = usePriceDisplay((s) => s.mode);
   const taxed = !!taxInfo && taxInfo.rateBps > 0;
 
@@ -61,6 +71,20 @@ export default function CartPage() {
   const taxHint = taxed ? (priceMode === "inclusive" ? "incl. tax" : "+ tax") : null;
   const subtotal = cartSubtotal(lines);
   const subtotalShown = showMinor(subtotal);
+
+  // Minimum-order progress nudge (#40): the server blocks placement below the branch
+  // minimum, so surface how much more is needed against the raw (pre-tax) subtotal the
+  // server compares. minOrderMinor of 0 = no minimum.
+  const minOrder = branch?.minOrderMinor ?? 0;
+  const remainingToMin = Math.max(0, minOrder - subtotal);
+  const minProgress = minOrder > 0 ? Math.min(1, subtotal / minOrder) : 1;
+
+  // "Popular with your order" upsell (#40): popular items not already in the cart. Adding
+  // routes through the restaurant page's item sheet (?item=) so modifiers are handled.
+  const inCartItemIds = new Set(lines.map((l) => l.menuItemId).filter(Boolean));
+  const upsells = (branch?.popularItems ?? [])
+    .filter((it) => !inCartItemIds.has(it.id))
+    .slice(0, 4);
 
   // Whether the current tip matches a preset (else it's a custom amount).
   const isPreset = (TIP_PRESETS as readonly number[]).includes(tipAmount);
@@ -140,6 +164,38 @@ export default function CartPage() {
           </div>
         ))}
       </div>
+
+      {/* "Popular with your order" upsell (#40). Tapping opens the item on the restaurant
+          page (?item=) so any required modifiers are chosen before it lands in the cart. */}
+      {upsells.length > 0 && (
+        <div className="mt-6">
+          <p className="mb-2 text-sm font-semibold text-kd-fg">Popular with your order</p>
+          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
+            {upsells.map((it) => (
+              <Link
+                key={it.id}
+                href={`/r/${branchSlug}?item=${it.id}`}
+                className="group w-28 shrink-0"
+                aria-label={`Add ${it.name}, ${formatRs(showMinor(it.priceMinor))}`}
+              >
+                <div className="relative">
+                  <ItemImage
+                    url={it.imageUrl}
+                    name={it.name}
+                    className="aspect-square w-28 rounded-xl"
+                    sizes="112px"
+                  />
+                  <span className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-kd-primary text-sm font-bold text-kd-primary-fg shadow">
+                    +
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-1 text-xs font-medium text-kd-fg">{it.name}</p>
+                <p className="text-xs text-kd-fg-muted">{formatRs(showMinor(it.priceMinor))}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tip the rider */}
       <div className="mt-6 rounded-xl border border-kd-border bg-kd-surface p-4">
@@ -280,8 +336,33 @@ export default function CartPage() {
         </p>
       </div>
 
-      <Link href="/checkout" className={buttonVariants({ size: "lg", className: "mt-6 w-full" })}>
-        Go to checkout
+      {/* Minimum-order progress nudge (#40): how much more to reach the branch minimum,
+          which the server enforces at placement. Hidden once the minimum is met. */}
+      {remainingToMin > 0 && (
+        <div className="mt-6 rounded-xl border border-kd-border bg-kd-surface p-4">
+          <p className="text-sm text-kd-fg">
+            Add <span className="font-semibold">{formatRs(remainingToMin)}</span> more to reach the{" "}
+            {formatRs(minOrder)} minimum order.
+          </p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-kd-surface-muted">
+            <div
+              className="h-full rounded-full bg-kd-primary transition-all"
+              style={{ width: `${Math.round(minProgress * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <Link
+        href="/checkout"
+        aria-disabled={remainingToMin > 0}
+        tabIndex={remainingToMin > 0 ? -1 : undefined}
+        className={buttonVariants({
+          size: "lg",
+          className: `mt-6 w-full ${remainingToMin > 0 ? "pointer-events-none opacity-50" : ""}`,
+        })}
+      >
+        {remainingToMin > 0 ? `Add ${formatRs(remainingToMin)} more` : "Go to checkout"}
       </Link>
     </main>
   );
