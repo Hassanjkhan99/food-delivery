@@ -10,6 +10,7 @@ import {
   type UnavailabilityPreference,
 } from "@fd/shared";
 import { GraphQLError } from "graphql";
+import { branchOpenNow } from "./branchHours.js";
 import { validateVoucher, VoucherError, type AppliedVoucher } from "./voucherService.js";
 
 export type ResolvedLine = {
@@ -199,6 +200,21 @@ export async function quoteCart(input: QuoteInput, userId?: string | null): Prom
     throw new GraphQLError("This restaurant isn't accepting orders right now.", {
       extensions: { code: "not_accepting_orders" },
     });
+  }
+  // Opening-hours guard at quote time too (#19): an immediate order to a branch that's
+  // closed by its published hours is rejected here, mirroring the placement guard — so a
+  // 3 a.m. cart can't even price. A scheduled pre-order (#54) is exempt: it targets a
+  // future slot, which placeOrder validates against hours at the requested time.
+  if ((input.deliveryOption ?? "standard") !== "scheduled") {
+    const open = await branchOpenNow(branch);
+    if (!open.isOpen) {
+      throw new GraphQLError(
+        open.opensAtLabel
+          ? `This restaurant is closed — opens ${open.opensAtLabel}.`
+          : "This restaurant is currently closed.",
+        { extensions: { code: "branch_closed" } },
+      );
+    }
   }
   if (!branch.activeMenuId) {
     throw new GraphQLError("This restaurant hasn't published a menu yet.", {
