@@ -2,7 +2,7 @@
 // Fail-closed: any failure yields an anonymous context (resolvers then 401 via scope-auth).
 import type { YogaInitialContext } from "graphql-yoga";
 import { prisma } from "@fd/db";
-import type { Role } from "@fd/shared";
+import type { OpenState, Role } from "@fd/shared";
 import { SESSION_COOKIE_NAME } from "@fd/shared";
 import { verifySessionToken } from "./auth/session.js";
 import { logger } from "./logger.js";
@@ -16,6 +16,10 @@ export type AppContext = YogaInitialContext & {
   restaurantIds: string[];
   riderId: string | null;
   hasRole: (role: Role) => boolean;
+  // Request-scoped memo for branchOpenNow (#207): dedupes the isOpenNow/opensAtLabel
+  // computation across one response (e.g. myOrders' N orders sharing branches), keyed by
+  // branchId + minute bucket. Request-scoped so there's no cross-request staleness.
+  openStateCache: Map<string, Promise<OpenState>>;
 };
 
 const ANON: Pick<AppContext, "userId" | "sessionId" | "roles" | "restaurantIds" | "riderId"> = {
@@ -27,7 +31,9 @@ const ANON: Pick<AppContext, "userId" | "sessionId" | "roles" | "restaurantIds" 
 };
 
 export async function buildContext(initial: YogaInitialContext): Promise<AppContext> {
-  const base = { ...initial, ...ANON, hasRole: (_: Role) => false } as AppContext;
+  // One cache per request, shared by every return path below.
+  const openStateCache = new Map<string, Promise<OpenState>>();
+  const base = { ...initial, ...ANON, hasRole: (_: Role) => false, openStateCache } as AppContext;
 
   const cookie = await initial.request.cookieStore?.get(SESSION_COOKIE_NAME);
   if (!cookie?.value) return base;
@@ -55,6 +61,7 @@ export async function buildContext(initial: YogaInitialContext): Promise<AppCont
       restaurantIds: [...new Set(roles.flatMap((r) => (r.restaurantId ? [r.restaurantId] : [])))],
       riderId: session.user.rider?.id ?? null,
       hasRole: (role: Role) => roles.some((r) => r.role === role),
+      openStateCache,
     } as AppContext;
   } catch (err) {
     // Fail-closed: a DB error while loading the session must not turn an otherwise-valid
