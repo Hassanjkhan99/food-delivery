@@ -28,7 +28,7 @@ export function AddressChip() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="flex max-w-full items-center gap-1.5 rounded-full bg-kd-surface-muted px-3 py-1.5 text-sm text-kd-fg-muted transition-colors hover:bg-kd-border">
+      <SheetTrigger className="kd-glass-sheet flex max-w-full items-center gap-1.5 self-start rounded-full px-3 py-1.5 text-sm text-kd-fg-muted transition-transform hover:-translate-y-px">
         <MapPin className="h-4 w-4 shrink-0 text-kd-primary" />
         <span className="text-kd-fg-muted">Deliver to</span>
         <span className="truncate font-semibold text-kd-fg">{label}</span>

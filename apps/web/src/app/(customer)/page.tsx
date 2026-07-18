@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "urql";
 import { ChevronRight, Search, WifiOff, X } from "lucide-react";
@@ -29,7 +29,21 @@ import { Swimlane } from "@/components/home/Swimlane";
 import { HomeSkeleton } from "@/components/home/HomeSkeleton";
 import { useOnlineStatus, useScrollRestoration } from "@/components/home/hooks";
 import { Button } from "@/components/ui/button";
+import { AmbientBackground, GlassPanel } from "@/components/ui/glass";
 import type { FeedHit } from "@/components/home/types";
+
+/** Time-of-day greeting. Read via useSyncExternalStore so the wall clock (a client-only
+ *  mutable source) is sampled in getSnapshot — not during render — which keeps the
+ *  react-hooks purity/set-state-in-effect rules happy and avoids a hydration mismatch:
+ *  SSR + first paint use the neutral server snapshot, then it resolves on the client. */
+function greetingForNow(): string {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+const NO_OP_SUBSCRIBE = () => () => {};
+function useGreeting(): string {
+  return useSyncExternalStore(NO_OP_SUBSCRIBE, greetingForNow, () => "Welcome back");
+}
 
 const HomeQuery = graphql(`
   query Home($lat: Float!, $lng: Float!, $filter: BrowseFilter, $sort: BrowseSort) {
@@ -166,6 +180,7 @@ export default function HomePage() {
   const online = useOnlineStatus();
   const router = useRouter();
   useScrollRestoration("home-feed");
+  const greeting = useGreeting();
 
   const [sort, setSort] = useState<BrowseSort>("relevance");
   const [filter, setFilter] = useState<BrowseFilterState>(EMPTY_FILTER);
@@ -367,65 +382,64 @@ export default function HomePage() {
   }, [engagementData, hits]);
 
   return (
-    <main className="space-y-6">
-      {/* Hero: warm peach card with a bold greeting, delivery address, a prominent search,
-          and the filter row (spaced below search). A decorative food image bleeds in on the
-          right (md+) — swap /banners/hero-dish.* for a real photo. Full-bleed on mobile,
-          a rounded inset card on sm+. */}
-      <section className="relative -mx-4 -mt-6 overflow-hidden bg-[#FFF9F2] px-4 pb-6 pt-6 sm:mx-0 sm:mt-0 sm:rounded-[28px] sm:px-8 lg:min-h-[370px] lg:px-12 lg:py-12">
-        {/* Decorative dish (md+): the top-down bowl framed as a circular plate. The source
-            has a baked-in transparency checkerboard, so we scale it (>1.2×) inside the round
-            crop to keep only the bowl. Swap for a clean transparent PNG later if available. */}
+    <main className="relative isolate space-y-6">
+      {/* Ambient blurred brand-color blobs — the backdrop the liquid-glass hero refracts. */}
+      <AmbientBackground />
+
+      {/* Hero: liquid-glass search over the ambient backdrop (no solid card). A time-aware
+          greeting sits above the headline; the address chip and search bar are frosted glass. */}
+      <section className="relative -mx-4 -mt-6 overflow-hidden px-4 pb-6 pt-6 sm:mx-0 sm:mt-0 sm:px-8 lg:min-h-[340px] lg:px-12 lg:py-12">
+        {/* Warm accent wash in the top-right, layered under the glass (matches the mockup). */}
         <div
           aria-hidden
-          className="pointer-events-none absolute right-2 top-1/2 hidden aspect-square w-[300px] -translate-y-1/2 overflow-hidden rounded-full shadow-[0_24px_60px_rgba(0,0,0,0.12)] ring-8 ring-white/70 md:block lg:right-8 lg:w-[340px]"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/Biryani/biryani-hero.jpg"
-            alt=""
-            className="h-full w-full scale-[1.28] object-cover"
-          />
-        </div>
-        <div className="relative flex h-full flex-col justify-center lg:w-[60%]">
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            background:
+              "radial-gradient(circle at 88% 12%, color-mix(in oklab, var(--kd-accent) 26%, transparent), transparent 58%)",
+          }}
+        />
+        <div className="relative flex h-full flex-col justify-center lg:w-[64%]">
           <AddressChip />
-          <h1 className="mt-4 text-3xl font-bold tracking-tight text-kd-fg sm:text-5xl lg:text-[56px] lg:leading-[64px]">
+          <p className="mt-4 text-kd-label font-semibold text-kd-fg-muted">{greeting} 👋</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-kd-fg sm:text-5xl lg:text-[56px] lg:leading-[64px]">
             What are you craving?
           </h1>
           {/* Instant in-feed filter for the quick case; Enter (or the search icon) jumps to
               the dedicated /search screen, which also matches dishes (#37). */}
           <form
             role="search"
-            className="relative mt-6 max-w-[760px]"
+            className="kd-glass-solid relative mt-6 flex max-w-[760px] items-center gap-2 rounded-full py-2 pl-5 pr-2 focus-within:ring-2 focus-within:ring-kd-primary"
             onSubmit={(e) => {
               e.preventDefault();
               const q = search.trim();
               router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/search");
             }}
           >
-            <button
-              type="submit"
-              aria-label="Search restaurants and dishes"
-              className="absolute left-5 top-1/2 -translate-y-1/2 text-kd-fg-muted hover:text-kd-primary"
-            >
-              <Search className="h-7 w-7" strokeWidth={1.75} />
-            </button>
+            <Search className="h-6 w-6 shrink-0 text-kd-fg-muted" strokeWidth={1.75} aria-hidden />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search restaurants, cuisines or dishes…"
-              className="h-[64px] w-full rounded-full border border-kd-border bg-kd-surface pl-14 pr-12 text-lg text-kd-fg shadow-[0_8px_20px_rgba(0,0,0,0.05)] outline-none transition-colors placeholder:text-kd-fg-subtle hover:border-kd-primary focus:border-2 focus:border-kd-primary lg:h-[72px]"
+              aria-label="Search restaurants and dishes"
+              className="h-11 min-w-0 flex-1 bg-transparent text-base text-kd-fg outline-none placeholder:text-kd-fg-subtle lg:h-12 lg:text-lg"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
                 aria-label="Clear search"
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-kd-fg-subtle hover:bg-kd-surface-muted"
+                className="shrink-0 rounded-full p-1 text-kd-fg-subtle hover:bg-kd-surface-muted"
               >
                 <X className="h-5 w-5" />
               </button>
             )}
+            <button
+              type="submit"
+              aria-label="Search"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kd-primary text-kd-primary-fg transition-transform hover:bg-kd-primary-hover active:scale-90 lg:h-12 lg:w-12"
+            >
+              <Search className="h-5 w-5" strokeWidth={2.2} aria-hidden />
+            </button>
           </form>
 
           {/* Filter row lives in the hero, spaced below the search (was cramped against it). */}
@@ -454,16 +468,22 @@ export default function HomePage() {
 
       {/* Error */}
       {error && !data && (
-        <div className="rounded-2xl border border-kd-danger-soft bg-kd-danger-soft p-6 text-center">
-          <p className="text-sm text-kd-danger">Couldn&apos;t load restaurants.</p>
+        <GlassPanel variant="strong" className="flex flex-col items-center p-8 text-center">
+          <div className="mb-3 grid h-14 w-14 place-items-center rounded-full bg-kd-danger-soft text-2xl">
+            ⚠️
+          </div>
+          <h2 className="text-kd-title font-bold text-kd-fg">Couldn&apos;t load restaurants</h2>
+          <p className="mt-1 max-w-xs text-sm text-kd-fg-muted">
+            Check your connection and try again — your cravings aren&apos;t going anywhere.
+          </p>
           <Button
-            variant="outline"
-            className="mt-3"
+            variant="brand"
+            className="mt-4"
             onClick={() => refetch({ requestPolicy: "network-only" })}
           >
             Try again
           </Button>
-        </div>
+        </GlassPanel>
       )}
 
       {data && (
@@ -542,7 +562,7 @@ export default function HomePage() {
                   : "All restaurants"}
               </h2>
               {feed.length === 0 ? (
-                <div className="rounded-2xl border border-kd-border bg-kd-surface px-4 py-10 text-center">
+                <GlassPanel className="flex flex-col items-center px-4 py-10 text-center">
                   <div className="text-3xl">🔍</div>
                   <p className="mt-2 text-sm font-medium text-kd-fg">
                     No restaurants match — try clearing filters.
@@ -561,7 +581,7 @@ export default function HomePage() {
                       Clear filters
                     </Button>
                   )}
-                </div>
+                </GlassPanel>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {feed.map((hit) => (
@@ -599,7 +619,7 @@ function EmptyState({ label, lat, lng }: { label: string; lat: number; lng: numb
   }
 
   return (
-    <div className="rounded-2xl border border-kd-border bg-kd-surface p-8 text-center">
+    <GlassPanel variant="strong" className="p-8 text-center">
       <div className="text-4xl">🛵</div>
       <h2 className="mt-3 text-lg font-bold text-kd-fg">No restaurants deliver to {label} yet</h2>
       <p className="mt-1 text-sm text-kd-fg-muted">
@@ -627,6 +647,6 @@ function EmptyState({ label, lat, lng }: { label: string; lat: number; lng: numb
           {error && <p className="mt-3 text-sm text-kd-danger">{error}</p>}
         </>
       )}
-    </div>
+    </GlassPanel>
   );
 }

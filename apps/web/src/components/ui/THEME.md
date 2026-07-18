@@ -137,3 +137,49 @@ Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`
 token already defines a `.dark` value, using the kd utilities gives correct
 light and dark rendering automatically. Only add `dark:` overrides for genuinely
 bespoke chrome that falls outside the token system.
+
+---
+
+## Liquid Glass
+
+The house style is Apple-style **liquid glass**: frosted translucent layers with a
+blurred backdrop, a 1px light border, and an inset specular top edge. Glass is a
+**material _option_, not a blanket** — it only reads over something colorful, and
+legibility must win on critical surfaces. Default to a solid `bg-kd-surface`; reach
+for glass on the hero, sticky headers, chips over imagery, state panels, and
+overlays. Keep **solid** fills for paid/merchandising badges and status pills.
+
+**Glass needs a backdrop.** Pair on-page glass with `<AmbientBackground />` (soft
+blurred brand-color blobs) or place chips over imagery — glass on a flat surface
+looks muddy.
+
+### Tokens (theme-aware; flip to warm charcoal in `.dark`)
+
+| Token                     | Meaning                                        |
+| ------------------------- | ---------------------------------------------- |
+| `--kd-glass-bg`           | Standard frosted panel fill                    |
+| `--kd-glass-bg-strong`    | Denser fill — legibility-first / text panels   |
+| `--kd-glass-border`       | 1px hairline edge                              |
+| `--kd-glass-highlight`    | Inset specular top-edge highlight (box-shadow) |
+| `--kd-glass-badge`        | Small pill floating over media                 |
+| `--kd-glass-badge-border` | Border for the on-media badge                  |
+| `--kd-shadow-sm/md/lg`    | Depth scale → `shadow-kd-sm` / `-md` / `-lg`   |
+
+### Utilities & primitives
+
+- **`kd-glass`** (utility) — on-media chip. **Constant white translucency in both
+  themes** (a photo looks the same regardless of app theme; white text/icons expected).
+- **`kd-glass-badge`** (utility) — theme-aware pill floating over imagery.
+- **`kd-glass-sheet`** / **`kd-glass-solid`** (utilities) — on-page panels
+  (standard / legibility-first). Token-driven, so they flip in dark mode.
+- **`<GlassPanel variant="default|strong">`** — the panel primitive (rounded +
+  `shadow-kd-md`); prefer it over the raw utility for state blocks / cards.
+- **`<GlassBadge>`** — on-media pill primitive (white text).
+- **`<Card variant="glass">`** — frosted variant of the standard card.
+- **`<AmbientBackground />`** — decorative blurred color blobs; fills its nearest
+  `relative` ancestor at `-z-10`.
+
+**Rule of thumb:** on media → `kd-glass` / `GlassBadge` (white). On the page →
+`GlassPanel` / `Card variant="glass"` (theme-aware). Never hand-roll
+`backdrop-filter` + `rgba()` in a component — use a utility or primitive so the
+blur values and the specular edge stay consistent.

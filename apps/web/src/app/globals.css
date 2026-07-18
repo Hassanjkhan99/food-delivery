@@ -96,6 +96,13 @@
   --text-kd-label--line-height: 1.25rem;
   --text-kd-caption: 0.75rem;
   --text-kd-caption--line-height: 1rem;
+
+  /* Liquid-glass depth scale. Mirrored so Tailwind emits shadow-kd-sm/md/lg.
+     Raw values live in :root/.dark (theme-aware — dark uses deeper, cooler
+     shadows since translucent glass casts less on a dark background). */
+  --shadow-kd-sm: var(--kd-shadow-sm);
+  --shadow-kd-md: var(--kd-shadow-md);
+  --shadow-kd-lg: var(--kd-shadow-lg);
 }
 
 :root {
@@ -164,6 +171,23 @@
   --kd-info: #0284c7;
   --kd-info-soft: #e0f2fe;
   --kd-overlay: rgb(0 0 0 / 0.5); /* scrim for modals / image overlays */
+
+  /* ── Liquid Glass material (light) ────────────────────────────────────────
+     Theme-aware tokens for frosted panels that sit on the PAGE background (they
+     flip to warm charcoal in .dark). Chips that sit on IMAGERY use the constant
+     `kd-glass` utility instead — a photo looks the same regardless of app theme,
+     so those stay white-translucent. See ui/THEME.md → Liquid Glass. */
+  --kd-glass-bg: rgba(255, 255, 255, 0.52); /* standard frosted panel */
+  --kd-glass-bg-strong: rgba(255, 255, 255, 0.72); /* legibility-first / dense panel */
+  --kd-glass-border: rgba(255, 255, 255, 0.65);
+  --kd-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7); /* specular top edge */
+  --kd-glass-badge: rgba(255, 255, 255, 0.38); /* small pill floating over media */
+  --kd-glass-badge-border: rgba(255, 255, 255, 0.5);
+
+  /* Depth scale — soft, warm-neutral shadows (raw values for the @theme mirror). */
+  --kd-shadow-sm: 0 1px 2px rgba(31, 41, 55, 0.06);
+  --kd-shadow-md: 0 4px 12px rgba(31, 41, 55, 0.09);
+  --kd-shadow-lg: 0 12px 30px rgba(31, 41, 55, 0.16);
 }
 
 .dark {
@@ -225,6 +249,18 @@
   --kd-info: #38bdf8;
   --kd-info-soft: #082f49;
   --kd-overlay: rgb(0 0 0 / 0.6);
+
+  /* ── Liquid Glass material (dark) — warm charcoal translucency ──────────── */
+  --kd-glass-bg: rgba(48, 40, 32, 0.46);
+  --kd-glass-bg-strong: rgba(48, 40, 32, 0.66);
+  --kd-glass-border: rgba(255, 255, 255, 0.14);
+  --kd-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --kd-glass-badge: rgba(20, 15, 10, 0.4);
+  --kd-glass-badge-border: rgba(255, 255, 255, 0.18);
+
+  --kd-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --kd-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --kd-shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
@@ -246,13 +282,20 @@
   }
 }
 
-/* ── Liquid Glass (customer list-view redesign) ──────────────────────────────
+/* ── Liquid Glass utilities ───────────────────────────────────────────────────
    Apple-style frosted material: translucent fill + backdrop blur/saturate + a
-   1px light border and an inset specular highlight edge. `kd-glass` is the chip
-   that sits ON imagery (hero cards); `kd-glass-sheet` is the lighter, more opaque
-   panel that sits on the page background (compact rows, menu sheet). See the
-   design handoff (design_handoff_liquid_glass_lists) for the recipe. The
-   -webkit- prefixes keep the blur working in iOS Safari (this is a PWA). */
+   1px light border and an inset specular highlight edge. See ui/THEME.md →
+   Liquid Glass and the design handoff (design_handoff_liquid_glass_lists) for the
+   recipe. The -webkit- prefixes keep the blur working in iOS Safari (this is a PWA).
+
+   Two families:
+   • ON-MEDIA (`kd-glass`, `kd-glass-badge`): chips floating over photos/gradients.
+     `kd-glass` holds white text and stays white-translucent in BOTH themes — a
+     photo looks the same regardless of app theme, so flipping it would hurt.
+   • ON-PAGE (`kd-glass-sheet`, `kd-glass-solid`): panels on the ambient page
+     background. These are token-driven and flip to warm charcoal in .dark. */
+
+/* On-media chip — constant white translucency (white text/icons over a scrim). */
 @utility kd-glass {
   background: rgba(255, 255, 255, 0.18);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -261,17 +304,30 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Near-opaque glass for the closed/paused pill — legibility wins over translucency. */
-@utility kd-glass-solid {
-  background: rgba(255, 255, 255, 0.85);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+/* On-media badge — theme-aware pill for promo/deal/status floating over imagery. */
+@utility kd-glass-badge {
+  background: var(--kd-glass-badge);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: blur(14px) saturate(180%);
+  border: 1px solid var(--kd-glass-badge-border);
 }
 
+/* On-page panel — standard frosted sheet (compact rows, menu sheet, state panels).
+   Depth is baked in (specular highlight + soft drop shadow) because a raw box-shadow
+   here would otherwise override any separate `shadow-*` utility. */
 @utility kd-glass-sheet {
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--kd-glass-bg);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--kd-glass-border);
+  box-shadow: var(--kd-glass-highlight), var(--kd-shadow-md);
+}
+
+/* On-page panel, legibility-first — denser fill for text-heavy / closed-pill use. */
+@utility kd-glass-solid {
+  background: var(--kd-glass-bg-strong);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid var(--kd-glass-border);
+  box-shadow: var(--kd-glass-highlight), var(--kd-shadow-md);
 }
