@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AmbientBackground, GlassPanel, GlassBadge } from "@/components/ui/glass";
+import { Star } from "lucide-react";
 
 export const metadata = { title: "Design System — KhaanaDo" };
 
@@ -147,6 +149,48 @@ export default function DesignKitPage() {
             <Skeleton className="h-4 w-1/2" />
             <Skeleton className="h-3 w-1/3" />
           </div>
+        </div>
+      </Section>
+
+      <Section title="Liquid Glass">
+        <p className="max-w-2xl text-kd-label text-kd-fg-muted">
+          Frosted material — pairs with an ambient backdrop or sits over imagery. On-page panels are
+          theme-aware; on-media chips stay white. See{" "}
+          <code className="text-kd-primary">components/ui/THEME.md</code> → Liquid Glass.
+        </p>
+
+        {/* On-page panels over an ambient backdrop (what glass looks like in the app). */}
+        <div className="relative overflow-hidden rounded-3xl border border-kd-border p-6">
+          <AmbientBackground />
+          <div className="relative grid gap-4 sm:grid-cols-2">
+            <GlassPanel className="p-4">
+              <h3 className="text-kd-title font-semibold text-kd-fg">GlassPanel · default</h3>
+              <p className="mt-1 text-kd-label text-kd-fg-muted">
+                Standard frosted sheet on the page background.
+              </p>
+            </GlassPanel>
+            <GlassPanel variant="strong" className="p-4">
+              <h3 className="text-kd-title font-semibold text-kd-fg">GlassPanel · strong</h3>
+              <p className="mt-1 text-kd-label text-kd-fg-muted">
+                Denser fill for text-heavy / state panels.
+              </p>
+            </GlassPanel>
+          </div>
+        </div>
+
+        {/* On-media chips over a brand gradient (badges float over a scrim). */}
+        <div className="relative flex h-40 items-end gap-2 overflow-hidden rounded-3xl bg-gradient-to-br from-kd-primary to-kd-accent p-4">
+          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/30 to-transparent" />
+          <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-kd-primary px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+            Promoted (solid)
+          </span>
+          <GlassBadge>
+            <Star className="h-3 w-3 fill-kd-accent text-kd-accent" />
+            4.7
+          </GlassBadge>
+          <span className="kd-glass inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium text-white">
+            kd-glass chip
+          </span>
         </div>
       </Section>
     </main>
