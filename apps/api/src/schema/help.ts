@@ -132,18 +132,29 @@ builder.mutationFields((t) => ({
             select: { id: true },
           });
           if (!existing) {
-            const refund = await tx.refund.create({
-              data: {
-                orderId: order.id,
-                status: "refund_pending",
-                amountMinor: refundAmount,
-                // COD has no card to reverse, so refund to wallet; card back to card.
-                destination: order.paymentMode === "cod" ? "wallet" : "card",
-                origin: "help_ticket",
-                reason: `${cat.label} (help ticket): ${itemNames.join(", ")}`,
-              },
+            // Clamp against refunds already issued for this order — including the item_removal
+            // refunds the guard above deliberately ignores — so cumulative refunds never exceed
+            // the order total (#214). A fully-refunded remainder opens a ticket-only complaint.
+            const prior = await tx.refund.aggregate({
+              where: { orderId: order.id, status: { in: ["refund_pending", "refunded"] } },
+              _sum: { amountMinor: true },
             });
-            refundId = refund.id;
+            const remaining = Math.max(0, order.grandTotalMinor - (prior._sum.amountMinor ?? 0));
+            const clamped = Math.min(refundAmount, remaining);
+            if (clamped > 0) {
+              const refund = await tx.refund.create({
+                data: {
+                  orderId: order.id,
+                  status: "refund_pending",
+                  amountMinor: clamped,
+                  // COD has no card to reverse, so refund to wallet; card back to card.
+                  destination: order.paymentMode === "cod" ? "wallet" : "card",
+                  origin: "help_ticket",
+                  reason: `${cat.label} (help ticket): ${itemNames.join(", ")}`,
+                },
+              });
+              refundId = refund.id;
+            }
           }
         }
         return tx.supportTicket.create({

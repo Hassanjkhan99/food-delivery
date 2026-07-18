@@ -901,10 +901,24 @@ builder.mutationFields((t) => ({
         }
         if (pref === "cancel_order") {
           // Customer opted to cancel the whole order if an item is unavailable. Route to the
-          // restaurant-reject flow (full refund + voucher/loyalty reversal via transition) —
-          // mirrors rejectOrder — instead of removing the line.
+          // tested reversal flow (full refund [refundMinor omitted] + voucher/loyalty reversal
+          // via transition), not a line removal. Pick the LEGAL restaurant reversal for the
+          // current status: pending_acceptance → rejected; accepted/preparing → cancelled.
+          // ready_for_pickup has no restaurant reversal — block and direct staff instead.
+          const target: "rejected" | "cancelled" | null =
+            peek.status === "pending_acceptance"
+              ? "rejected"
+              : peek.status === "accepted" || peek.status === "preparing"
+                ? "cancelled"
+                : null;
+          if (!target) {
+            throw new GraphQLError(
+              `${itemName} is unavailable and the customer asked to cancel the order — but it's already past prep. Contact the customer / support to cancel.`,
+              { extensions: { code: "cannot_cancel_now" } },
+            );
+          }
           const decision = evaluateOrderCancellation(peek, "restaurant");
-          const updated = await transition(args.orderId, "rejected", restaurantActor(ctx), {
+          const updated = await transition(args.orderId, target, restaurantActor(ctx), {
             reason: `Item unavailable — customer chose to cancel the order: ${itemName}`,
             meta: {
               policyScenario: decision.scenario,
@@ -913,18 +927,20 @@ builder.mutationFields((t) => ({
             },
           });
           await recordCancellation(peek, "restaurant");
-          publishOrderChanged({
-            orderId: args.orderId,
-            branchId: peek.branchId,
-            status: "rejected",
-          });
-          return prisma.order.findUniqueOrThrow({ ...query, where: { id: args.orderId } });
+          publishOrderChanged({ orderId: args.orderId, branchId: peek.branchId, status: target });
+          return updated;
         }
       }
 
-      // A card charge must be captured before we can post a partial refund. Block editing
-      // during the pre-capture window so a removal can't reduce totals with no refund (#214).
-      if (peek.paymentMode === "card" && peek.payment && peek.payment.status !== "captured") {
+      // A card charge must be captured before we can post a partial refund. Block editing only
+      // during the true pre-capture window (pending/authorized) so a removal can't reduce totals
+      // with no refund (#214). `captured` and `partially_refunded` (a prior removal already
+      // refunded part) are both fine — don't block a legitimate second removal.
+      if (
+        peek.paymentMode === "card" &&
+        peek.payment &&
+        (peek.payment.status === "pending" || peek.payment.status === "authorized")
+      ) {
         throw new GraphQLError(
           "This card payment is still being processed — try removing the item again in a moment.",
           { extensions: { code: "payment_not_captured" } },
