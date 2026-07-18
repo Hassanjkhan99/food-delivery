@@ -12,6 +12,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /**
@@ -71,20 +79,25 @@ export function BrowseControls({
     <div className="flex items-center gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <FilterSheet count={count} filter={filter} onApply={onFilterChange} />
 
-      <label className="relative shrink-0">
-        <span className="sr-only">Sort restaurants</span>
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as BrowseSort)}
-          className="h-12 cursor-pointer rounded-full border border-kd-border bg-kd-surface pl-5 pr-9 text-base font-medium text-kd-fg outline-none hover:border-kd-primary focus:border-kd-primary focus:ring-2 focus:ring-kd-primary-soft"
-        >
-          {BROWSE_SORTS.map((s) => (
-            <option key={s} value={s}>
-              Sort: {SORT_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="shrink-0">
+        <Select value={sort} onValueChange={(v) => onSortChange(v as BrowseSort)}>
+          <SelectTrigger
+            aria-label="Sort restaurants"
+            className="h-12 w-auto rounded-full pr-3 pl-5 text-base font-medium"
+          >
+            <span className="whitespace-nowrap">
+              Sort: <SelectValue>{(v) => SORT_LABELS[(v as BrowseSort) ?? sort]}</SelectValue>
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {BROWSE_SORTS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {SORT_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Quick-toggle chips mirror the most common Foodpanda filters. */}
       <QuickChip
@@ -289,28 +302,10 @@ function FilterToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between"
-    >
+    <label className="flex w-full cursor-pointer items-center justify-between">
       <span className="text-sm font-medium text-kd-fg">{label}</span>
-      <span
-        className={cn(
-          "relative h-6 w-10 rounded-full transition-colors",
-          checked ? "bg-kd-primary" : "bg-kd-border",
-        )}
-      >
-        <span
-          className={cn(
-            "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
-            checked && "translate-x-4",
-          )}
-        />
-      </span>
-    </button>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </label>
   );
 }
 
