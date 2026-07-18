@@ -21,9 +21,10 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { SidebarShell, type SidebarNavItem } from "@/components/ui/sidebar-shell";
 
 // `staff: true` items are visible to restaurant_staff; everything else is owner-only (#156).
-const NAV = [
+const NAV: (SidebarNavItem & { staff?: boolean })[] = [
   { href: "/restaurant/orders", label: "Orders", icon: ClipboardList, staff: true },
   { href: "/restaurant/today", label: "Today", icon: Sun, staff: true },
   { href: "/restaurant/menu", label: "Menu", icon: CookingPot },
@@ -93,48 +94,22 @@ function ConsoleShell({ children }: { children: React.ReactNode }) {
     if (blocked) router.replace("/restaurant/orders");
   }, [blocked, router]);
   return (
-    <div className="flex min-h-screen bg-kd-surface-muted">
-      <aside className="hidden w-52 shrink-0 border-r border-kd-border bg-kd-surface p-4 sm:block">
-        <Link href="/restaurant/orders" className="mb-6 block text-lg font-bold">
-          🍜 Console
-        </Link>
-        <BranchSwitcher />
-        <nav className="space-y-1">
-          {nav.map((n) => {
-            const Icon = n.icon;
-            const active = pathname.startsWith(n.href);
-            return (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-                  active
-                    ? "bg-kd-primary font-medium text-white"
-                    : "text-kd-fg-muted hover:bg-kd-surface-muted"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {n.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <Link href="/" className="mt-8 block text-xs text-kd-fg-subtle hover:text-kd-fg-muted">
-          ← Customer site
-        </Link>
-      </aside>
-      <div className="flex-1 p-4 sm:p-6">
-        {blocked ? (
-          <div className="mx-auto mt-16 max-w-md rounded-2xl border border-kd-border bg-kd-surface p-6 text-center">
-            <p className="font-semibold">Owner-only page</p>
-            <p className="mt-1 text-sm text-kd-fg-muted">
-              Only the restaurant owner can view this. Taking you back to Orders…
-            </p>
-          </div>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
+    <SidebarShell
+      brand={<Link href="/restaurant/orders">🍜 Console</Link>}
+      items={nav}
+      aside={<BranchSwitcher />}
+      footer={<Link href="/">← Customer site</Link>}
+    >
+      {blocked ? (
+        <div className="mx-auto mt-16 max-w-md rounded-2xl border border-kd-border bg-kd-surface p-6 text-center">
+          <p className="font-semibold">Owner-only page</p>
+          <p className="mt-1 text-sm text-kd-fg-muted">
+            Only the restaurant owner can view this. Taking you back to Orders…
+          </p>
+        </div>
+      ) : (
+        children
+      )}
+    </SidebarShell>
   );
 }
