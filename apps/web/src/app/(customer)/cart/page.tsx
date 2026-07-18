@@ -72,12 +72,17 @@ export default function CartPage() {
   const subtotal = cartSubtotal(lines);
   const subtotalShown = showMinor(subtotal);
 
-  // Minimum-order progress nudge (#40): the server blocks placement below the branch
-  // minimum, so surface how much more is needed against the raw (pre-tax) subtotal the
-  // server compares. minOrderMinor of 0 = no minimum.
+  // Minimum-order progress nudge (#40). The server compares the PRE-TAX subtotal against
+  // the minimum, so back inclusive tax out of the estimate too — else a tax-inclusive
+  // branch overstates progress and can claim the minimum is met when the authoritative
+  // quote would reject it. Purely informational: it never blocks navigation to checkout,
+  // which does the authoritative min check (client line prices can be stale/lower).
   const minOrder = branch?.minOrderMinor ?? 0;
-  const remainingToMin = Math.max(0, minOrder - subtotal);
-  const minProgress = minOrder > 0 ? Math.min(1, subtotal / minOrder) : 1;
+  const comparableSubtotal = taxed
+    ? displayPriceMinor(subtotal, taxInfo.rateBps, taxInfo.inclusive, "exclusive")
+    : subtotal;
+  const remainingToMin = Math.max(0, minOrder - comparableSubtotal);
+  const minProgress = minOrder > 0 ? Math.min(1, comparableSubtotal / minOrder) : 1;
 
   // "Popular with your order" upsell (#40): popular items not already in the cart. Adding
   // routes through the restaurant page's item sheet (?item=) so modifiers are handled.
@@ -174,7 +179,7 @@ export default function CartPage() {
             {upsells.map((it) => (
               <Link
                 key={it.id}
-                href={`/r/${branchSlug}?item=${it.id}`}
+                href={`/r/${branchSlug}?item=${it.id}&branch=${branchId}`}
                 className="group w-28 shrink-0"
                 aria-label={`Add ${it.name}, ${formatRs(showMinor(it.priceMinor))}`}
               >
@@ -336,8 +341,9 @@ export default function CartPage() {
         </p>
       </div>
 
-      {/* Minimum-order progress nudge (#40): how much more to reach the branch minimum,
-          which the server enforces at placement. Hidden once the minimum is met. */}
+      {/* Minimum-order progress nudge (#40): an estimate of how much more to reach the
+          branch minimum. Informational only — checkout's authoritative quote enforces the
+          real minimum, so this never blocks navigation (client line prices can be stale). */}
       {remainingToMin > 0 && (
         <div className="mt-6 rounded-xl border border-kd-border bg-kd-surface p-4">
           <p className="text-sm text-kd-fg">
@@ -353,16 +359,8 @@ export default function CartPage() {
         </div>
       )}
 
-      <Link
-        href="/checkout"
-        aria-disabled={remainingToMin > 0}
-        tabIndex={remainingToMin > 0 ? -1 : undefined}
-        className={buttonVariants({
-          size: "lg",
-          className: `mt-6 w-full ${remainingToMin > 0 ? "pointer-events-none opacity-50" : ""}`,
-        })}
-      >
-        {remainingToMin > 0 ? `Add ${formatRs(remainingToMin)} more` : "Go to checkout"}
+      <Link href="/checkout" className={buttonVariants({ size: "lg", className: "mt-6 w-full" })}>
+        Go to checkout
       </Link>
     </main>
   );
