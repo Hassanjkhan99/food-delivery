@@ -10,6 +10,7 @@ import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { buttonVariants } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 const ViewerQuery = graphql(`
@@ -35,6 +36,10 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     // lang/dir are scoped to the customer surface here (not global <html>) so an Urdu
     // (RTL) selection never mirrors the English restaurant/admin/rider consoles (#129).
     <div lang={locale} dir={rtl ? "rtl" : "ltr"} className="flex min-h-screen flex-col bg-kd-bg">
+      {/* Mounted before {children} so the toast provider subscribes to the manager before a
+          page's first-mount effect can fire a toast (Base UI doesn't buffer for late listeners).
+          Fixed-positioned, so DOM order doesn't affect where it renders. */}
+      <Toaster />
       <header className="sticky top-0 z-40 border-b border-kd-border bg-kd-surface/90 backdrop-blur">
         <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-12">
           <Link href="/" className="text-kd-fg" aria-label="KhaanaDo home">
