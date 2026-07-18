@@ -40,6 +40,12 @@ encoded in the migration and validated on the dev cluster:
 4. **Customer rating writes (`rateOrder`).** Insert into `ratings` happens outside `withTenant`
    (NULL GUC) and fails a `WITH CHECK`. → `ratings` needs a customer-insert-allowed policy (or set
    the order's restaurant tenant for that insert), tied to decision (1).
+5. **Public rating reads (Codex #215).** The restaurant page rating summary + the browse
+   `minRating` filter read `ratings` on the plain client (no tenant GUC), so under FORCE RLS they
+   return zero rows — reviews/averages vanish and rating filters silently drop everything. → Needs
+   a **public-read policy** on `ratings` (same shape as decision (1)). Note: an unconditional
+   public-read policy OR-combines with the tenant policy, so a `withTenant(A)` query could then
+   read all approved rating rows — scope the read policy accordingly.
 
 ## How it works
 
