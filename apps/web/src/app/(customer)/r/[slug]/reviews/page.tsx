@@ -10,7 +10,7 @@ import { useQuery } from "urql";
 import { ArrowLeft, Star } from "lucide-react";
 import { graphql } from "@/graphql/generated";
 import { reviewTagLabel } from "@fd/shared";
-import { Button } from "@/components/ui/button";
+import { LoadMore } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_THEME, themeVars, type ThemeShape } from "@/components/theme/theme";
 
@@ -230,13 +230,12 @@ export default function ReviewsPage({ params }: { params: Promise<{ slug: string
         </ul>
       )}
 
-      {canLoadMore && (
-        <div className="mt-5 flex justify-center">
-          <Button variant="outline" disabled={fetching} onClick={() => setOffset((o) => o + PAGE)}>
-            {fetching ? "Loading…" : "Load more"}
-          </Button>
-        </div>
-      )}
+      <LoadMore
+        hasMore={canLoadMore}
+        loading={fetching}
+        onLoadMore={() => setOffset((o) => o + PAGE)}
+        className="mt-5"
+      />
     </main>
   );
 }
