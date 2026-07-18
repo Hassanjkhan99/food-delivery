@@ -198,6 +198,15 @@ instead of re-implementing the markup; see all of them live on `/dev/design`.
   from `RestaurantImage`, which is for feed/menu photography).
 - **`<Stepper steps current>`** — vertical status timeline / multi-step progress.
 
+### App chrome
+
+- **`<SidebarShell brand items aside footer tone>`** — the shared console layout
+  (sidebar + content) used by the **restaurant** and **admin** layouts (previously
+  copy-pasted). Pass nav `items` (`{ href, label, icon, exact? }`); it owns the
+  active-link logic. `tone="dark"` keeps the admin console's dark chrome. The customer
+  (top-nav) and rider (mobile tab-bar) layouts are intentionally different navigation
+  patterns and don't use this.
+
 ## Dark mode
 
 Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`

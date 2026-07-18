@@ -18,6 +18,7 @@ import { StatusPill, OrderStatusPill } from "@/components/ui/status-pill";
 import { NavDemos } from "./nav-demos";
 import { FormDemos } from "./form-demos";
 import { FeedbackDemos } from "./feedback-demos";
+import { ShellDemo } from "./shell-demo";
 import { ChevronRight, Star } from "lucide-react";
 
 export const metadata = { title: "Design System — KhaanaDo" };
@@ -324,6 +325,10 @@ export default function DesignKitPage() {
 
       <Section title="Feedback & overlays">
         <FeedbackDemos />
+      </Section>
+
+      <Section title="App chrome — SidebarShell">
+        <ShellDemo />
       </Section>
     </main>
   );
