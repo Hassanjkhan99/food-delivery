@@ -29,8 +29,11 @@ function diskPath(objectKey: string): string {
 
 export const localDiskStore: ObjectStore = {
   async presignPut(objectKey, contentType, byteSizeLimit) {
+    // aud="upload" (#213): scope this token to the upload handler so a read token can't
+    // be replayed to write, and vice-versa (both were signed with the same secret).
     const token = await new SignJWT({ objectKey, contentType, byteSizeLimit })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("upload")
       .setExpirationTime("15m")
       .sign(secret());
     return `${env.objectStoreBaseUrl}/api/uploads?token=${encodeURIComponent(token)}`;
@@ -43,8 +46,10 @@ export const localDiskStore: ObjectStore = {
   // Private-asset read URL (#119): a 15m HS256 token bound to this exact objectKey, which
   // handleLocalFileGet verifies before streaming a `private/` file.
   async signedReadUrl(objectKey) {
+    // aud="read": distinct audience from upload tokens (#213).
     const token = await new SignJWT({ objectKey })
       .setProtectedHeader({ alg: "HS256" })
+      .setAudience("read")
       .setExpirationTime("15m")
       .sign(secret());
     return `${env.objectStoreBaseUrl}/files/${objectKey}?token=${encodeURIComponent(token)}`;
@@ -72,10 +77,16 @@ export async function handleLocalUploadPut(req: Request): Promise<Response> {
   if (!token) return new Response("Missing token", { status: 401 });
   let claims: { objectKey: string; contentType: string; byteSizeLimit: number };
   try {
-    const { payload } = await jwtVerify(token, secret());
+    // audience:"upload" rejects a read-scoped token (which also lacks byteSizeLimit, so it
+    // could otherwise write unbounded bytes) — #213.
+    const { payload } = await jwtVerify(token, secret(), { audience: "upload" });
     claims = payload as never;
   } catch {
     return new Response("Invalid or expired upload token", { status: 401 });
+  }
+  // Defensive: an upload token must carry a numeric size cap.
+  if (typeof claims.byteSizeLimit !== "number") {
+    return new Response("Invalid upload token", { status: 401 });
   }
   const body = Buffer.from(await req.arrayBuffer());
   if (body.byteLength === 0) return new Response("Empty body", { status: 400 });
@@ -101,7 +112,8 @@ export async function handleLocalFileGet(req: Request): Promise<Response> {
     const token = url.searchParams.get("token");
     if (!token) return new Response("Missing token", { status: 401 });
     try {
-      const { payload } = await jwtVerify(token, secret());
+      // audience:"read" rejects an upload-scoped token being replayed to read (#213).
+      const { payload } = await jwtVerify(token, secret(), { audience: "read" });
       if ((payload as { objectKey?: string }).objectKey !== objectKey) {
         return new Response("Token does not match resource", { status: 401 });
       }
