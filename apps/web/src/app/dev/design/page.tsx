@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmbientBackground, GlassPanel, GlassBadge } from "@/components/ui/glass";
-import { Star } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Chip, chipVariants } from "@/components/ui/chip";
+import { StatTile } from "@/components/ui/stat-tile";
+import { ListRow } from "@/components/ui/list-row";
+import { Banner } from "@/components/ui/banner";
+import { StatusPill, OrderStatusPill } from "@/components/ui/status-pill";
+import { ChevronRight, Star } from "lucide-react";
 
 export const metadata = { title: "Design System — KhaanaDo" };
 
@@ -191,6 +198,116 @@ export default function DesignKitPage() {
           <span className="kd-glass inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium text-white">
             kd-glass chip
           </span>
+        </div>
+      </Section>
+
+      <Section title="Page header">
+        <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
+          <PageHeader
+            title="Your orders"
+            description="Track and reorder — all in one place."
+            actions={<Button variant="outline">Filter</Button>}
+          />
+        </div>
+      </Section>
+
+      <Section title="Status pills">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone="neutral" label="Pending" />
+          <StatusPill tone="info" label="Preparing" />
+          <StatusPill tone="success" label="Delivered" />
+          <StatusPill tone="warning" label="Waiting" />
+          <StatusPill tone="danger" label="Cancelled" />
+          <StatusPill tone="brand" label="Promoted" />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <OrderStatusPill status="preparing" />
+          <OrderStatusPill status="out_for_delivery" />
+          <OrderStatusPill status="delivered" />
+          <OrderStatusPill status="rejected" />
+        </div>
+      </Section>
+
+      <Section title="Banners">
+        <div className="space-y-2">
+          <Banner tone="info" title="Heads up">
+            Your address is set to Phase 8, Bahria Town.
+          </Banner>
+          <Banner tone="success">Order placed — the kitchen has your order.</Banner>
+          <Banner tone="warning" title="You're offline">
+            Showing your last loaded restaurants.
+          </Banner>
+          <Banner tone="danger" title="Payment failed">
+            Your card was declined — try another method.
+          </Banner>
+        </div>
+      </Section>
+
+      <Section title="Chips">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip>Biryani</Chip>
+          <Chip tone="neutral" selected>
+            Selected
+          </Chip>
+          <Chip tone="primary">Free delivery</Chip>
+          {/* Interactive filter chips reuse chipVariants on a real button. */}
+          <button type="button" className={chipVariants({ tone: "neutral", interactive: true })}>
+            Open now
+          </button>
+          <button
+            type="button"
+            aria-pressed
+            className={chipVariants({ tone: "neutral", interactive: true, selected: true })}
+          >
+            Top rated
+          </button>
+        </div>
+      </Section>
+
+      <Section title="Stat tiles">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Orders today" value="128" />
+          <StatTile label="GMV today" value="Rs 84,200" hint="+12% vs yesterday" />
+          <StatTile label="Active orders" value="7" />
+          <StatTile label="Avg rating" value="4.6" hint="last 30 days" />
+        </div>
+      </Section>
+
+      <Section title="List rows">
+        <div className="space-y-2">
+          <ListRow
+            title="Karachi Biryani House"
+            subtitle="KBH-1042 · 2 items"
+            trailing={<OrderStatusPill status="delivered" />}
+          />
+          <ListRow
+            href="#"
+            leading={<span className="text-2xl">🥗</span>}
+            title="Green Bowl"
+            subtitle="Healthy · 1.0 km"
+            trailing={<ChevronRight className="h-4 w-4 text-kd-fg-subtle" />}
+          />
+        </div>
+      </Section>
+
+      <Section title="Empty states">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <EmptyState
+            icon="🧾"
+            title="No orders yet"
+            description="Your past and in-progress orders will show up here."
+            action={<Button variant="brand">Browse restaurants</Button>}
+          />
+          <div className="relative overflow-hidden rounded-3xl p-2">
+            <AmbientBackground />
+            <EmptyState
+              surface="glass"
+              icon="🔍"
+              title="No restaurants match"
+              description="Try a different cuisine, or clear your filters."
+              action={<Button variant="outline">Clear filters</Button>}
+            />
+          </div>
         </div>
       </Section>
     </main>

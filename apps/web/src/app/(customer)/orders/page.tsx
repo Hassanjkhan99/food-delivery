@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useQuery } from "urql";
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { OrderStatusPill } from "@/components/ui/status-pill";
 import { ReorderButton } from "@/components/ReorderButton";
 import { REORDERABLE_STATUSES, type OrderItemSnapshot } from "@/lib/cart";
 
@@ -36,22 +38,6 @@ const MyOrdersQuery = graphql(`
   }
 `);
 
-const STATUS_LABEL: Record<string, string> = {
-  pending_acceptance: "Waiting for restaurant",
-  accepted: "Accepted",
-  preparing: "Preparing",
-  ready_for_pickup: "Ready",
-  rider_assigned: "Rider assigned",
-  picked_up: "Picked up",
-  out_for_delivery: "On the way",
-  delivered: "Delivered",
-  rejected: "Rejected",
-  auto_expired: "Not accepted in time",
-  cancelled: "Cancelled",
-  failed_delivery_attempt: "Delivery attempt failed",
-  reassigning: "Reassigning rider",
-};
-
 export default function OrdersPage() {
   const [{ data, fetching }] = useQuery({
     query: MyOrdersQuery,
@@ -60,9 +46,15 @@ export default function OrdersPage() {
 
   return (
     <main className="mx-auto max-w-lg">
-      <h1 className="mb-6 text-2xl font-bold">Your orders</h1>
+      <PageHeader title="Your orders" />
       {fetching && <Skeleton className="h-40 rounded-2xl" />}
-      {data?.myOrders.length === 0 && <p className="text-kd-fg-muted">No orders yet.</p>}
+      {data?.myOrders.length === 0 && (
+        <EmptyState
+          icon="🧾"
+          title="No orders yet"
+          description="Your past and in-progress orders will show up here."
+        />
+      )}
       <div className="space-y-3">
         {data?.myOrders.map((o) => (
           <div
@@ -77,9 +69,7 @@ export default function OrdersPage() {
                 </p>
               </div>
               <div className="text-right">
-                <Badge variant={o.status === "delivered" ? "default" : "secondary"}>
-                  {STATUS_LABEL[o.status] ?? o.status}
-                </Badge>
+                <OrderStatusPill status={o.status} />
                 <p className="mt-1 text-sm font-semibold">{formatRs(o.grandTotalMinor)}</p>
               </div>
             </Link>

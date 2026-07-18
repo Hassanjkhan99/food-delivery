@@ -14,6 +14,7 @@ import { AlertTriangle, ArrowUpRight, Bike, Clock, Store, TrendingUp } from "luc
 import { graphql } from "@/graphql/generated";
 import { formatRs } from "@fd/shared";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -54,13 +55,7 @@ const CommandCenterQuery = graphql(`
 const POLL_MS = 15_000;
 
 function HealthTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-2xl border border-kd-border bg-kd-surface p-4">
-      <p className="text-2xl font-bold tabular-nums">{value}</p>
-      <p className="text-xs text-kd-fg-muted">{label}</p>
-      {sub && <p className="mt-1 text-[11px] text-kd-fg-subtle">{sub}</p>}
-    </div>
-  );
+  return <StatTile label={label} value={value} hint={sub} />;
 }
 
 export default function AdminCommandCenterPage() {

@@ -6,6 +6,7 @@ import { BadgeCheck, Clock, Flame, Heart, MapPin, Star, Tag } from "lucide-react
 import { formatRs, priceBandDots } from "@fd/shared";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { restaurantCoverPlaceholder } from "@/components/media/placeholders";
+import { Chip } from "@/components/ui/chip";
 import { cn } from "@/lib/utils";
 import type { FeedHit } from "./types";
 
@@ -202,12 +203,9 @@ export function RestaurantCard({ hit }: { hit: FeedHit }) {
               {r.cuisineTags.length > 0 && (
                 <div className="flex items-center gap-1.5 overflow-hidden">
                   {r.cuisineTags.slice(0, 3).map((c) => (
-                    <span
-                      key={c}
-                      className="kd-glass whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium text-white/90"
-                    >
+                    <Chip key={c} tone="glass" size="sm" className="px-2 py-0.5 text-white/90">
                       {c}
-                    </span>
+                    </Chip>
                   ))}
                   {r.cuisineTags.length > 3 && (
                     <span className="whitespace-nowrap text-xs text-white/70">

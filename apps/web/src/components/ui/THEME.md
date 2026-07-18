@@ -131,6 +131,31 @@ hand-rolled markup:
   text. Pass a control via `children`, or omit `children` to get a default
   `<Input>`.
 
+### Structural primitives (build the library once)
+
+These replace the most-duplicated inline patterns across the app. Reach for them
+instead of re-implementing the markup; see all of them live on `/dev/design`.
+
+- **`<PageHeader title description actions>`** — the `h1` + subtitle + right-side
+  actions block at the top of nearly every screen.
+- **`<EmptyState icon title description action surface>`** — "no … yet" / zero-result /
+  not-found states. `surface`: `"card"` (default, solid), `"glass"` (frosted, over an
+  ambient background), or `"bare"`.
+- **`<Chip>`** (+ `chipVariants` for `<button>` call sites) — `rounded-full` pills.
+  `tone`: `neutral` / `primary` / `glass`; `selected` for active filters; apply
+  `chipVariants({ interactive: true, selected })` to a real `<button>` so it keeps
+  native semantics + `aria-pressed`.
+- **`<StatTile label value hint icon>`** — dashboard metric tile (tabular value).
+- **`<ListRow leading title subtitle trailing href>`** — a summary row; renders as a
+  `<Link>` when `href` is set.
+- **`<Banner tone title>`** — inline alert; `tone`: `info` / `success` / `warning` /
+  `danger` (default Lucide icon per tone; `icon={null}` to drop it).
+- **`<StatusPill tone label>`** and **`<OrderStatusPill status>`** — status pills driven
+  by a shared registry (`status-pill.tsx`). **Do not** re-declare status → label/color
+  maps in a screen; add to `ORDER_STATUS_DESCRIPTORS` (or a sibling registry) instead.
+  The registry is keyed by the `@fd/shared` `OrderStatus` union, so a new status is a
+  compile error until it's given a `{ label, tone }`.
+
 ## Dark mode
 
 Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`
