@@ -15,7 +15,11 @@
     "db:migrate": "pnpm --filter @fd/db migrate",
     "db:seed": "pnpm --filter @fd/db seed",
     "db:studio": "pnpm --filter @fd/db studio",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml}\" --ignore-path .gitignore",
+    "ci": "node scripts/ci-local.mjs",
+    "ci:build": "node scripts/ci-local.mjs --build",
+    "ci:all": "node scripts/ci-local.mjs --all"
   },
   "devDependencies": {
     "embedded-postgres": "^18.4.0-beta.17",
