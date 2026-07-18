@@ -74,30 +74,52 @@ function SegmentedControl({
   glass?: boolean;
   className?: string;
 }) {
+  // A single-select value switch is a radiogroup, NOT a tablist — Base UI Tabs would
+  // expose tab semantics for content panels that don't exist here. Radio buttons with
+  // roving tabindex + arrow-key nav give the correct, panel-free selector semantics.
+  function onKeyDown(e: React.KeyboardEvent) {
+    const idx = options.findIndex((o) => o.value === value);
+    if (idx < 0) return;
+    let next = idx;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (idx + 1) % options.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+      next = (idx - 1 + options.length) % options.length;
+    else return;
+    e.preventDefault();
+    onValueChange(options[next].value);
+  }
+
   return (
-    <TabsPrimitive.Root
-      value={value}
-      onValueChange={(v) => onValueChange(String(v))}
+    <div
+      role="radiogroup"
       data-slot="segmented-control"
+      onKeyDown={onKeyDown}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full p-1",
+        glass ? "kd-glass-sheet" : "bg-kd-surface-muted",
+        className,
+      )}
     >
-      <TabsPrimitive.List
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full p-1",
-          glass ? "kd-glass-sheet" : "bg-kd-surface-muted",
-          className,
-        )}
-      >
-        {options.map((o) => (
-          <TabsPrimitive.Tab
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <button
             key={o.value}
-            value={o.value}
-            className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-kd-fg-muted transition-colors hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary data-[active]:bg-kd-surface data-[active]:text-kd-fg data-[active]:shadow-sm"
+            type="button"
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onValueChange(o.value)}
+            className={cn(
+              "cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary",
+              active ? "bg-kd-surface text-kd-fg shadow-sm" : "text-kd-fg-muted hover:text-kd-fg",
+            )}
           >
             {o.label}
-          </TabsPrimitive.Tab>
-        ))}
-      </TabsPrimitive.List>
-    </TabsPrimitive.Root>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
