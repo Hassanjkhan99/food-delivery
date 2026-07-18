@@ -156,6 +156,20 @@ instead of re-implementing the markup; see all of them live on `/dev/design`.
   The registry is keyed by the `@fd/shared` `OrderStatus` union, so a new status is a
   compile error until it's given a `{ label, tone }`.
 
+### Navigation & disclosure (on `@base-ui/react`)
+
+- **`<Tabs>` / `<TabsList>` / `<TabsTab>` / `<TabsPanel>`** — underline tabbed content with
+  real `tablist` / `tab` / `tabpanel` ARIA + keyboard nav. Controlled (`value` +
+  `onValueChange`) or uncontrolled (`defaultValue`).
+- **`<SegmentedControl options value onValueChange glass>`** — compact pill-group value
+  selector (no panels) — the shape most of the app's inline "filter tabs" actually are.
+  `glass` frosts the container for sticky headers. **Do not** hand-roll a button list with
+  conditional `bg-kd-primary` active styling and no ARIA.
+- **`<Accordion multiple>` / `<AccordionItem value>` / `<AccordionTrigger>` /
+  `<AccordionPanel>`** — accessible collapsible group; replaces native `<details>`.
+- **`<LoadMore hasMore loading onLoadMore>`** — cursor/offset "Load more" button (renders
+  nothing when `!hasMore`). **`<Pagination page pageCount onPageChange>`** — numbered pager.
+
 ## Dark mode
 
 Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`

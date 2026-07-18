@@ -16,6 +16,7 @@ import { useDeliveryLocation } from "@/lib/location";
 import { RestaurantImage } from "@/components/media/RestaurantImage";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
 import { useRecentSearches } from "./use-recent-searches";
 import { didYouMean, suggestTerms } from "./suggestions";
 
@@ -275,15 +276,19 @@ function SearchScreen() {
 
       {active && data && hasResults && (
         <>
-          <div className="flex items-center justify-between gap-2 border-b border-kd-border">
-            <div className="flex gap-1">
-              <TabButton active={tab === "restaurants"} onClick={() => setTabChoice("restaurants")}>
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTabChoice(v as Tab)}
+            className="flex-row items-center justify-between gap-2 border-b border-kd-border"
+          >
+            <TabsList className="border-b-0">
+              <TabsTab value="restaurants" className="px-3">
                 Restaurants ({restaurants.length})
-              </TabButton>
-              <TabButton active={tab === "dishes"} onClick={() => setTabChoice("dishes")}>
+              </TabsTab>
+              <TabsTab value="dishes" className="px-3">
                 Dishes ({dishes.length})
-              </TabButton>
-            </div>
+              </TabsTab>
+            </TabsList>
             <label className="flex shrink-0 items-center gap-1.5 pb-1 text-xs text-kd-fg-muted">
               <span className="hidden sm:inline">Sort</span>
               <select
@@ -299,7 +304,7 @@ function SearchScreen() {
                 ))}
               </select>
             </label>
-          </div>
+          </Tabs>
 
           {tab === "restaurants" &&
             (restaurants.length > 0 ? (
@@ -560,30 +565,6 @@ function ZeroState({
         </Link>
       </div>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        active
-          ? "-mb-px border-b-2 border-kd-primary px-3 py-2 text-sm font-semibold text-kd-fg"
-          : "-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-kd-fg-muted hover:text-kd-fg"
-      }
-    >
-      {children}
-    </button>
   );
 }
 
