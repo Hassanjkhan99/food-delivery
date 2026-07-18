@@ -15,16 +15,19 @@ function ListRow({
   subtitle,
   trailing,
   href,
+  onClick,
   className,
   ...props
-}: Omit<React.ComponentProps<"div">, "title" | "prefix"> & {
+}: Omit<React.ComponentProps<"div">, "title" | "prefix" | "onClick"> & {
   leading?: React.ReactNode;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   trailing?: React.ReactNode;
   href?: string;
+  /** Makes the whole row a real, keyboard-operable button. */
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
 }) {
-  const interactive = Boolean(href) || Boolean(props.onClick);
+  const interactive = Boolean(href) || Boolean(onClick);
   const classes = cn(
     "flex items-center gap-3 rounded-xl border border-kd-border bg-kd-surface px-4 py-3",
     interactive && "transition-colors hover:border-kd-fg-subtle",
@@ -47,6 +50,24 @@ function ListRow({
       <Link href={href} data-slot="list-row" className={classes}>
         {content}
       </Link>
+    );
+  }
+
+  // A click handler makes the row an actionable control — render a real <button> so it's
+  // focusable and Enter/Space activate it (not a div with a bare onClick).
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        data-slot="list-row"
+        onClick={onClick}
+        className={cn(
+          classes,
+          "w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary",
+        )}
+      >
+        {content}
+      </button>
     );
   }
 
