@@ -10,7 +10,7 @@ import {
 } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import { z } from "zod";
-import { branchOpenNow } from "../services/branchHours.js";
+import { branchOpenNow, branchOpenNowCached } from "../services/branchHours.js";
 import { builder } from "./builder.js";
 
 // Timed-86 re-arm (#110): an item 86'd with an `unavailableUntil` in the past is treated
@@ -227,11 +227,11 @@ builder.prismaObject("Branch", {
     // BranchHours rows and falls back to hoursJson (#19/#63). The home feed shows a
     // "Closed — opens HH:MM" overlay instead of hiding closed branches.
     isOpenNow: t.boolean({
-      resolve: (b) => branchOpenNow(b).then((s) => s.isOpen),
+      resolve: (b, _args, ctx) => branchOpenNowCached(ctx, b).then((s) => s.isOpen),
     }),
     opensAtLabel: t.string({
       nullable: true,
-      resolve: (b) => branchOpenNow(b).then((s) => s.opensAtLabel),
+      resolve: (b, _args, ctx) => branchOpenNowCached(ctx, b).then((s) => s.opensAtLabel),
     }),
     restaurant: t.relation("restaurant"),
     // Image pipeline (#50): uploaded restaurant hero -> Google Places venue photo
