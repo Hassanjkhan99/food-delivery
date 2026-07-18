@@ -184,6 +184,20 @@ instead of re-implementing the markup; see all of them live on `/dev/design`.
 - **`<RatingStars value count onChange size>`** — star rating; omit `onChange` for a
   read-only display, pass it to make it an input.
 
+### Feedback & overlays (on `@base-ui/react`)
+
+- **`toast()` + `<Toaster>`** — the app's transient-feedback system (there was none;
+  `alert()`/`window.confirm()` were used). Mount `<Toaster>` once per surface (customer
+  layout does); then call `toast.success(title, description)` / `toast.error` /
+  `toast.info` / `toast.warning` from anywhere — no provider needed at the call site.
+  **Prefer this over `alert()`** for non-blocking confirmations.
+- **`<Tooltip content side>`** — hover/focus tooltip; wrap the trigger as its single child.
+  Replaces native `title=`. Wrap a subtree in `<TooltipProvider>` to share delays.
+- **`<Progress value>`** — determinate bar (0–100; `null` = indeterminate).
+- **`<Avatar src fallback size>`** — user/entity avatar with initials fallback (distinct
+  from `RestaurantImage`, which is for feed/menu photography).
+- **`<Stepper steps current>`** — vertical status timeline / multi-step progress.
+
 ## Dark mode
 
 Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`

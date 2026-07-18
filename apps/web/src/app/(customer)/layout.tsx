@@ -10,6 +10,7 @@ import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { buttonVariants } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 const ViewerQuery = graphql(`
@@ -108,6 +109,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-12">
         {children}
       </div>
+      <Toaster />
     </div>
   );
 }

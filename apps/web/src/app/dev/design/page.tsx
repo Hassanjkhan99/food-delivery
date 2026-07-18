@@ -17,6 +17,7 @@ import { Banner } from "@/components/ui/banner";
 import { StatusPill, OrderStatusPill } from "@/components/ui/status-pill";
 import { NavDemos } from "./nav-demos";
 import { FormDemos } from "./form-demos";
+import { FeedbackDemos } from "./feedback-demos";
 import { ChevronRight, Star } from "lucide-react";
 
 export const metadata = { title: "Design System — KhaanaDo" };
@@ -319,6 +320,10 @@ export default function DesignKitPage() {
 
       <Section title="Form controls">
         <FormDemos />
+      </Section>
+
+      <Section title="Feedback & overlays">
+        <FeedbackDemos />
       </Section>
     </main>
   );
