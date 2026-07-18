@@ -56,7 +56,9 @@ function ToastList() {
       key={t.id}
       toast={t}
       className={cn(
-        "kd-glass-solid flex items-start gap-3 rounded-xl border-l-4 border-l-kd-border p-3.5 pr-2 shadow-kd-lg",
+        // Base UI keeps toasts beyond the provider limit in the array marked `data-limited`;
+        // hide them so bursts don't visibly stack past the limit.
+        "kd-glass-solid flex items-start gap-3 rounded-xl border-l-4 border-l-kd-border p-3.5 pr-2 shadow-kd-lg data-[limited]:hidden",
         t.type && TONE[t.type],
       )}
     >
@@ -74,15 +76,16 @@ function ToastList() {
   ));
 }
 
-/** Mount once near the app root. Self-contained (owns the provider + viewport). */
+/** Mount once near the app root. Self-contained (owns the provider + viewport).
+ *  The viewport is NOT portaled to `body`: rendering it in place keeps it inside the
+ *  customer layout's scoped `dir`/`lang`, so localized (e.g. Urdu/RTL) toasts inherit the
+ *  right direction. It's `position: fixed`, so DOM location doesn't affect its placement. */
 export function Toaster() {
   return (
     <Toast.Provider toastManager={toastManager}>
-      <Toast.Portal>
-        <Toast.Viewport className="fixed right-4 bottom-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 outline-none">
-          <ToastList />
-        </Toast.Viewport>
-      </Toast.Portal>
+      <Toast.Viewport className="fixed right-4 bottom-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 outline-none">
+        <ToastList />
+      </Toast.Viewport>
     </Toast.Provider>
   );
 }
