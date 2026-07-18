@@ -48,6 +48,8 @@ function RatingStars({
           <button
             key={i}
             type="button"
+            role="radio"
+            aria-checked={i + 1 === Math.round(value)}
             aria-label={`${i + 1} of ${max} stars`}
             onClick={() => onChange(i + 1)}
             className="cursor-pointer rounded transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary"
