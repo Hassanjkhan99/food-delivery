@@ -38,7 +38,7 @@ function TabsTab({ className, ...props }: React.ComponentProps<typeof TabsPrimit
     <TabsPrimitive.Tab
       data-slot="tabs-tab"
       className={cn(
-        "-mb-px cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-kd-fg-muted transition-colors hover:text-kd-fg focus-visible:outline-none focus-visible:text-kd-fg data-[selected]:border-kd-primary data-[selected]:text-kd-fg",
+        "-mb-px cursor-pointer border-b-2 border-transparent pb-2 text-sm font-medium text-kd-fg-muted transition-colors hover:text-kd-fg focus-visible:outline-none focus-visible:text-kd-fg data-[active]:border-kd-primary data-[active]:text-kd-fg",
         className,
       )}
       {...props}
@@ -91,7 +91,7 @@ function SegmentedControl({
           <TabsPrimitive.Tab
             key={o.value}
             value={o.value}
-            className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-kd-fg-muted transition-colors hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary data-[selected]:bg-kd-surface data-[selected]:text-kd-fg data-[selected]:shadow-sm"
+            className="cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium text-kd-fg-muted transition-colors hover:text-kd-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-kd-primary data-[active]:bg-kd-surface data-[active]:text-kd-fg data-[active]:shadow-sm"
           >
             {o.label}
           </TabsPrimitive.Tab>
