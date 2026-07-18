@@ -111,8 +111,12 @@ export async function handleLocalFileGet(req: Request): Promise<Response> {
   }
   if (!existsSync(path)) return new Response("Not found", { status: 404 });
   const stream = createReadStream(path);
+  // Private assets must not be cached by shared/browser caches (Codex #215/#213) — the
+  // signed token is short-lived, but a `public` cache entry would outlive it. Public
+  // assets keep the shared cache.
+  const isPrivate = objectKey.startsWith("private/");
   return new Response(stream as never, {
     status: 200,
-    headers: { "cache-control": "public, max-age=3600" },
+    headers: { "cache-control": isPrivate ? "private, no-store" : "public, max-age=3600" },
   });
 }

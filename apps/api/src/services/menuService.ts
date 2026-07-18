@@ -95,6 +95,10 @@ export async function cloneMenu(
             priceMinor: item.priceMinor,
             compareAtPriceMinor: item.compareAtPriceMinor,
             isAvailable: item.isAvailable,
+            // Carry the timed-86 expiry across clone/publish (Codex #215/#210) — else a
+            // temporarily-unavailable item copies isAvailable=false with no re-arm time and
+            // stays 86'd forever after the next publish.
+            unavailableUntil: item.unavailableUntil,
             imageAssetId: item.imageAssetId,
             badges: item.badges,
             // Copy dietary/allergen tags on clone (Codex #231) — else draft-create or
