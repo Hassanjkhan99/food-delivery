@@ -124,6 +124,10 @@ builder.mutationFields((t) => ({
             where: {
               orderId: order.id,
               status: { in: ["refund_pending", "refunded"] },
+              // A staff item-removal posts its own (already-settled) partial refund; it must
+              // not make the order look "already refunded" and block a genuine missing/
+              // wrong-item ticket refund (#214).
+              origin: { not: "item_removal" },
             },
             select: { id: true },
           });
@@ -135,6 +139,7 @@ builder.mutationFields((t) => ({
                 amountMinor: refundAmount,
                 // COD has no card to reverse, so refund to wallet; card back to card.
                 destination: order.paymentMode === "cod" ? "wallet" : "card",
+                origin: "help_ticket",
                 reason: `${cat.label} (help ticket): ${itemNames.join(", ")}`,
               },
             });

@@ -170,6 +170,16 @@ enum RefundDestination {
   wallet
 }
 
+// Where a refund originated (#214). Lets the help-ticket idempotency guard ignore the
+// automatic partial refund a staff item-removal creates, so a later missing/wrong-item
+// ticket can still open its own refund. Legacy rows default to `other`.
+enum RefundOrigin {
+  item_removal
+  help_ticket
+  cancellation
+  other
+}
+
 enum PayoutStatus {
   pending
   paid
@@ -1145,6 +1155,7 @@ model Refund {
   status          RefundStatus      @default(refund_pending)
   amountMinor     Int
   destination     RefundDestination @default(card)
+  origin          RefundOrigin      @default(other)
   reason          String
   decidedByUserId String?
   decidedAt       DateTime?         @db.Timestamptz()

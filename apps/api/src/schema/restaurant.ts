@@ -6,7 +6,13 @@ import type { AppContext } from "../context.js";
 import { transition, type Actor } from "../services/orderService.js";
 import { recordCancellation, evaluateOrderCancellation } from "../services/policyService.js";
 import { publishOrderChanged } from "../pubsub.js";
-import { ACCEPTANCE_SLA_SECONDS, formatRs, isRestaurantOwner, TERMINAL_STATUSES } from "@fd/shared";
+import {
+  ACCEPTANCE_SLA_SECONDS,
+  DEFAULT_UNAVAILABILITY_PREFERENCE,
+  formatRs,
+  isRestaurantOwner,
+  TERMINAL_STATUSES,
+} from "@fd/shared";
 import { accountBalance, postLedgerTx, postItemRemovalRefund } from "../services/ledgerService.js";
 import { ensureDraft, publishDraft } from "../services/menuService.js";
 import { settlementReportCsv, eimsInvoiceCsv } from "../services/csvExport.js";
@@ -869,6 +875,62 @@ builder.mutationFields((t) => ({
         "preparing",
         "ready_for_pickup",
       ];
+
+      // Honor the customer's "if this item is unavailable" choice (#214) before mutating.
+      // The preference is frozen in the per-line snapshot. Read it up front so we can route
+      // cancel_order to the (tested) reject+full-refund flow and refuse to silently remove
+      // an item the customer wanted to be contacted about. remove_item falls through to the
+      // normal removal below. (The removal tx re-validates status/existence under its lock.)
+      const peek = await prisma.order.findUniqueOrThrow({
+        where: { id: args.orderId },
+        include: { items: true, payment: true },
+      });
+      const peekItem = peek.items.find((i) => i.id === args.orderItemId);
+      if (peekItem && REMOVABLE_STATUSES.includes(peek.status)) {
+        const snap = peekItem.menuSnapshotJson as {
+          name?: string;
+          unavailabilityPreference?: string;
+        } | null;
+        const pref = snap?.unavailabilityPreference ?? DEFAULT_UNAVAILABILITY_PREFERENCE;
+        const itemName = snap?.name ?? "that item";
+        if (pref === "contact_me") {
+          throw new GraphQLError(
+            `${itemName}: this customer asked to be contacted if an item is unavailable — reach out before editing the order.`,
+            { extensions: { code: "contact_customer_first" } },
+          );
+        }
+        if (pref === "cancel_order") {
+          // Customer opted to cancel the whole order if an item is unavailable. Route to the
+          // restaurant-reject flow (full refund + voucher/loyalty reversal via transition) —
+          // mirrors rejectOrder — instead of removing the line.
+          const decision = evaluateOrderCancellation(peek, "restaurant");
+          const updated = await transition(args.orderId, "rejected", restaurantActor(ctx), {
+            reason: `Item unavailable — customer chose to cancel the order: ${itemName}`,
+            meta: {
+              policyScenario: decision.scenario,
+              policyOutcome: decision.outcome,
+              faultParty: decision.faultParty,
+            },
+          });
+          await recordCancellation(peek, "restaurant");
+          publishOrderChanged({
+            orderId: args.orderId,
+            branchId: peek.branchId,
+            status: "rejected",
+          });
+          return prisma.order.findUniqueOrThrow({ ...query, where: { id: args.orderId } });
+        }
+      }
+
+      // A card charge must be captured before we can post a partial refund. Block editing
+      // during the pre-capture window so a removal can't reduce totals with no refund (#214).
+      if (peek.paymentMode === "card" && peek.payment && peek.payment.status !== "captured") {
+        throw new GraphQLError(
+          "This card payment is still being processed — try removing the item again in a moment.",
+          { extensions: { code: "payment_not_captured" } },
+        );
+      }
+
       const { branchId, status } = await prisma.$transaction(async (tx) => {
         // Serialize concurrent removals on the same order so two staff clients can't both
         // read items.length===2, both delete a different line, and empty the order while
