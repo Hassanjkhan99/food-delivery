@@ -1,14 +1,15 @@
 // Local CI runner — mirrors .github/workflows/ci.yml so the exact same gates can be
 // run on a developer machine for fast pre-push feedback (no waiting on a hosted run).
 //
-// Usage:
-//   node scripts/ci-local.mjs          # FAST gates: prep + format + typecheck + lint (~1 min)
+// Usage (note: `pnpm ci` is a pnpm BUILTIN — clean-install — so this is `ci:local`):
+//   node scripts/ci-local.mjs          # FAST gates: install + prep + format + typecheck + lint
 //   node scripts/ci-local.mjs --build  # also run the full production build (turbo build) — slow
 //   node scripts/ci-local.mjs --e2e    # also run the Playwright e2e job (embedded PG + dev servers)
 //   node scripts/ci-local.mjs --all    # everything (build + e2e) — the full ci.yml mirror
-//   pnpm ci        # fast gates       pnpm ci:build  # + build       pnpm ci:all  # + build + e2e
+//   pnpm ci:local     pnpm ci:build     pnpm ci:all
 //
 // Mirrors ci.yml, but the slow jobs are opt-in so the common pre-merge check is quick:
+//   install:        pnpm install --frozen-lockfile  (catches lockfile drift, like every CI job)
 //   format:         prettier --check "**/*.{ts,tsx,json,md,yml}" --ignore-path .gitignore
 //   typecheck-lint: db build -> api+web codegen -> pnpm typecheck -> pnpm lint
 //   build (--build):    ... -> pnpm build      (full Next production build; cold ~2-4 min)
@@ -65,6 +66,26 @@ function summary() {
 }
 
 async function main() {
+  // Surface lockfile drift like every hosted CI job — but NON-fatal: a locked/partial local
+  // node_modules (e.g. Windows file locks while an embedded DB is running) shouldn't block the
+  // useful gates, and hosted CI runs the authoritative `pnpm install --frozen-lockfile`.
+  {
+    const t0 = Date.now();
+    console.log(
+      `\n${C.cyan}▶ install (frozen)${C.reset} ${C.dim}(pnpm install --frozen-lockfile)${C.reset}`,
+    );
+    const code = await run("pnpm", ["install", "--frozen-lockfile"]);
+    if (code === 0) {
+      console.log(
+        `${C.green}✔ install (frozen) (${((Date.now() - t0) / 1000).toFixed(0)}s)${C.reset}`,
+      );
+    } else {
+      console.warn(
+        `${C.dim}⚠ install (frozen) failed — check for lockfile drift (hosted CI enforces it); continuing with existing node_modules.${C.reset}`,
+      );
+    }
+  }
+
   // Shared prerequisite: @fd/web imports the gitignored @/graphql/generated, produced by
   // web codegen, which needs api's schema.graphql, which needs the generated Prisma client.
   await gate("prep: db build", "pnpm", ["--filter", "@fd/db", "build"]);
@@ -110,6 +131,9 @@ async function main() {
 async function e2e() {
   const env = {
     ...process.env,
+    // CI=true makes e2e/playwright.config.ts use workers:1 (seeded-OTP logins conflict
+    // under parallel workers), retries, and forbidOnly — matching the hosted e2e job.
+    CI: "true",
     DATABASE_URL: "postgresql://fd:fd@localhost:5455/fooddelivery",
     SESSION_SECRET: "ci-secret-not-real-0000000000000000",
     NEXT_PUBLIC_API_URL: "http://localhost:4000/graphql",
@@ -117,6 +141,19 @@ async function e2e() {
     E2E_API_URL: "http://localhost:4000/graphql",
     OTP_RATE_LIMIT_PER_HOUR: "1000",
   };
+
+  // ci-db uses the shared port 5455 (scripts/pg.mjs). If a developer's persistent `pnpm db`
+  // is already on it, the ephemeral cluster can't bind — and the TCP wait below would
+  // happily connect to that real DB, so e2e would run against (and mutate) it. Refuse to
+  // start unless 5455 is free.
+  if (await portInUse(5455)) {
+    console.error(
+      `${C.red}✖ e2e: port 5455 is already in use — stop your local 'pnpm db' first so the ephemeral cluster is used, not your persistent one.${C.reset}`,
+    );
+    results.push({ name: "e2e", ok: false, secs: "0" });
+    summary();
+    process.exit(1);
+  }
   const spawned = [];
   const bg = (cmd, args) => {
     const child = spawn(cmd, args, { stdio: "inherit", shell: WIN, env });
@@ -134,9 +171,25 @@ async function e2e() {
   await run("pnpm", ["--filter", "@fd/e2e", "exec", "playwright", "install", "chromium"]);
 
   console.log(`${C.cyan}▶ e2e: embedded Postgres (ci-db)${C.reset}`);
-  bg("node", ["e2e/scripts/ci-db.mjs"]);
-  if (!(await waitFor("http://localhost:5455", 60, { tcp: true }))) {
-    console.error(`${C.red}✖ e2e: Postgres never came up on :5455${C.reset}`);
+  const db = bg("node", ["e2e/scripts/ci-db.mjs"]);
+  let dbExited = false;
+  db.on("exit", () => {
+    dbExited = true;
+  });
+  // Wait for the ephemeral cluster to bind — but bail if the child dies first (e.g. it
+  // couldn't bind), rather than falsely "connecting" to some other server later.
+  let dbReady = false;
+  for (let i = 0; i < 60 && !dbExited; i++) {
+    if (await portInUse(5455)) {
+      dbReady = true;
+      break;
+    }
+    await sleep(2000);
+  }
+  if (!dbReady) {
+    console.error(
+      `${C.red}✖ e2e: ephemeral Postgres never came up on :5455 (ci-db exited?)${C.reset}`,
+    );
     stopAll();
     results.push({ name: "e2e", ok: false, secs: "0" });
     summary();
@@ -165,27 +218,28 @@ async function e2e() {
     console.error(`${C.red}✖ e2e failed (non-blocking, mirrors CI continue-on-error)${C.reset}`);
 }
 
-/** Poll a URL (HTTP GET, or a TCP connect when {tcp:true}) until it responds or times out. */
-async function waitFor(url, tries, { tcp = false } = {}) {
+/** Poll an HTTP URL until it responds 2xx or times out. */
+async function waitFor(url, tries) {
   for (let i = 0; i < tries; i++) {
     try {
-      if (tcp) {
-        const { hostname, port } = new URL(url);
-        await new Promise((res, rej) => {
-          const s = net.connect(Number(port), hostname, () => {
-            s.end();
-            res();
-          });
-          s.on("error", rej);
-        });
-        return true;
-      }
       const r = await fetch(url);
       if (r.ok) return true;
     } catch {}
     await sleep(2000);
   }
   return false;
+}
+
+/** True if something is already listening on localhost:port. */
+function portInUse(port) {
+  return new Promise((resolve) => {
+    const s = net.connect(port, "localhost");
+    s.on("connect", () => {
+      s.end();
+      resolve(true);
+    });
+    s.on("error", () => resolve(false));
+  });
 }
 
 main().catch((e) => {

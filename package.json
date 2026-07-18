@@ -17,7 +17,7 @@
     "db:studio": "pnpm --filter @fd/db studio",
     "format": "prettier --write .",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml}\" --ignore-path .gitignore",
-    "ci": "node scripts/ci-local.mjs",
+    "ci:local": "node scripts/ci-local.mjs",
     "ci:build": "node scripts/ci-local.mjs --build",
     "ci:all": "node scripts/ci-local.mjs --all"
   },
