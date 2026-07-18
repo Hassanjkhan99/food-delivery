@@ -95,25 +95,38 @@ builder.mutationFields((t) => ({
       const customerId = ctx.userId!;
       const { amountMinor, paymentMethodId, idempotencyKey } = topUpSchema.parse(args);
 
-      const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
-      if (!method || method.userId !== customerId)
-        throw new GraphQLError("We couldn't find that card.", {
-          extensions: { code: "payment_method_not_found" },
-        });
-
-      // Claim the idempotency key BEFORE charging. The UNIQUE constraint is the race
-      // arbiter: a retry / double-submit loses here and returns the wallet unchanged
-      // instead of charging the card and crediting the wallet a second time (#116).
+      // Claim the idempotency key FIRST — before the card lookup and the charge (#116/#208).
+      // The UNIQUE constraint is the race arbiter: a retry / double-submit loses here and
+      // returns the wallet unchanged instead of charging + crediting a second time. Doing
+      // this before the card lookup means a genuine replay still succeeds even if the saved
+      // card was since removed (the replay must not fail on card lookup).
       try {
         await prisma.walletTopUp.create({
           data: { idempotencyKey, userId: customerId, amountMinor, status: "pending" },
         });
       } catch (e) {
         if ((e as { code?: string }).code === "P2002") {
-          // Same attempt already in-flight or completed — return the current wallet.
+          // Same key already claimed. Confirm it's THIS user's attempt (the key is
+          // client-supplied) before returning their wallet — a cross-user key collision
+          // must not be treated as this user's top-up.
+          const prior = await prisma.walletTopUp.findUnique({ where: { idempotencyKey } });
+          if (prior && prior.userId !== customerId)
+            throw new GraphQLError("This looks like a duplicate request — please try again.", {
+              extensions: { code: "idempotency_key_conflict" },
+            });
           return loadWallet(customerId);
         }
         throw e;
+      }
+
+      const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
+      if (!method || method.userId !== customerId) {
+        // Nothing was charged yet — release the claim so the customer can retry this key
+        // with a valid card (only a real charge attempt should consume the key).
+        await prisma.walletTopUp.delete({ where: { idempotencyKey } });
+        throw new GraphQLError("We couldn't find that card.", {
+          extensions: { code: "payment_method_not_found" },
+        });
       }
 
       const result = await mockProvider.charge({
