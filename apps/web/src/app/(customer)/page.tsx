@@ -30,6 +30,7 @@ import { HomeSkeleton } from "@/components/home/HomeSkeleton";
 import { useOnlineStatus, useScrollRestoration } from "@/components/home/hooks";
 import { Button } from "@/components/ui/button";
 import { AmbientBackground, GlassPanel } from "@/components/ui/glass";
+import { Banner } from "@/components/ui/banner";
 import type { FeedHit } from "@/components/home/types";
 
 /** Time-of-day greeting. Read via useSyncExternalStore so the wall clock (a client-only
@@ -457,10 +458,9 @@ export default function HomePage() {
       </section>
 
       {!online && (
-        <div className="flex items-center gap-2 rounded-xl bg-kd-warning-soft px-3 py-2 text-sm text-kd-warning">
-          <WifiOff className="h-4 w-4" />
+        <Banner tone="warning" icon={<WifiOff className="mt-0.5 h-4 w-4 shrink-0" />}>
           You&apos;re offline — showing the last loaded restaurants.
-        </div>
+        </Banner>
       )}
 
       {/* Loading */}
