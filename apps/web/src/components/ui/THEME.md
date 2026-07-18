@@ -170,6 +170,20 @@ instead of re-implementing the markup; see all of them live on `/dev/design`.
 - **`<LoadMore hasMore loading onLoadMore>`** — cursor/offset "Load more" button (renders
   nothing when `!hasMore`). **`<Pagination page pageCount onPageChange>`** — numbered pager.
 
+### Form controls (on `@base-ui/react`)
+
+- **`<Switch checked onCheckedChange>`** — on/off toggle. Use for boolean settings /
+  filters instead of a styled native checkbox.
+- **`<Checkbox checked onCheckedChange>`** (supports `indeterminate`) — multi-select /
+  opt-in.
+- **`<Select>` / `<SelectTrigger>` / `<SelectValue>` / `<SelectContent>` / `<SelectItem>`**
+  — the design-system dropdown (the app had no dropdown layer). `<SelectValue>` accepts a
+  `(value) => label` render function. Prefer over a bare native `<select>` when the trigger
+  must match the design.
+- **`<NumberStepper value onValueChange min max>`** — accessible −/＋ quantity counter.
+- **`<RatingStars value count onChange size>`** — star rating; omit `onChange` for a
+  read-only display, pass it to make it an input.
+
 ## Dark mode
 
 Do not write `dark:` neutral/color overrides by hand. Because every `--kd-*`
