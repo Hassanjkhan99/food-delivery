@@ -382,7 +382,7 @@ export default function HomePage() {
   }, [engagementData, hits]);
 
   return (
-    <main className="relative space-y-6">
+    <main className="relative isolate space-y-6">
       {/* Ambient blurred brand-color blobs — the backdrop the liquid-glass hero refracts. */}
       <AmbientBackground />
 
@@ -408,7 +408,7 @@ export default function HomePage() {
               the dedicated /search screen, which also matches dishes (#37). */}
           <form
             role="search"
-            className="kd-glass-solid relative mt-6 flex max-w-[760px] items-center gap-2 rounded-full py-2 pl-5 pr-2"
+            className="kd-glass-solid relative mt-6 flex max-w-[760px] items-center gap-2 rounded-full py-2 pl-5 pr-2 focus-within:ring-2 focus-within:ring-kd-primary"
             onSubmit={(e) => {
               e.preventDefault();
               const q = search.trim();
@@ -436,7 +436,7 @@ export default function HomePage() {
             <button
               type="submit"
               aria-label="Search"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kd-primary text-white transition-transform hover:bg-kd-primary-hover active:scale-90 lg:h-12 lg:w-12"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-kd-primary text-kd-primary-fg transition-transform hover:bg-kd-primary-hover active:scale-90 lg:h-12 lg:w-12"
             >
               <Search className="h-5 w-5" strokeWidth={2.2} aria-hidden />
             </button>
