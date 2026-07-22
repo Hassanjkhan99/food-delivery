@@ -121,9 +121,14 @@ builder.mutationFields((t) => ({
 
       const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
       if (!method || method.userId !== customerId) {
-        // Nothing was charged yet — release the claim so the customer can retry this key
-        // with a valid card (only a real charge attempt should consume the key).
-        await prisma.walletTopUp.delete({ where: { idempotencyKey } });
+        // Mark the claim failed (don't DELETE it): deleting would let a concurrent duplicate
+        // that already lost the P2002 race find no row and wrongly report a completed replay.
+        // A terminal `failed` row keeps the key resolved — the customer retries with a new key,
+        // exactly like a declined charge below. (Codex #208)
+        await prisma.walletTopUp.update({
+          where: { idempotencyKey },
+          data: { status: "failed" },
+        });
         throw new GraphQLError("We couldn't find that card.", {
           extensions: { code: "payment_method_not_found" },
         });

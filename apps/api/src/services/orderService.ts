@@ -403,9 +403,13 @@ export async function placeOrder(
       return created;
     });
 
-    // A same-key replay returns the winner's existing order; its side effects (card charge,
-    // etc.) already ran for the winner, so skip them here (#208).
-    if (placedReplay) return order;
+    // A same-key replay returns the winner's order — do NOT re-run side effects (card charge)
+    // here, or we'd double-charge. The winner owns settlement: its post-commit charge may
+    // still be in flight or may later decline (which cancels the order, keeping the row), so
+    // return a FRESH read to surface the current payment/status rather than the in-tx snapshot.
+    // This matches the pre-lock idempotency guard — the client observes the final state by
+    // polling the order. (Codex #208)
+    if (placedReplay) return prisma.order.findUniqueOrThrow({ where: { id: order.id } });
 
     // Charge AFTER the order row exists: the idempotency-unique create is the race
     // arbiter, so a duplicate submit can never double-charge.
