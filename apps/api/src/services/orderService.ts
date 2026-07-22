@@ -199,6 +199,10 @@ export async function placeOrder(
     .toString(36)
     .toUpperCase()}`;
 
+  // Set when the in-lock re-check finds a concurrent same-key winner already created the
+  // order, so we return it and skip the post-tx side effects (card charge) below (#208).
+  let placedReplay = false;
+
   try {
     const order = await prisma.$transaction(async (tx) => {
       // Per-customer placement lock: serialize all concurrent placements for this customer
@@ -207,6 +211,22 @@ export async function placeOrder(
       // Held until commit; same primitive as the pickup-code lock (Codex #118 P2 / #116).
       // Also shared with applyReferralCode so the referral "first order" check is atomic.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${customerOrderLockKey(customerId)})::bigint)`;
+
+      // In-lock idempotency re-check (#208): two concurrent requests with the SAME key both
+      // pass the pre-lock guard (neither order existed yet); the winner creates the order,
+      // then the loser acquires the lock. Return the winner's order here — BEFORE the
+      // velocity check — so the loser doesn't get velocity-rejected for counting the very
+      // order it's replaying (and never creates a duplicate).
+      const replay = await tx.order.findUnique({ where: { idempotencyKey } });
+      if (replay) {
+        if (replay.customerId !== customerId)
+          throw new GraphQLError("This looks like a duplicate request — please try again.", {
+            extensions: { code: "idempotency_key_conflict" },
+          });
+        placedReplay = true;
+        return replay;
+      }
+
       await assertOrderVelocity(customerId, tx);
 
       // Short 4-digit code the customer quotes at the counter to collect a pickup order.
@@ -382,6 +402,14 @@ export async function placeOrder(
 
       return created;
     });
+
+    // A same-key replay returns the winner's order — do NOT re-run side effects (card charge)
+    // here, or we'd double-charge. The winner owns settlement: its post-commit charge may
+    // still be in flight or may later decline (which cancels the order, keeping the row), so
+    // return a FRESH read to surface the current payment/status rather than the in-tx snapshot.
+    // This matches the pre-lock idempotency guard — the client observes the final state by
+    // polling the order. (Codex #208)
+    if (placedReplay) return prisma.order.findUniqueOrThrow({ where: { id: order.id } });
 
     // Charge AFTER the order row exists: the idempotency-unique create is the race
     // arbiter, so a duplicate submit can never double-charge.

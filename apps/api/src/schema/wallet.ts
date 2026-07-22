@@ -95,25 +95,51 @@ builder.mutationFields((t) => ({
       const customerId = ctx.userId!;
       const { amountMinor, paymentMethodId, idempotencyKey } = topUpSchema.parse(args);
 
-      const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
-      if (!method || method.userId !== customerId)
-        throw new GraphQLError("We couldn't find that card.", {
-          extensions: { code: "payment_method_not_found" },
-        });
-
-      // Claim the idempotency key BEFORE charging. The UNIQUE constraint is the race
-      // arbiter: a retry / double-submit loses here and returns the wallet unchanged
-      // instead of charging the card and crediting the wallet a second time (#116).
+      // Claim the idempotency key FIRST — before the card lookup and the charge (#116/#208).
+      // The UNIQUE constraint is the race arbiter: a retry / double-submit loses here and
+      // returns the wallet unchanged instead of charging + crediting a second time. Doing
+      // this before the card lookup means a genuine replay still succeeds even if the saved
+      // card was since removed (the replay must not fail on card lookup).
       try {
         await prisma.walletTopUp.create({
           data: { idempotencyKey, userId: customerId, amountMinor, status: "pending" },
         });
       } catch (e) {
         if ((e as { code?: string }).code === "P2002") {
-          // Same attempt already in-flight or completed — return the current wallet.
+          // Same key already claimed — replay the ORIGINAL attempt's outcome (#208):
+          const prior = await prisma.walletTopUp.findUnique({ where: { idempotencyKey } });
+          // Confirm it's THIS user's attempt (the key is client-supplied) — a cross-user
+          // collision must not be treated as this user's top-up.
+          if (prior && prior.userId !== customerId)
+            throw new GraphQLError("This looks like a duplicate request — please try again.", {
+              extensions: { code: "idempotency_key_conflict" },
+            });
+          // A prior FAILED attempt must not report success on retry — the card was never
+          // charged and nothing was credited. Surface the failure so the client retries
+          // (with a fresh key), mirroring the original attempt's error.
+          if (prior?.status === "failed")
+            throw new GraphQLError("That top-up didn't go through — please try again.", {
+              extensions: { code: "topup_failed" },
+            });
+          // pending (in-flight) or completed → the current wallet reflects the outcome.
           return loadWallet(customerId);
         }
         throw e;
+      }
+
+      const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
+      if (!method || method.userId !== customerId) {
+        // Mark the claim failed (don't DELETE it): deleting would let a concurrent duplicate
+        // that already lost the P2002 race find no row and wrongly report a completed replay.
+        // A terminal `failed` row keeps the key resolved — the customer retries with a new key,
+        // exactly like a declined charge below. (Codex #208)
+        await prisma.walletTopUp.update({
+          where: { idempotencyKey },
+          data: { status: "failed" },
+        });
+        throw new GraphQLError("We couldn't find that card.", {
+          extensions: { code: "payment_method_not_found" },
+        });
       }
 
       const result = await mockProvider.charge({
