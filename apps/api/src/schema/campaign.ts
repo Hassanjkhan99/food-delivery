@@ -52,11 +52,20 @@ async function assertNoActiveFeaturedSlot(
   candidate: { startsAt: Date | null; endsAt: Date | null },
   exceptId?: string,
 ) {
+  // accrueCampaigns bills once per campaign per UTC DAY, so the conflict test must be at
+  // day granularity — two slots that merely avoid each other by time (00:00–10:00 vs
+  // 11:00–23:00 same date) still share a UTC day and would both bill (#210). Expand the
+  // candidate window to whole UTC days so any existing slot touching those days is caught.
+  const startOfUTCDay = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+  const endOfUTCDay = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+  const candStart = candidate.startsAt ? startOfUTCDay(candidate.startsAt) : null;
+  const candEnd = candidate.endsAt ? endOfUTCDay(candidate.endsAt) : null;
+
   const overlap: Prisma.CampaignWhereInput[] = [];
-  if (candidate.endsAt)
-    overlap.push({ OR: [{ startsAt: null }, { startsAt: { lte: candidate.endsAt } }] });
-  if (candidate.startsAt)
-    overlap.push({ OR: [{ endsAt: null }, { endsAt: { gte: candidate.startsAt } }] });
+  if (candEnd) overlap.push({ OR: [{ startsAt: null }, { startsAt: { lte: candEnd } }] });
+  if (candStart) overlap.push({ OR: [{ endsAt: null }, { endsAt: { gte: candStart } }] });
 
   const existing = await prisma.campaign.findFirst({
     where: {
