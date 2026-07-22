@@ -5,7 +5,7 @@
 // Daily accrual is triggered by runCampaignAccrual (see campaignService — no cron in MVP).
 // Customer: featuredBranches surfaces active featured_slot campaigns above organic results,
 // with an SLA guardrail so operationally poor restaurants can't buy top placement.
-import { prisma } from "@fd/db";
+import { prisma, Prisma } from "@fd/db";
 import { isRestaurantOwner } from "@fd/shared";
 import { GraphQLError } from "graphql";
 import type { AppContext } from "../context.js";
@@ -36,23 +36,49 @@ async function acceptanceSlaPct(restaurantId: string, days = 30): Promise<number
   return (inSla.length / decided.length) * 100;
 }
 
-// Double-billing guard (#117): a restaurant may only have ONE live featured_slot at a
-// time — accrueCampaigns bills per active campaign, so two overlapping featured slots
-// would debit the wallet twice for a single promoted rail. `pending_approval` counts too
-// so a second slot can't be queued to slip through right behind the first. `exceptId`
-// lets a campaign re-check without matching itself.
-async function assertNoActiveFeaturedSlot(restaurantId: string, exceptId?: string) {
+// Double-billing guard (#117/#210): accrueCampaigns bills per active featured_slot per day,
+// so two featured slots whose date windows OVERLAP would debit the wallet twice for a single
+// promoted rail. We only block on an OVERLAP (not merely another slot existing) so a
+// restaurant can schedule non-overlapping slots back-to-back, and two non-overlapping
+// pending slots don't deadlock each other's approval. `pending_approval` counts too so a
+// second overlapping slot can't slip through behind the first. `exceptId` lets a campaign
+// re-check without matching itself.
+//
+// Window semantics: null startsAt = open-ended in the past, null endsAt = open-ended future.
+// Overlap iff existing.start <= candidate.end AND candidate.start <= existing.end (with nulls
+// treated as ±infinity). A candidate open on a side imposes no constraint on that side.
+async function assertNoActiveFeaturedSlot(
+  restaurantId: string,
+  candidate: { startsAt: Date | null; endsAt: Date | null },
+  exceptId?: string,
+) {
+  // accrueCampaigns bills once per campaign per UTC DAY, so the conflict test must be at
+  // day granularity — two slots that merely avoid each other by time (00:00–10:00 vs
+  // 11:00–23:00 same date) still share a UTC day and would both bill (#210). Expand the
+  // candidate window to whole UTC days so any existing slot touching those days is caught.
+  const startOfUTCDay = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+  const endOfUTCDay = (d: Date) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+  const candStart = candidate.startsAt ? startOfUTCDay(candidate.startsAt) : null;
+  const candEnd = candidate.endsAt ? endOfUTCDay(candidate.endsAt) : null;
+
+  const overlap: Prisma.CampaignWhereInput[] = [];
+  if (candEnd) overlap.push({ OR: [{ startsAt: null }, { startsAt: { lte: candEnd } }] });
+  if (candStart) overlap.push({ OR: [{ endsAt: null }, { endsAt: { gte: candStart } }] });
+
   const existing = await prisma.campaign.findFirst({
     where: {
       restaurantId,
       type: "featured_slot",
       status: { in: ["active", "pending_approval"] },
       ...(exceptId ? { id: { not: exceptId } } : {}),
+      ...(overlap.length ? { AND: overlap } : {}),
     },
   });
   if (existing) {
     throw new GraphQLError(
-      "This restaurant already has a featured placement live or awaiting approval. End it before starting another.",
+      "This restaurant already has a featured placement live or awaiting approval for an overlapping period. End it or pick a non-overlapping window.",
       { extensions: { code: "duplicate_active_placement" } },
     );
   }
@@ -302,8 +328,13 @@ builder.mutationFields((t) => ({
           extensions: { code: "invalid_state" },
         });
       }
-      // #117: block a second featured slot from entering the approval/active pipeline.
-      if (c.type === "featured_slot") await assertNoActiveFeaturedSlot(c.restaurantId, c.id);
+      // #117/#210: block an OVERLAPPING featured slot from entering the approval/active pipeline.
+      if (c.type === "featured_slot")
+        await assertNoActiveFeaturedSlot(
+          c.restaurantId,
+          { startsAt: c.startsAt, endsAt: c.endsAt },
+          c.id,
+        );
       if (c.dailyRateMinor > 0) {
         const balance = await prisma.$transaction((tx) =>
           accountBalance(tx as never, `restaurant:${c.restaurantId}:payable`),
@@ -357,9 +388,14 @@ builder.mutationFields((t) => ({
         throw new GraphQLError("This campaign is not awaiting approval.", {
           extensions: { code: "invalid_state" },
         });
-      // #117: re-check at approval time — two slots could have been submitted before
-      // either was approved. Excludes this campaign so it doesn't match itself.
-      if (c.type === "featured_slot") await assertNoActiveFeaturedSlot(c.restaurantId, c.id);
+      // #117/#210: re-check at approval time — two overlapping slots could have been
+      // submitted before either was approved. Excludes this campaign so it doesn't match itself.
+      if (c.type === "featured_slot")
+        await assertNoActiveFeaturedSlot(
+          c.restaurantId,
+          { startsAt: c.startsAt, endsAt: c.endsAt },
+          c.id,
+        );
       const updated = await prisma.campaign.update({
         ...query,
         where: { id: args.id },
