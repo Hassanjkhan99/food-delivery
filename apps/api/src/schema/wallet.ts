@@ -106,14 +106,22 @@ builder.mutationFields((t) => ({
         });
       } catch (e) {
         if ((e as { code?: string }).code === "P2002") {
-          // Same key already claimed. Confirm it's THIS user's attempt (the key is
-          // client-supplied) before returning their wallet — a cross-user key collision
-          // must not be treated as this user's top-up.
+          // Same key already claimed — replay the ORIGINAL attempt's outcome (#208):
           const prior = await prisma.walletTopUp.findUnique({ where: { idempotencyKey } });
+          // Confirm it's THIS user's attempt (the key is client-supplied) — a cross-user
+          // collision must not be treated as this user's top-up.
           if (prior && prior.userId !== customerId)
             throw new GraphQLError("This looks like a duplicate request — please try again.", {
               extensions: { code: "idempotency_key_conflict" },
             });
+          // A prior FAILED attempt must not report success on retry — the card was never
+          // charged and nothing was credited. Surface the failure so the client retries
+          // (with a fresh key), mirroring the original attempt's error.
+          if (prior?.status === "failed")
+            throw new GraphQLError("That top-up didn't go through — please try again.", {
+              extensions: { code: "topup_failed" },
+            });
+          // pending (in-flight) or completed → the current wallet reflects the outcome.
           return loadWallet(customerId);
         }
         throw e;
